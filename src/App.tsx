@@ -109,7 +109,7 @@ function App() {
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
         .select('*')
-        .order('date', { ascending: true });
+        .order('date', { ascending: false });
 
       if (eventsError) throw eventsError;
 
