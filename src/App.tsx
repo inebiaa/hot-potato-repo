@@ -185,22 +185,22 @@ function App() {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((event) => {
         const nameMatch = event.name.toLowerCase().includes(query);
-        const descriptionMatch = event.description.toLowerCase().includes(query);
-        const cityMatch = event.city?.toLowerCase().includes(query);
-        const locationMatch = event.location?.toLowerCase().includes(query);
+        const descriptionMatch = event.description?.toLowerCase().includes(query) || false;
+        const cityMatch = event.city?.toLowerCase().includes(query) || false;
+        const locationMatch = event.location?.toLowerCase().includes(query) || false;
         const designersMatch = event.featured_designers?.some((d) =>
           d.toLowerCase().includes(query)
-        );
-        const modelsMatch = event.models?.some((m) => m.toLowerCase().includes(query));
+        ) || false;
+        const modelsMatch = event.models?.some((m) => m.toLowerCase().includes(query)) || false;
         const producersMatch = event.producers?.some((p) =>
           p.toLowerCase().includes(query)
-        );
+        ) || false;
         const headerTagsMatch = event.header_tags?.some((t) =>
           t.toLowerCase().includes(query)
-        );
+        ) || false;
         const footerTagsMatch = event.footer_tags?.some((t) =>
           t.toLowerCase().includes(query)
-        );
+        ) || false;
         return nameMatch || descriptionMatch || cityMatch || locationMatch || designersMatch || modelsMatch || producersMatch || headerTagsMatch || footerTagsMatch;
       });
     }
@@ -326,45 +326,55 @@ function App() {
           </p>
 
           <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <div className="flex flex-wrap gap-3 items-center mb-4">
+              <div className="relative flex-1 min-w-[250px]">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
-                  placeholder="Search by show name, designer, model, or producer..."
+                  placeholder="Search shows, designers, models..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
               </div>
 
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                <select
-                  value={selectedCity}
-                  onChange={(e) => setSelectedCity(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
-                >
-                  <option value="">All Cities</option>
-                  {allCities.map((city) => (
-                    <option key={city} value={city}>
-                      {city}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <div className="flex flex-wrap gap-2">
+                <div className="relative">
+                  <select
+                    value={selectedCity}
+                    onChange={(e) => setSelectedCity(e.target.value)}
+                    className="appearance-none pl-4 pr-8 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    style={{
+                      backgroundColor: selectedCity ? (appSettings.city_bg_color || '#dbeafe') : '#f3f4f6',
+                      color: selectedCity ? (appSettings.city_text_color || '#1e40af') : '#4b5563'
+                    }}
+                  >
+                    <option value="">All Cities</option>
+                    {allCities.map((city) => (
+                      <option key={city} value={city}>
+                        {city}
+                      </option>
+                    ))}
+                  </select>
+                  <MapPin className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none" size={14} />
+                </div>
 
-              <div className="relative">
-                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                <select
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value as 'all' | 'past' | 'future')}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
-                >
-                  <option value="all">All Events</option>
-                  <option value="future">Upcoming Events</option>
-                  <option value="past">Past Events</option>
-                </select>
+                <div className="relative">
+                  <select
+                    value={dateFilter}
+                    onChange={(e) => setDateFilter(e.target.value as 'all' | 'past' | 'future')}
+                    className="appearance-none pl-4 pr-8 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    style={{
+                      backgroundColor: dateFilter !== 'all' ? '#fef3c7' : '#f3f4f6',
+                      color: dateFilter !== 'all' ? '#b45309' : '#4b5563'
+                    }}
+                  >
+                    <option value="all">All Events</option>
+                    <option value="future">Upcoming</option>
+                    <option value="past">Past</option>
+                  </select>
+                  <Filter className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none" size={14} />
+                </div>
               </div>
             </div>
 
