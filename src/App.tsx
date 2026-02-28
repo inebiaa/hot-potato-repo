@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, FileEdit } from 'lucide-react';
+import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, FileEdit, BarChart3 } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
 import EventCard from './components/EventCard';
@@ -8,6 +8,7 @@ import AddEventModal from './components/AddEventModal';
 import SettingsModal from './components/SettingsModal';
 import SuggestionsPanel from './components/SuggestionsPanel';
 import TagRatingsModal from './components/TagRatingsModal';
+import StatisticsPage from './components/StatisticsPage';
 
 interface EventWithStats extends Event {
   average_rating: number;
@@ -50,6 +51,7 @@ function App() {
   const [isSuggestionsPanelOpen, setIsSuggestionsPanelOpen] = useState(false);
   const [isTagRatingsModalOpen, setIsTagRatingsModalOpen] = useState(false);
   const [tagRatingsData, setTagRatingsData] = useState<{ type: string; value: string } | null>(null);
+  const [isStatisticsPageOpen, setIsStatisticsPageOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedTag, setSelectedTag] = useState<{ type: string; value: string } | null>(null);
@@ -267,6 +269,14 @@ function App() {
             </div>
 
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsStatisticsPageOpen(true)}
+                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                title="View Statistics"
+              >
+                <BarChart3 size={20} />
+                <span className="hidden sm:inline text-sm">Stats</span>
+              </button>
               {user ? (
                 <>
                   {isAdmin && (
@@ -490,6 +500,12 @@ function App() {
         onClose={() => setIsTagRatingsModalOpen(false)}
         tagType={tagRatingsData?.type || ''}
         tagValue={tagRatingsData?.value || ''}
+      />
+
+      <StatisticsPage
+        isOpen={isStatisticsPageOpen}
+        onClose={() => setIsStatisticsPageOpen(false)}
+        tagColors={appSettings}
       />
     </div>
   );
