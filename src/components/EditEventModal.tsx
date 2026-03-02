@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { supabase, Event } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import TagInput from './TagInput';
 
 interface EditEventModalProps {
   isOpen: boolean;
@@ -20,12 +19,12 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
   const [location, setLocation] = useState(event.location || '');
   const [address, setAddress] = useState(event.address || '');
   const [imageUrl, setImageUrl] = useState(event.image_url || '');
-  const [producers, setProducers] = useState<string[]>(event.producers || []);
-  const [designers, setDesigners] = useState<string[]>(event.featured_designers || []);
-  const [models, setModels] = useState<string[]>(event.models || []);
-  const [hairMakeup, setHairMakeup] = useState<string[]>(event.hair_makeup || []);
-  const [headerTags, setHeaderTags] = useState<string[]>(event.header_tags || []);
-  const [footerTags, setFooterTags] = useState<string[]>(event.footer_tags || []);
+  const [producers, setProducers] = useState(event.producers?.join(', ') || '');
+  const [designers, setDesigners] = useState(event.featured_designers?.join(', ') || '');
+  const [models, setModels] = useState(event.models?.join(', ') || '');
+  const [hairMakeup, setHairMakeup] = useState(event.hair_makeup?.join(', ') || '');
+  const [headerTags, setHeaderTags] = useState(event.header_tags?.join(', ') || '');
+  const [footerTags, setFooterTags] = useState(event.footer_tags?.join(', ') || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
@@ -40,26 +39,27 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       setLocation(event.location || '');
       setAddress(event.address || '');
       setImageUrl(event.image_url || '');
-      setProducers(event.producers || []);
-      setDesigners(event.featured_designers || []);
-      setModels(event.models || []);
-      setHairMakeup(event.hair_makeup || []);
-      setHeaderTags(event.header_tags || []);
-      setFooterTags(event.footer_tags || []);
+      setProducers(event.producers?.join(', ') || '');
+      setDesigners(event.featured_designers?.join(', ') || '');
+      setModels(event.models?.join(', ') || '');
+      setHairMakeup(event.hair_makeup?.join(', ') || '');
+      setHeaderTags(event.header_tags?.join(', ') || '');
+      setFooterTags(event.footer_tags?.join(', ') || '');
     }
   }, [isOpen, event]);
 
   if (!isOpen) return null;
+
+  const parseArray = (str: string): string[] | null => {
+    if (!str.trim()) return null;
+    return str.split(',').map(item => item.trim()).filter(item => item);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!user) {
       setError('You must be logged in to edit events');
-      return;
-    }
-    if (producers.length === 0 || designers.length === 0) {
-      setError('Please add at least one producer and one designer');
       return;
     }
 
@@ -78,12 +78,12 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           location: location || null,
           address: address || null,
           image_url: imageUrl || null,
-          producers: producers.length ? producers : null,
-          featured_designers: designers.length ? designers : null,
-          models: models.length ? models : null,
-          hair_makeup: hairMakeup.length ? hairMakeup : null,
-          header_tags: headerTags.length ? headerTags : null,
-          footer_tags: footerTags.length ? footerTags : null,
+          producers: parseArray(producers),
+          featured_designers: parseArray(designers),
+          models: parseArray(models),
+          hair_makeup: parseArray(hairMakeup),
+          header_tags: parseArray(headerTags),
+          footer_tags: parseArray(footerTags),
         })
         .eq('id', event.id);
 
@@ -212,67 +212,96 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             />
           </div>
 
-          <TagInput
-            id="producers"
-            label="Producers"
-            value={producers}
-            onChange={setProducers}
-            tagColumn="producers"
-            placeholder="e.g., Fashion Production Co, Designer Studios"
-            required
-            hint="Type and press Enter to add; suggestions appear as you type"
-          />
+          <div>
+            <label htmlFor="producers" className="block text-sm font-medium text-gray-700 mb-1">
+              Producers *
+            </label>
+            <input
+              id="producers"
+              type="text"
+              value={producers}
+              onChange={(e) => setProducers(e.target.value)}
+              required
+              placeholder="e.g., Fashion Production Co, Designer Studios"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">Separate multiple producers with commas</p>
+          </div>
 
-          <TagInput
-            id="designers"
-            label="Featured Designers"
-            value={designers}
-            onChange={setDesigners}
-            tagColumn="featured_designers"
-            placeholder="e.g., Valentino, Gucci, Alexander McQueen"
-            required
-            hint="Type and press Enter to add; suggestions appear as you type"
-          />
+          <div>
+            <label htmlFor="designers" className="block text-sm font-medium text-gray-700 mb-1">
+              Featured Designers *
+            </label>
+            <input
+              id="designers"
+              type="text"
+              value={designers}
+              onChange={(e) => setDesigners(e.target.value)}
+              required
+              placeholder="e.g., Valentino, Gucci, Alexander McQueen"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">Separate multiple designers with commas</p>
+          </div>
 
-          <TagInput
-            id="models"
-            label="Featured Models"
-            value={models}
-            onChange={setModels}
-            tagColumn="models"
-            placeholder="e.g., Gigi Hadid, Bella Hadid, Karlie Kloss"
-            hint="Type and press Enter to add; suggestions appear as you type"
-          />
+          <div>
+            <label htmlFor="models" className="block text-sm font-medium text-gray-700 mb-1">
+              Featured Models
+            </label>
+            <input
+              id="models"
+              type="text"
+              value={models}
+              onChange={(e) => setModels(e.target.value)}
+              placeholder="e.g., Gigi Hadid, Bella Hadid, Karlie Kloss"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">Separate multiple models with commas</p>
+          </div>
 
-          <TagInput
-            id="hairMakeup"
-            label="Hair & Makeup Artists"
-            value={hairMakeup}
-            onChange={setHairMakeup}
-            tagColumn="hair_makeup"
-            placeholder="e.g., James Boehmer, Pat McGrath"
-            hint="Type and press Enter to add; suggestions appear as you type"
-          />
+          <div>
+            <label htmlFor="hairMakeup" className="block text-sm font-medium text-gray-700 mb-1">
+              Hair & Makeup Artists
+            </label>
+            <input
+              id="hairMakeup"
+              type="text"
+              value={hairMakeup}
+              onChange={(e) => setHairMakeup(e.target.value)}
+              placeholder="e.g., James Boehmer, Pat McGrath"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+          </div>
 
-          <TagInput
-            id="headerTags"
-            label="Header Tags"
-            value={headerTags}
-            onChange={setHeaderTags}
-            tagColumn="header_tags"
-            placeholder="e.g., Spring 2024, Couture, Limited Edition"
-            hint="Optional tags for the header section"
-          />
+          <div>
+            <label htmlFor="headerTags" className="block text-sm font-medium text-gray-700 mb-1">
+              Header Tags
+            </label>
+            <input
+              id="headerTags"
+              type="text"
+              value={headerTags}
+              onChange={(e) => setHeaderTags(e.target.value)}
+              placeholder="e.g., Spring 2024, Couture, Limited Edition"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">Optional tags for the header section - separate with commas</p>
+          </div>
 
-          <TagInput
-            id="footerTags"
-            label="Footer Tags"
-            value={footerTags}
-            onChange={setFooterTags}
-            tagColumn="footer_tags"
-            placeholder="e.g., Award Winning, Sustainable Fashion"
-            hint="Optional tags for the footer section"
-          />
+          <div>
+            <label htmlFor="footerTags" className="block text-sm font-medium text-gray-700 mb-1">
+              Footer Tags
+            </label>
+            <input
+              id="footerTags"
+              type="text"
+              value={footerTags}
+              onChange={(e) => setFooterTags(e.target.value)}
+              placeholder="e.g., Award Winning, Sustainable Fashion"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">Optional tags for the footer section - separate with commas</p>
+          </div>
 
           <div>
             <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700 mb-1">
