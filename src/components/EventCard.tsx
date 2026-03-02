@@ -1,4 +1,4 @@
-import { Calendar, MapPin, Star, Sparkles, Users, Scissors, Edit, Trash2, FileEdit, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, MapPin, Star, Sparkles, Users, Scissors, Edit, Trash2, FileEdit, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
 import { Event, Rating, supabase } from '../lib/supabase';
 import { useState } from 'react';
 import RatingModal from './RatingModal';
@@ -53,7 +53,32 @@ export default function EventCard({
   const [isSuggestEditModalOpen, setIsSuggestEditModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExpanded, setIsExpanded] = useState(!collapsibleEnabled);
+  const [showShareMenu, setShowShareMenu] = useState(false);
+  const [shareCopied, setShareCopied] = useState<'link' | 'embed' | 'embedcode' | null>(null);
   const { user, isAdmin } = useAuth();
+
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
+  const shareLink = `${baseUrl}?event=${event.id}`;
+  const embedLink = `${baseUrl}?embed=1&event=${event.id}`;
+  const embedCode = `<iframe src="${embedLink}" width="400" height="600" frameborder="0" title="${event.name}"></iframe>`;
+
+  const copyToClipboard = async (text: string, type: 'link' | 'embed' | 'embedcode') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setShareCopied(type);
+      setTimeout(() => setShareCopied(null), 2000);
+    } catch {
+      // fallback for older browsers
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setShareCopied(type);
+      setTimeout(() => setShareCopied(null), 2000);
+    }
+  };
 
   const canEdit = user && (isAdmin || event.created_by === user.id);
 
@@ -104,6 +129,48 @@ export default function EventCard({
     <>
       <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all relative">
         <div className="absolute top-2 right-2 z-10 flex gap-2">
+          <div className="relative">
+            <button
+              onClick={() => setShowShareMenu(!showShareMenu)}
+              className="p-2 bg-white/90 hover:bg-white rounded-lg shadow-md transition-colors"
+              title="Share"
+            >
+              <Share2 size={16} className="text-gray-600" />
+            </button>
+            {showShareMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowShareMenu(false)}
+                  aria-hidden="true"
+                />
+                <div className="absolute right-0 top-full mt-1 w-72 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                  <div className="px-3 py-1.5 text-xs font-medium text-gray-500 uppercase">Share this show</div>
+                  <button
+                    onClick={() => copyToClipboard(shareLink, 'link')}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
+                  >
+                    <span>Copy link</span>
+                    {shareCopied === 'link' && <span className="text-green-600 text-xs">Copied!</span>}
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(embedLink, 'embed')}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
+                  >
+                    <span>Copy embed URL</span>
+                    {shareCopied === 'embed' && <span className="text-green-600 text-xs">Copied!</span>}
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(embedCode, 'embedcode')}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between border-t border-gray-100"
+                  >
+                    <span>Copy embed code</span>
+                    {shareCopied === 'embedcode' && <span className="text-green-600 text-xs">Copied!</span>}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           {canEdit ? (
             <>
               <button
