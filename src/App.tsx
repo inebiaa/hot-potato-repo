@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, FileEdit, BarChart3 } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
@@ -57,7 +57,6 @@ function App() {
   const [selectedTag, setSelectedTag] = useState<{ type: string; value: string } | null>(null);
   const [dateFilter, setDateFilter] = useState<'all' | 'past' | 'future'>('all');
   const [allCities, setAllCities] = useState<string[]>([]);
-  const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [appSettings, setAppSettings] = useState<AppSettings>({
     app_name: 'Runway Rate',
     app_icon_url: '',
@@ -172,30 +171,6 @@ function App() {
     setDateFilter('all');
   };
 
-  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const embedMode = urlParams?.get('embed') === '1';
-  const eventIdFromUrl = urlParams?.get('event') || null;
-
-  // When opening shared link (?event=xxx), ensure event is visible and scroll to it
-  useEffect(() => {
-    if (!embedMode && eventIdFromUrl && !loading && events.length > 0) {
-      const eventExists = events.some((e) => e.id === eventIdFromUrl);
-      const eventInFiltered = filteredEvents.some((e) => e.id === eventIdFromUrl);
-      if (eventExists && !eventInFiltered) {
-        clearFilters();
-      }
-    }
-  }, [embedMode, eventIdFromUrl, loading, events, filteredEvents]);
-
-  useEffect(() => {
-    if (!embedMode && eventIdFromUrl && !loading && filteredEvents.length > 0) {
-      const el = eventCardRefs.current[eventIdFromUrl];
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }
-  }, [embedMode, eventIdFromUrl, loading, filteredEvents]);
-
   useEffect(() => {
     let filtered = [...events];
 
@@ -265,48 +240,6 @@ function App() {
   }, [searchQuery, selectedCity, selectedTag, dateFilter, events]);
 
   console.log('Auth state:', { user: !!user, userId: user?.id, isAdmin });
-
-  // Embed mode: show only the single event card, minimal layout
-  if (embedMode && eventIdFromUrl) {
-    const embedEvent = events.find((e) => e.id === eventIdFromUrl);
-    if (loading) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
-        </div>
-      );
-    }
-    if (!embedEvent) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-          <p className="text-gray-600">Show not found</p>
-        </div>
-      );
-    }
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-md mx-auto">
-          <EventCard
-            event={embedEvent}
-            averageRating={embedEvent.average_rating}
-            ratingCount={embedEvent.rating_count}
-            userRating={embedEvent.user_rating}
-            onRatingSubmitted={fetchEvents}
-            onEventUpdated={fetchEvents}
-            onTagClick={handleTagClick}
-            tagColors={appSettings}
-            collapsibleEnabled={false}
-          />
-        </div>
-        <TagRatingsModal
-          isOpen={isTagRatingsModalOpen}
-          onClose={() => setIsTagRatingsModalOpen(false)}
-          tagType={tagRatingsData?.type || ''}
-          tagValue={tagRatingsData?.value || ''}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
@@ -522,22 +455,18 @@ function App() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredEvents.map((event) => (
-              <div
+              <EventCard
                 key={event.id}
-                ref={(el) => { eventCardRefs.current[event.id] = el; }}
-              >
-                <EventCard
-                  event={event}
-                  averageRating={event.average_rating}
-                  ratingCount={event.rating_count}
-                  userRating={event.user_rating}
-                  onRatingSubmitted={fetchEvents}
-                  onEventUpdated={fetchEvents}
-                  onTagClick={handleTagClick}
-                  tagColors={appSettings}
-                  collapsibleEnabled={appSettings.collapsible_cards_enabled === 'true'}
-                />
-              </div>
+                event={event}
+                averageRating={event.average_rating}
+                ratingCount={event.rating_count}
+                userRating={event.user_rating}
+                onRatingSubmitted={fetchEvents}
+                onEventUpdated={fetchEvents}
+                onTagClick={handleTagClick}
+                tagColors={appSettings}
+                collapsibleEnabled={appSettings.collapsible_cards_enabled === 'true'}
+              />
             ))}
           </div>
         )}
