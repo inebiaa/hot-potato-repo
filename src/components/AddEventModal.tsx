@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, EventCollection } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import TagInput from './TagInput';
 
@@ -25,9 +25,19 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
   const [hairMakeup, setHairMakeup] = useState<string[]>([]);
   const [headerTags, setHeaderTags] = useState<string[]>([]);
   const [footerTags, setFooterTags] = useState<string[]>([]);
+  const [collectionId, setCollectionId] = useState('');
+  const [collections, setCollections] = useState<EventCollection[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
+
+  useEffect(() => {
+    if (isOpen) {
+      supabase.from('event_collections').select('*').order('sort_order').order('name').then(({ data }) => {
+        setCollections(data || []);
+      });
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -62,6 +72,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
         hair_makeup: hairMakeup.length ? hairMakeup : null,
         header_tags: headerTags.length ? headerTags : null,
         footer_tags: footerTags.length ? footerTags : null,
+        collection_id: collectionId || null,
         created_by: user.id,
       });
 
@@ -83,6 +94,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       setHairMakeup([]);
       setHeaderTags([]);
       setFooterTags([]);
+      setCollectionId('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create event');
     } finally {
@@ -265,6 +277,23 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             placeholder="e.g., Award Winning, Sustainable Fashion"
             hint="Optional tags for the footer section"
           />
+
+          <div>
+            <label htmlFor="collection" className="block text-sm font-medium text-gray-700 mb-1">
+              Collection
+            </label>
+            <select
+              id="collection"
+              value={collectionId}
+              onChange={(e) => setCollectionId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">No collection</option>
+              {collections.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
 
           <div>
             <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700 mb-1">

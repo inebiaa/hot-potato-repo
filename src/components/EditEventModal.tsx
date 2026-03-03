@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { supabase, Event } from '../lib/supabase';
+import { supabase, Event, EventCollection } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import TagInput from './TagInput';
 
@@ -26,6 +26,8 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
   const [hairMakeup, setHairMakeup] = useState<string[]>(event.hair_makeup || []);
   const [headerTags, setHeaderTags] = useState<string[]>(event.header_tags || []);
   const [footerTags, setFooterTags] = useState<string[]>(event.footer_tags || []);
+  const [collectionId, setCollectionId] = useState<string>(event.collection_id || '');
+  const [collections, setCollections] = useState<EventCollection[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
@@ -46,8 +48,17 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       setHairMakeup(event.hair_makeup || []);
       setHeaderTags(event.header_tags || []);
       setFooterTags(event.footer_tags || []);
+      setCollectionId(event.collection_id || '');
     }
   }, [isOpen, event]);
+
+  useEffect(() => {
+    if (isOpen) {
+      supabase.from('event_collections').select('*').order('sort_order').order('name').then(({ data }) => {
+        setCollections(data || []);
+      });
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -84,6 +95,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           hair_makeup: hairMakeup.length ? hairMakeup : null,
           header_tags: headerTags.length ? headerTags : null,
           footer_tags: footerTags.length ? footerTags : null,
+          collection_id: collectionId || null,
         })
         .eq('id', event.id);
 
@@ -273,6 +285,23 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             placeholder="e.g., Award Winning, Sustainable Fashion"
             hint="Optional tags for the footer section"
           />
+
+          <div>
+            <label htmlFor="collection" className="block text-sm font-medium text-gray-700 mb-1">
+              Collection
+            </label>
+            <select
+              id="collection"
+              value={collectionId}
+              onChange={(e) => setCollectionId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">No collection</option>
+              {collections.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
 
           <div>
             <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700 mb-1">

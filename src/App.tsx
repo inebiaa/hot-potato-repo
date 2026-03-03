@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, FileEdit, BarChart3 } from 'lucide-react';
+import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, FileEdit, BarChart3, FolderOpen, LayoutGrid, Layers } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
-import { supabase, Event, Rating } from './lib/supabase';
+import { supabase, Event, Rating, EventCollection } from './lib/supabase';
 import EventCard from './components/EventCard';
 import AuthModal from './components/AuthModal';
 import AddEventModal from './components/AddEventModal';
@@ -9,6 +9,7 @@ import SettingsModal from './components/SettingsModal';
 import SuggestionsPanel from './components/SuggestionsPanel';
 import TagRatingsModal from './components/TagRatingsModal';
 import StatisticsPage from './components/StatisticsPage';
+import CollectionsModal from './components/CollectionsModal';
 
 interface EventWithStats extends Event {
   average_rating: number;
@@ -45,6 +46,7 @@ function App() {
   const [events, setEvents] = useState<EventWithStats[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<EventWithStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -57,7 +59,11 @@ function App() {
   const [selectedTag, setSelectedTag] = useState<{ type: string; value: string } | null>(null);
   const [dateFilter, setDateFilter] = useState<'all' | 'past' | 'future'>('all');
   const [allCities, setAllCities] = useState<string[]>([]);
+  const [collections, setCollections] = useState<EventCollection[]>([]);
+  const [viewByCollection, setViewByCollection] = useState(false);
+  const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
   const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const hasClearedFiltersForSharedLink = useRef(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({
     app_name: 'Runway Rate',
     app_icon_url: '',
@@ -108,19 +114,30 @@ function App() {
 
   const fetchEvents = async () => {
     setLoading(true);
+    setEventsError(null);
     try {
-      const { data: eventsData, error: eventsError } = await supabase
+      const { data: eventsData, error: eventsErr } = await supabase
         .from('events')
         .select('*')
         .order('date', { ascending: false });
 
-      if (eventsError) throw eventsError;
+      if (eventsErr) {
+        setEventsError(eventsErr.message || String(eventsErr));
+        setEvents([]);
+        setFilteredEvents([]);
+        return;
+      }
 
-      const { data: ratingsData, error: ratingsError } = await supabase
+      const { data: ratingsData, error: ratingsErr } = await supabase
         .from('ratings')
         .select('*');
 
-      if (ratingsError) throw ratingsError;
+      if (ratingsErr) {
+        setEventsError(ratingsErr.message || String(ratingsErr));
+        setEvents([]);
+        setFilteredEvents([]);
+        return;
+      }
 
       const eventsWithStats: EventWithStats[] = (eventsData || []).map((event) => {
         const eventRatings = (ratingsData || []).filter((r) => r.event_id === event.id);
@@ -148,7 +165,23 @@ function App() {
         }
       });
       setAllCities(Array.from(citiesSet).sort());
+
+      // Fetch collections separately so a missing table or RLS issue doesn't hide events
+      try {
+        const { data: collectionsData } = await supabase
+          .from('event_collections')
+          .select('*')
+          .order('sort_order')
+          .order('name');
+        setCollections(collectionsData || []);
+      } catch {
+        setCollections([]);
+      }
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setEventsError(message);
+      setEvents([]);
+      setFilteredEvents([]);
       console.error('Error fetching events:', error);
     } finally {
       setLoading(false);
@@ -176,13 +209,14 @@ function App() {
   const embedMode = urlParams?.get('embed') === '1';
   const eventIdFromUrl = urlParams?.get('event') || null;
 
-  // When opening shared link (?event=xxx), ensure event is visible and scroll to it
+  // When opening shared link (?event=xxx), clear filters once so the event is visible (don't clear again when user searches)
   useEffect(() => {
-    if (!embedMode && eventIdFromUrl && !loading && events.length > 0) {
+    if (!embedMode && eventIdFromUrl && !loading && events.length > 0 && !hasClearedFiltersForSharedLink.current) {
       const eventExists = events.some((e) => e.id === eventIdFromUrl);
       const eventInFiltered = filteredEvents.some((e) => e.id === eventIdFromUrl);
       if (eventExists && !eventInFiltered) {
         clearFilters();
+        hasClearedFiltersForSharedLink.current = true;
       }
     }
   }, [embedMode, eventIdFromUrl, loading, events, filteredEvents]);
@@ -357,6 +391,14 @@ function App() {
                         <span className="hidden sm:inline text-sm">Suggestions</span>
                       </button>
                       <button
+                        onClick={() => setIsCollectionsModalOpen(true)}
+                        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        title="Collections"
+                      >
+                        <FolderOpen size={20} />
+                        <span className="hidden sm:inline text-sm">Collections</span>
+                      </button>
+                      <button
                         onClick={() => setIsSettingsModalOpen(true)}
                         className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                         title="App Settings"
@@ -452,6 +494,29 @@ function App() {
                   </select>
                   <Filter className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none" size={14} />
                 </div>
+
+                {collections.length > 0 && (
+                  <div className="flex rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                    <button
+                      type="button"
+                      onClick={() => setViewByCollection(false)}
+                      className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${!viewByCollection ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                      title="Show all in grid"
+                    >
+                      <LayoutGrid size={16} />
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewByCollection(true)}
+                      className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${viewByCollection ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                      title="Group by collection"
+                    >
+                      <Layers size={16} />
+                      By collection
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -481,11 +546,37 @@ function App() {
           </div>
         </div>
 
+        {eventsError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start justify-between gap-4">
+            <div>
+              <p className="font-medium text-red-800">Could not load events</p>
+              <p className="text-sm text-red-700 mt-1 font-mono">{eventsError}</p>
+              <p className="text-xs text-red-600 mt-2">
+                Check the browser console for details. Common fixes: run all migrations in Supabase (SQL Editor), or check RLS policies allow SELECT on <code>events</code> and <code>ratings</code> for anon/authenticated.
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => { setEventsError(null); fetchEvents(); }}
+                className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+              >
+                Retry
+              </button>
+              <button
+                onClick={() => setEventsError(null)}
+                className="px-3 py-1.5 border border-red-300 rounded hover:bg-red-100 text-red-700 text-sm"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
-        ) : events.length === 0 ? (
+        ) : events.length === 0 && !eventsError ? (
           <div className="text-center py-12">
             <div className="bg-white rounded-lg shadow-md p-8 max-w-md mx-auto">
               <Sparkles size={48} className="mx-auto text-gray-400 mb-4" />
@@ -519,6 +610,92 @@ function App() {
               </button>
             </div>
           </div>
+        ) : viewByCollection && collections.length > 0 ? (
+          (() => {
+            const sortedCollections = [...collections].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+            const byCollection = new Map<string, EventWithStats[]>();
+            const ungrouped: EventWithStats[] = [];
+            const byDate = (a: EventWithStats, b: EventWithStats) => new Date(b.date).getTime() - new Date(a.date).getTime();
+            filteredEvents.forEach((event) => {
+              if (event.collection_id) {
+                const list = byCollection.get(event.collection_id) || [];
+                list.push(event);
+                byCollection.set(event.collection_id, list);
+              } else {
+                ungrouped.push(event);
+              }
+            });
+            sortedCollections.forEach((c) => {
+              const list = byCollection.get(c.id) || [];
+              list.sort(byDate);
+              byCollection.set(c.id, list);
+            });
+            ungrouped.sort(byDate);
+            return (
+              <div className="space-y-10">
+                {sortedCollections.map((coll) => {
+                  const eventsInColl = byCollection.get(coll.id) || [];
+                  if (eventsInColl.length === 0) return null;
+                  return (
+                    <section key={coll.id}>
+                      <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                        <FolderOpen size={20} className="text-blue-600" />
+                        {coll.name}
+                        {coll.description && (
+                          <span className="text-sm font-normal text-gray-500">— {coll.description}</span>
+                        )}
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {eventsInColl.map((event) => (
+                          <div
+                            key={event.id}
+                            ref={(el) => { eventCardRefs.current[event.id] = el; }}
+                          >
+                            <EventCard
+                              event={event}
+                              averageRating={event.average_rating}
+                              ratingCount={event.rating_count}
+                              userRating={event.user_rating}
+                              onRatingSubmitted={fetchEvents}
+                              onEventUpdated={fetchEvents}
+                              onTagClick={handleTagClick}
+                              tagColors={appSettings}
+                              collapsibleEnabled={appSettings.collapsible_cards_enabled === 'true'}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+                {ungrouped.length > 0 && (
+                  <section>
+                    <h3 className="text-lg font-semibold text-gray-600 mb-3">Ungrouped</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {ungrouped.map((event) => (
+                        <div
+                          key={event.id}
+                          ref={(el) => { eventCardRefs.current[event.id] = el; }}
+                        >
+                          <EventCard
+                            event={event}
+                            averageRating={event.average_rating}
+                            ratingCount={event.rating_count}
+                            userRating={event.user_rating}
+                            onRatingSubmitted={fetchEvents}
+                            onEventUpdated={fetchEvents}
+                            onTagClick={handleTagClick}
+                            tagColors={appSettings}
+                            collapsibleEnabled={appSettings.collapsible_cards_enabled === 'true'}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </div>
+            );
+          })()
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredEvents.map((event) => (
@@ -577,6 +754,12 @@ function App() {
         isOpen={isStatisticsPageOpen}
         onClose={() => setIsStatisticsPageOpen(false)}
         tagColors={appSettings}
+      />
+
+      <CollectionsModal
+        isOpen={isCollectionsModalOpen}
+        onClose={() => setIsCollectionsModalOpen(false)}
+        onCollectionsUpdated={fetchEvents}
       />
     </div>
   );

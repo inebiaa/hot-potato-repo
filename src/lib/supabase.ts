@@ -9,6 +9,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+export interface EventCollection {
+  id: string;
+  name: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
 export interface Event {
   id: string;
   name: string;
@@ -25,6 +33,7 @@ export interface Event {
   hair_makeup: string[] | null;
   header_tags: string[] | null;
   footer_tags: string[] | null;
+  collection_id: string | null;
   created_by: string | null;
   created_at: string;
 }
