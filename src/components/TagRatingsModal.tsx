@@ -1,12 +1,17 @@
 import { X, Star } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { getSeasonFromDate } from '../lib/season';
 
 interface TagRatingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   tagType: string;
   tagValue: string;
+  /** When set, clicking an event opens it (e.g. in an overlay) for viewing/rating. */
+  onEventClick?: (eventId: string) => void;
+  /** Increment to refetch list (e.g. after closing an event overlay so ratings stay in sync). */
+  refreshTrigger?: number;
 }
 
 interface EventRating {
@@ -21,8 +26,11 @@ export default function TagRatingsModal({
   onClose,
   tagType,
   tagValue,
+  onEventClick,
+  refreshTrigger = 0,
 }: TagRatingsModalProps) {
   const [eventRatings, setEventRatings] = useState<EventRating[]>([]);
+  const [totalShows, setTotalShows] = useState(0);
   const [loading, setLoading] = useState(true);
   const [overallAverage, setOverallAverage] = useState(0);
   const [totalRatings, setTotalRatings] = useState(0);
@@ -31,12 +39,12 @@ export default function TagRatingsModal({
     if (isOpen) {
       fetchTagRatings();
     }
-  }, [isOpen, tagType, tagValue]);
+  }, [isOpen, tagType, tagValue, refreshTrigger]);
 
   const fetchTagRatings = async () => {
     setLoading(true);
     try {
-      let query = supabase.from('events').select('id, name');
+      let query = supabase.from('events').select('id, name, date, season');
 
       switch (tagType) {
         case 'producer':
@@ -55,26 +63,30 @@ export default function TagRatingsModal({
           query = query.eq('city', tagValue);
           break;
         case 'season':
-          query = query.eq('season', tagValue);
           break;
         case 'header_tags':
-          query = query.contains('header_tags', [tagValue]);
+          query = query.contains('genre', [tagValue]);
           break;
         case 'footer_tags':
           query = query.contains('footer_tags', [tagValue]);
           break;
       }
 
-      const { data: events, error: eventsError } = await query;
+      let { data: events, error: eventsError } = await query;
+      if (tagType === 'season' && events) {
+        events = events.filter((e: { date: string; season?: string | null }) => (e.season || getSeasonFromDate(e.date)) === tagValue);
+      }
       if (eventsError) throw eventsError;
 
       if (!events || events.length === 0) {
         setEventRatings([]);
+        setTotalShows(0);
         setOverallAverage(0);
         setTotalRatings(0);
         setLoading(false);
         return;
       }
+      setTotalShows(events.length);
 
       const eventIds = events.map(e => e.id);
 
@@ -105,11 +117,10 @@ export default function TagRatingsModal({
       });
 
       const results: EventRating[] = Array.from(eventRatingsMap.entries())
-        .filter(([_, data]) => data.count > 0)
         .map(([id, data]) => ({
           event_id: id,
           event_name: data.name,
-          avg_rating: data.sum / data.count,
+          avg_rating: data.count > 0 ? data.sum / data.count : 0,
           rating_count: data.count,
         }))
         .sort((a, b) => b.avg_rating - a.avg_rating);
@@ -134,7 +145,7 @@ export default function TagRatingsModal({
       case 'hair_makeup': return 'Hair & Makeup Artist';
       case 'city': return 'City';
       case 'season': return 'Season';
-      case 'header_tags': return 'Tag';
+      case 'header_tags': return 'Genre';
       case 'footer_tags': return 'Tag';
       default: return 'Tag';
     }
@@ -159,7 +170,7 @@ export default function TagRatingsModal({
         </div>
 
         <div className="p-6 border-b bg-gray-50">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-sm text-gray-600 mb-1">Overall Rating</p>
               <div className="flex items-center gap-2">
@@ -177,27 +188,42 @@ export default function TagRatingsModal({
                 </span>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-600">Total Ratings</p>
-              <p className="text-2xl font-bold text-gray-900">{totalRatings}</p>
+            <div className="flex items-center gap-6">
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Shows</p>
+                <p className="text-xl font-bold text-gray-900">{totalShows}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Ratings</p>
+                <p className="text-xl font-bold text-gray-900">{totalRatings}</p>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
-            <div className="text-center py-8 text-gray-500">Loading ratings...</div>
+            <div className="text-center py-8 text-gray-500">Loading...</div>
           ) : eventRatings.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              No rated events found for this {getTagTypeLabel().toLowerCase()}
+              No rated shows yet for this {getTagTypeLabel().toLowerCase()}. {totalShows > 0 ? `${totalShows} show${totalShows === 1 ? '' : 's'} with this tag.` : ''}
             </div>
           ) : (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Events ({eventRatings.length})</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                Shows ({eventRatings.length}{totalShows > 0 ? ` of ${totalShows}` : ''})
+                {onEventClick && (
+                  <span className="block text-xs font-normal text-gray-500 mt-1">Click any show to open and rate</span>
+                )}
+              </h3>
               {eventRatings.map((eventRating) => (
                 <div
                   key={eventRating.event_id}
-                  className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors"
+                  role={onEventClick ? 'button' : undefined}
+                  tabIndex={onEventClick ? 0 : undefined}
+                  onClick={onEventClick ? () => onEventClick(eventRating.event_id) : undefined}
+                  onKeyDown={onEventClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onEventClick(eventRating.event_id); } : undefined}
+                  className={`rounded-lg p-4 transition-colors ${onEventClick ? 'bg-gray-50 hover:bg-gray-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset' : 'bg-gray-50'}`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -219,7 +245,7 @@ export default function TagRatingsModal({
                           ))}
                         </div>
                         <span className="text-sm font-medium text-gray-900">
-                          {eventRating.avg_rating.toFixed(2)}
+                          {eventRating.avg_rating > 0 ? eventRating.avg_rating.toFixed(2) : 'Unrated'}
                         </span>
                         <span className="text-xs text-gray-500">
                           ({eventRating.rating_count} {eventRating.rating_count === 1 ? 'rating' : 'ratings'})

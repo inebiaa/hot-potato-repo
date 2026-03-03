@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, FileEdit, BarChart3 } from 'lucide-react';
+import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, BarChart3 } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating, EventCollection } from './lib/supabase';
+import { getSeasonFromDate } from './lib/season';
 import EventCard from './components/EventCard';
 import AuthModal from './components/AuthModal';
 import AddEventModal from './components/AddEventModal';
 import SettingsModal from './components/SettingsModal';
-import SuggestionsPanel from './components/SuggestionsPanel';
 import TagRatingsModal from './components/TagRatingsModal';
 import StatisticsPage from './components/StatisticsPage';
+import ProfilePage from './components/ProfilePage';
 
 interface EventWithStats extends Event {
   average_rating: number;
@@ -49,7 +50,6 @@ function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [isSuggestionsPanelOpen, setIsSuggestionsPanelOpen] = useState(false);
   const [isTagRatingsModalOpen, setIsTagRatingsModalOpen] = useState(false);
   const [tagRatingsData, setTagRatingsData] = useState<{ type: string; value: string } | null>(null);
   const [isStatisticsPageOpen, setIsStatisticsPageOpen] = useState(false);
@@ -59,6 +59,9 @@ function App() {
   const [dateFilter, setDateFilter] = useState<'all' | 'past' | 'future'>('all');
   const [allCities, setAllCities] = useState<string[]>([]);
   const [collections, setCollections] = useState<EventCollection[]>([]);
+  const [overlayEventId, setOverlayEventId] = useState<string | null>(null);
+  const [tagModalRefreshTrigger, setTagModalRefreshTrigger] = useState(0);
+  const [upcomingExpanded, setUpcomingExpanded] = useState(false);
   const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasClearedFiltersForSharedLink = useRef(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -205,6 +208,7 @@ function App() {
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const embedMode = urlParams?.get('embed') === '1';
   const eventIdFromUrl = urlParams?.get('event') || null;
+  const showProfile = urlParams?.get('profile') === '1' && !!user;
 
   // When opening shared link (?event=xxx), clear filters once so the event is visible (don't clear again when user searches)
   useEffect(() => {
@@ -218,14 +222,46 @@ function App() {
     }
   }, [embedMode, eventIdFromUrl, loading, events, filteredEvents]);
 
+  // Sync URL ?event=id to overlay (shared links open overlay)
   useEffect(() => {
-    if (!embedMode && eventIdFromUrl && !loading && filteredEvents.length > 0) {
+    if (!embedMode && eventIdFromUrl && !loading && events.length > 0) {
+      setOverlayEventId(eventIdFromUrl);
+    }
+  }, [embedMode, eventIdFromUrl, loading, events.length]);
+
+  useEffect(() => {
+    if (!overlayEventId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeEventOverlay();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [overlayEventId]);
+
+  // Lock background scroll when any popup/overlay is open so only the popup scrolls
+  useEffect(() => {
+    const anyPopupOpen = !!(
+      overlayEventId ||
+      isStatisticsPageOpen ||
+      isTagRatingsModalOpen ||
+      isSettingsModalOpen ||
+      isAddEventModalOpen ||
+      isAuthModalOpen
+    );
+    document.body.style.overflow = anyPopupOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [overlayEventId, isStatisticsPageOpen, isTagRatingsModalOpen, isSettingsModalOpen, isAddEventModalOpen, isAuthModalOpen]);
+
+  useEffect(() => {
+    if (!embedMode && eventIdFromUrl && !loading && filteredEvents.length > 0 && !overlayEventId) {
       const el = eventCardRefs.current[eventIdFromUrl];
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [embedMode, eventIdFromUrl, loading, filteredEvents]);
+  }, [embedMode, eventIdFromUrl, loading, filteredEvents, overlayEventId]);
 
   useEffect(() => {
     let filtered = [...events];
@@ -253,7 +289,7 @@ function App() {
         const producersMatch = event.producers?.some((p) =>
           p.toLowerCase().includes(query)
         ) || false;
-        const headerTagsMatch = event.header_tags?.some((t) =>
+        const headerTagsMatch = event.genre?.some((t: string) =>
           t.toLowerCase().includes(query)
         ) || false;
         const footerTagsMatch = event.footer_tags?.some((t) =>
@@ -273,7 +309,7 @@ function App() {
           case 'city':
             return event.city === selectedTag.value;
           case 'season':
-            return event.season === selectedTag.value;
+            return (event.season || getSeasonFromDate(event.date)) === selectedTag.value;
           case 'producer':
             return event.producers?.includes(selectedTag.value);
           case 'designer':
@@ -283,7 +319,7 @@ function App() {
           case 'hair_makeup':
             return event.hair_makeup?.includes(selectedTag.value);
           case 'header_tags':
-            return event.header_tags?.includes(selectedTag.value);
+            return event.genre?.includes(selectedTag.value);
           case 'footer_tags':
             return event.footer_tags?.includes(selectedTag.value);
           default:
@@ -296,6 +332,28 @@ function App() {
   }, [searchQuery, selectedCity, selectedTag, dateFilter, events]);
 
   console.log('Auth state:', { user: !!user, userId: user?.id, isAdmin });
+
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+  const overlayEvent = overlayEventId ? (events.find((e) => e.id === overlayEventId) ?? filteredEvents.find((e) => e.id === overlayEventId)) : null;
+
+  const openEventOverlay = (eventId: string) => {
+    setOverlayEventId(eventId);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('event', eventId);
+      window.history.replaceState(null, '', url.pathname + '?' + url.searchParams.toString());
+    }
+  };
+
+  const closeEventOverlay = () => {
+    setOverlayEventId(null);
+    setTagModalRefreshTrigger((t) => t + 1);
+    if (typeof window !== 'undefined') window.history.replaceState(null, '', pathname);
+  };
+
+  const goBack = () => {
+    if (typeof window !== 'undefined') window.location.href = pathname;
+  };
 
   // Embed mode: show only the single event card, minimal layout
   if (embedMode && eventIdFromUrl) {
@@ -326,7 +384,6 @@ function App() {
             onEventUpdated={fetchEvents}
             onTagClick={handleTagClick}
             tagColors={appSettings}
-            collapsibleEnabled={false}
           />
         </div>
         <TagRatingsModal
@@ -334,7 +391,80 @@ function App() {
           onClose={() => setIsTagRatingsModalOpen(false)}
           tagType={tagRatingsData?.type || ''}
           tagValue={tagRatingsData?.value || ''}
+          onEventClick={openEventOverlay}
+          refreshTrigger={tagModalRefreshTrigger}
         />
+      </div>
+    );
+  }
+
+  if (showProfile && user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+        <header className="bg-white shadow-sm border-b sticky top-0 z-40">
+          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {appSettings.app_logo_url ? (
+                <img src={appSettings.app_logo_url} alt={appSettings.app_name} className="h-10 object-contain" />
+              ) : (
+                <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2">
+                  <Sparkles className="text-white" size={24} />
+                </div>
+              )}
+              <a href={pathname} className="text-lg font-semibold text-gray-900 hover:text-blue-600">
+                {appSettings.app_name}
+              </a>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={goBack} className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50">
+                ← Back to shows
+              </button>
+              <button onClick={() => signOut()} className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </header>
+        <main className="max-w-3xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <ProfilePage
+            userId={user.id}
+            pathname={pathname}
+            onClose={goBack}
+            onTagClick={handleTagClick}
+          />
+        </main>
+
+        <TagRatingsModal
+          isOpen={isTagRatingsModalOpen}
+          onClose={() => setIsTagRatingsModalOpen(false)}
+          tagType={tagRatingsData?.type || ''}
+          tagValue={tagRatingsData?.value || ''}
+          onEventClick={openEventOverlay}
+          refreshTrigger={tagModalRefreshTrigger}
+        />
+
+        {overlayEvent && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 overflow-y-auto"
+            onClick={closeEventOverlay}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Event details"
+          >
+            <div className="relative max-w-md w-full my-8 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+              <EventCard
+                event={overlayEvent}
+                averageRating={overlayEvent.average_rating}
+                ratingCount={overlayEvent.rating_count}
+                userRating={overlayEvent.user_rating}
+                onRatingSubmitted={() => { fetchEvents(); }}
+                onEventUpdated={() => { fetchEvents(); }}
+                onTagClick={handleTagClick}
+                tagColors={appSettings}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -350,9 +480,9 @@ function App() {
               ) : (
                 <>
                   {appSettings.app_icon_url ? (
-                    <img src={appSettings.app_icon_url} alt="App Icon" className="w-10 h-10 rounded-lg" />
+                    <img src={appSettings.app_icon_url} alt="App Icon" className="w-10 h-10" />
                   ) : (
-                    <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2 rounded-lg">
+                    <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2">
                       <Sparkles className="text-white" size={24} />
                     </div>
                   )}
@@ -377,16 +507,15 @@ function App() {
               </button>
               {user ? (
                 <>
+                  <a
+                    href={`${pathname}?profile=1`}
+                    className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    title="My Profile"
+                  >
+                    <span className="hidden sm:inline text-sm">Profile</span>
+                  </a>
                   {isAdmin && (
                     <>
-                      <button
-                        onClick={() => setIsSuggestionsPanelOpen(true)}
-                        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                        title="Review Edit Suggestions"
-                      >
-                        <FileEdit size={20} />
-                        <span className="hidden sm:inline text-sm">Suggestions</span>
-                      </button>
                       <button
                         onClick={() => setIsSettingsModalOpen(true)}
                         className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -399,7 +528,7 @@ function App() {
                   )}
                   <button
                     onClick={() => setIsAddEventModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                   >
                     <Plus size={20} />
                     <span className="hidden sm:inline">Add Show</span>
@@ -415,7 +544,7 @@ function App() {
               ) : (
                 <button
                   onClick={() => setIsAuthModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                 >
                   <LogIn size={20} />
                   Sign In
@@ -433,29 +562,24 @@ function App() {
             {user ? 'Discover, rate, and review fashion shows from around the world' : 'Sign in to rate shows and add your own!'}
           </p>
 
-          <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-            <div className="flex flex-wrap gap-3 items-center mb-4">
-              <div className="relative flex-1 min-w-[250px]">
+          <div className="border-b border-gray-200 pb-4 mb-6">
+            <div className="flex flex-wrap gap-3 items-center">
+              <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
                   placeholder="Search shows, designers, models..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 text-sm"
                 />
               </div>
-
               <div className="flex flex-wrap gap-2">
                 <div className="relative">
                   <select
                     value={selectedCity}
                     onChange={(e) => setSelectedCity(e.target.value)}
-                    className="appearance-none pl-4 pr-8 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    style={{
-                      backgroundColor: selectedCity ? (appSettings.city_bg_color || '#dbeafe') : '#f3f4f6',
-                      color: selectedCity ? (appSettings.city_text_color || '#1e40af') : '#4b5563'
-                    }}
+                    className="pl-3 pr-8 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 appearance-none cursor-pointer"
                   >
                     <option value="">All Cities</option>
                     {allCities.map((city) => (
@@ -464,24 +588,19 @@ function App() {
                       </option>
                     ))}
                   </select>
-                  <MapPin className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none" size={14} />
+                  <MapPin className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" size={14} />
                 </div>
-
                 <div className="relative">
                   <select
                     value={dateFilter}
                     onChange={(e) => setDateFilter(e.target.value as 'all' | 'past' | 'future')}
-                    className="appearance-none pl-4 pr-8 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    style={{
-                      backgroundColor: dateFilter !== 'all' ? '#fef3c7' : '#f3f4f6',
-                      color: dateFilter !== 'all' ? '#b45309' : '#4b5563'
-                    }}
+                    className="pl-3 pr-8 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 appearance-none cursor-pointer"
                   >
                     <option value="all">All Events</option>
                     <option value="future">Upcoming</option>
                     <option value="past">Past</option>
                   </select>
-                  <Filter className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none" size={14} />
+                  <Filter className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" size={14} />
                 </div>
               </div>
             </div>
@@ -492,12 +611,14 @@ function App() {
                   Showing {filteredEvents.length} of {events.length} shows
                 </span>
                 {selectedTag && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 text-sm">
                     {selectedTag.type === 'designer' && 'Designer: '}
                     {selectedTag.type === 'model' && 'Model: '}
                     {selectedTag.type === 'producer' && 'Producer: '}
                     {selectedTag.type === 'city' && 'City: '}
+                    {selectedTag.type === 'season' && 'Season: '}
                     {selectedTag.type === 'hair_makeup' && 'Hair & Makeup: '}
+                    {selectedTag.type === 'header_tags' && 'Genre: '}
                     {selectedTag.value}
                   </span>
                 )}
@@ -513,7 +634,7 @@ function App() {
         </div>
 
         {eventsError && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start justify-between gap-4">
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 flex items-start justify-between gap-4">
             <div>
               <p className="font-medium text-red-800">Could not load events</p>
               <p className="text-sm text-red-700 mt-1 font-mono">{eventsError}</p>
@@ -553,7 +674,7 @@ function App() {
               {user && (
                 <button
                   onClick={() => setIsAddEventModalOpen(true)}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                 >
                   Add Show
                 </button>
@@ -570,7 +691,7 @@ function App() {
               </p>
               <button
                 onClick={clearFilters}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
               >
                 Clear Filters
               </button>
@@ -579,26 +700,94 @@ function App() {
         ) : (() => {
           // Group by collection when any event has a collection (backend-controlled via collection_id)
           const hasGroupedEvents = filteredEvents.some((e) => e.collection_id) && collections.length > 0;
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const byDateDesc = (a: EventWithStats, b: EventWithStats) => new Date(b.date).getTime() - new Date(a.date).getTime();
+          const sortedByDate = [...filteredEvents].sort(byDateDesc);
+          const pastEvents = sortedByDate.filter((e) => new Date(e.date) < today);
+          const upcoming = sortedByDate.filter((e) => new Date(e.date) >= today).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          const latestPast = pastEvents[0] ?? null;
+          const nextUpcoming = upcoming[0] ?? null;
+          const otherUpcoming = upcoming.slice(1);
+          const restPast = pastEvents.slice(1);
+
+          const renderCard = (event: EventWithStats, greyed = false) => (
+            <div
+              key={event.id}
+              ref={(el) => { eventCardRefs.current[event.id] = el; }}
+              className={greyed ? 'opacity-60 hover:opacity-90 transition-opacity' : ''}
+            >
+              <EventCard
+                event={event}
+                averageRating={event.average_rating}
+                ratingCount={event.rating_count}
+                userRating={event.user_rating}
+                onRatingSubmitted={fetchEvents}
+                onEventUpdated={fetchEvents}
+                onTagClick={handleTagClick}
+                tagColors={appSettings}
+                viewHref={`${pathname}?event=${event.id}`}
+                onViewClick={openEventOverlay}
+              />
+            </div>
+          );
+
           if (!hasGroupedEvents) {
             return (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredEvents.map((event) => (
-                  <div
-                    key={event.id}
-                    ref={(el) => { eventCardRefs.current[event.id] = el; }}
-                  >
-                    <EventCard
-                      event={event}
-                      averageRating={event.average_rating}
-                      ratingCount={event.rating_count}
-                      userRating={event.user_rating}
-                      onRatingSubmitted={fetchEvents}
-                      onEventUpdated={fetchEvents}
-                      onTagClick={handleTagClick}
-                      tagColors={appSettings}
-                      collapsibleEnabled={appSettings.collapsible_cards_enabled === 'true'}
-                    />
+                {upcoming.length > 0 && nextUpcoming && (
+                  <div className="relative min-h-[280px] overflow-visible">
+                    {!upcomingExpanded && (
+                      <>
+                        {otherUpcoming.slice(0, 3).map((event, i) => (
+                          <div
+                            key={event.id}
+                            className="absolute inset-0 opacity-60 pointer-events-none"
+                            style={{
+                              zIndex: i,
+                              transform: `translate(${(i + 1) * 10}px, ${(i + 1) * 10}px)`,
+                            }}
+                          >
+                            <EventCard
+                              event={event}
+                              averageRating={event.average_rating}
+                              ratingCount={event.rating_count}
+                              userRating={event.user_rating}
+                              onRatingSubmitted={fetchEvents}
+                              onEventUpdated={fetchEvents}
+                              onTagClick={handleTagClick}
+                              tagColors={appSettings}
+                viewHref={`${pathname}?event=${event.id}`}
+                              onViewClick={openEventOverlay}
+                            />
+                          </div>
+                        ))}
+                        <div
+                          className="relative z-10 opacity-60"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setUpcomingExpanded((v) => !v)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setUpcomingExpanded((v) => !v); } }}
+                          aria-expanded={upcomingExpanded}
+                          aria-label={upcomingExpanded ? 'Collapse upcoming' : 'Show all upcoming'}
+                        >
+                          {renderCard(nextUpcoming, true)}
+                        </div>
+                      </>
+                    )}
+                    {upcomingExpanded && (
+                      <div className="relative z-10" onClick={() => setUpcomingExpanded(false)}>
+                        {renderCard(nextUpcoming)}
+                      </div>
+                    )}
                   </div>
+                )}
+                {upcomingExpanded && otherUpcoming.map((event) => (
+                  <div key={event.id}>{renderCard(event, true)}</div>
+                ))}
+                {latestPast && <div>{renderCard(latestPast)}</div>}
+                {restPast.map((event) => (
+                  <div key={event.id}>{renderCard(event)}</div>
                 ))}
               </div>
             );
@@ -630,17 +819,14 @@ function App() {
                 return (
                   <div
                     key={coll.id}
-                    className="rounded-xl border border-gray-200 bg-gray-50/60 overflow-hidden shadow-sm"
+                    className="border border-gray-200 rounded-lg bg-gray-50/60 overflow-hidden shadow-sm"
                   >
                     <div className="px-4 py-2.5 border-b border-gray-200 bg-white/90 text-sm font-medium text-gray-700">
                       {coll.name}
                     </div>
                     <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {eventsInColl.map((event) => (
-                        <div
-                          key={event.id}
-                          ref={(el) => { eventCardRefs.current[event.id] = el; }}
-                        >
+                        <div key={event.id} ref={(el) => { eventCardRefs.current[event.id] = el; }}>
                           <EventCard
                             event={event}
                             averageRating={event.average_rating}
@@ -650,7 +836,8 @@ function App() {
                             onEventUpdated={fetchEvents}
                             onTagClick={handleTagClick}
                             tagColors={appSettings}
-                            collapsibleEnabled={appSettings.collapsible_cards_enabled === 'true'}
+                            viewHref={`${pathname}?event=${event.id}`}
+                            onViewClick={openEventOverlay}
                           />
                         </div>
                       ))}
@@ -659,16 +846,13 @@ function App() {
                 );
               })}
               {ungrouped.length > 0 && (
-                <div className="rounded-xl border border-gray-200 bg-gray-50/60 overflow-hidden shadow-sm">
+                <div className="border border-gray-200 rounded-lg bg-gray-50/60 overflow-hidden shadow-sm">
                   <div className="px-4 py-2.5 border-b border-gray-200 bg-white/90 text-sm font-medium text-gray-500">
                     Other shows
                   </div>
                   <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {ungrouped.map((event) => (
-                      <div
-                        key={event.id}
-                        ref={(el) => { eventCardRefs.current[event.id] = el; }}
-                      >
+                      <div key={event.id} ref={(el) => { eventCardRefs.current[event.id] = el; }}>
                         <EventCard
                           event={event}
                           averageRating={event.average_rating}
@@ -678,7 +862,8 @@ function App() {
                           onEventUpdated={fetchEvents}
                           onTagClick={handleTagClick}
                           tagColors={appSettings}
-                          collapsibleEnabled={appSettings.collapsible_cards_enabled === 'true'}
+                          viewHref={`${pathname}?event=${event.id}`}
+                          onViewClick={openEventOverlay}
                         />
                       </div>
                     ))}
@@ -707,23 +892,44 @@ function App() {
         onSettingsUpdated={fetchSettings}
       />
 
-      <SuggestionsPanel
-        isOpen={isSuggestionsPanelOpen}
-        onClose={() => setIsSuggestionsPanelOpen(false)}
-        onSuggestionProcessed={fetchEvents}
-      />
-
       <TagRatingsModal
         isOpen={isTagRatingsModalOpen}
         onClose={() => setIsTagRatingsModalOpen(false)}
         tagType={tagRatingsData?.type || ''}
         tagValue={tagRatingsData?.value || ''}
+        onEventClick={openEventOverlay}
+        refreshTrigger={tagModalRefreshTrigger}
       />
+
+      {overlayEvent && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 overflow-y-auto"
+          onClick={closeEventOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Event details"
+        >
+          <div className="relative max-w-md w-full my-8 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <EventCard
+              event={overlayEvent}
+              averageRating={overlayEvent.average_rating}
+              ratingCount={overlayEvent.rating_count}
+              userRating={overlayEvent.user_rating}
+              onRatingSubmitted={() => { fetchEvents(); }}
+              onEventUpdated={() => { fetchEvents(); }}
+              onTagClick={handleTagClick}
+              tagColors={appSettings}
+            />
+          </div>
+        </div>
+      )}
 
       <StatisticsPage
         isOpen={isStatisticsPageOpen}
         onClose={() => setIsStatisticsPageOpen(false)}
         tagColors={appSettings}
+        onOpenEvent={openEventOverlay}
+        tagModalRefreshTrigger={tagModalRefreshTrigger}
       />
     </div>
   );

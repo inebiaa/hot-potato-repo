@@ -1,5 +1,6 @@
-import { Calendar, MapPin, Star, Sparkles, Users, Scissors, Edit, Trash2, FileEdit, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
+import { Calendar, MapPin, Star, Sparkles, Users, Scissors, Edit, Trash2, FileEdit, Share2, MoreVertical } from 'lucide-react';
 import { Event, Rating, supabase } from '../lib/supabase';
+import { getSeasonFromDate } from '../lib/season';
 import { useState } from 'react';
 import RatingModal from './RatingModal';
 import EditEventModal from './EditEventModal';
@@ -15,7 +16,10 @@ interface EventCardProps {
   onRatingSubmitted: () => void;
   onEventUpdated: () => void;
   onTagClick: (type: string, value: string) => void;
-  collapsibleEnabled?: boolean;
+  /** When set, the card title links to this URL (e.g. single-event view) */
+  viewHref?: string;
+  /** When set, clicking the title opens overlay instead of navigating (e.g. openEventOverlay) */
+  onViewClick?: (eventId: string) => void;
   tagColors?: {
     producer_bg_color?: string;
     producer_text_color?: string;
@@ -44,7 +48,8 @@ export default function EventCard({
   onRatingSubmitted,
   onEventUpdated,
   onTagClick,
-  collapsibleEnabled = true,
+  viewHref,
+  onViewClick,
   tagColors
 }: EventCardProps) {
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
@@ -52,9 +57,14 @@ export default function EventCard({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSuggestEditModalOpen, setIsSuggestEditModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(!collapsibleEnabled);
-  const [showShareMenu, setShowShareMenu] = useState(false);
   const [shareCopied, setShareCopied] = useState<'link' | 'embed' | 'embedcode' | null>(null);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [expandedTagSections, setExpandedTagSections] = useState<Record<string, boolean>>({});
+
+  const TAG_LIMIT = 8; // ~2 lines of tags; beyond this show "View more"
+  const toggleTagSection = (key: string) => {
+    setExpandedTagSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
   const { user, isAdmin } = useAuth();
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
@@ -111,6 +121,7 @@ export default function EventCard({
     const [year, month, day] = dateString.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     return date.toLocaleDateString('en-US', {
+      weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -118,111 +129,114 @@ export default function EventCard({
   };
 
   const handleCardClick = (e: React.MouseEvent) => {
-    if (!collapsibleEnabled) return;
-    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) {
-      return;
-    }
-    setIsExpanded(!isExpanded);
+    if (!onViewClick) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('a') || target.closest('.absolute.top-2.right-2')) return;
+    onViewClick(event.id);
   };
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all relative">
-        <div className="absolute top-2 right-2 z-10 flex gap-2">
-          <div className="relative">
+      <div
+        className={`bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all relative ${onViewClick ? 'cursor-pointer' : ''}`}
+        onClick={handleCardClick}
+        role={onViewClick ? 'button' : undefined}
+        tabIndex={onViewClick ? 0 : undefined}
+        onKeyDown={onViewClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewClick(event.id); } } : undefined}
+      >
+        <div className="absolute top-2 right-2 z-10">
             <button
-              onClick={() => setShowShareMenu(!showShareMenu)}
-              className="p-2 bg-white/90 hover:bg-white rounded-lg shadow-md transition-colors"
-              title="Share"
+              onClick={() => setShowActionsMenu(!showActionsMenu)}
+              className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-black/5 transition-colors"
+              title="Actions"
+              aria-haspopup="true"
+              aria-expanded={showActionsMenu}
             >
-              <Share2 size={16} className="text-gray-600" />
+              <MoreVertical size={18} />
             </button>
-            {showShareMenu && (
+            {showActionsMenu && (
               <>
                 <div
                   className="fixed inset-0 z-40"
-                  onClick={() => setShowShareMenu(false)}
+                  onClick={() => setShowActionsMenu(false)}
                   aria-hidden="true"
                 />
-                <div className="absolute right-0 top-full mt-1 w-72 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                  <div className="px-3 py-1.5 text-xs font-medium text-gray-500 uppercase">Share this show</div>
+                <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                   <button
-                    onClick={() => copyToClipboard(shareLink, 'link')}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
+                    onClick={() => { copyToClipboard(shareLink, 'link'); setShowActionsMenu(false); }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between gap-2"
                   >
+                    <Share2 size={14} className="text-gray-500" />
                     <span>Copy link</span>
                     {shareCopied === 'link' && <span className="text-green-600 text-xs">Copied!</span>}
                   </button>
                   <button
-                    onClick={() => copyToClipboard(embedLink, 'embed')}
+                    onClick={() => { copyToClipboard(embedLink, 'embed'); setShowActionsMenu(false); }}
                     className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
                   >
+                    <Share2 size={14} className="text-gray-500" />
                     <span>Copy embed URL</span>
-                    {shareCopied === 'embed' && <span className="text-green-600 text-xs">Copied!</span>}
                   </button>
                   <button
-                    onClick={() => copyToClipboard(embedCode, 'embedcode')}
+                    onClick={() => { copyToClipboard(embedCode, 'embedcode'); setShowActionsMenu(false); }}
                     className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between border-t border-gray-100"
                   >
+                    <Share2 size={14} className="text-gray-500" />
                     <span>Copy embed code</span>
-                    {shareCopied === 'embedcode' && <span className="text-green-600 text-xs">Copied!</span>}
                   </button>
+                  {canEdit && (
+                    <>
+                      <div className="border-t border-gray-100 my-1" />
+                      <button
+                        onClick={() => { setIsEditModalOpen(true); setShowActionsMenu(false); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                      >
+                        <Edit size={14} className="text-blue-600" />
+                        <span>Edit show</span>
+                      </button>
+                      <button
+                        onClick={() => { handleDelete(); setShowActionsMenu(false); }}
+                        disabled={isDeleting}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50 text-red-600"
+                      >
+                        <Trash2 size={14} />
+                        <span>Delete show</span>
+                      </button>
+                    </>
+                  )}
+                  {!canEdit && user && (
+                    <>
+                      <div className="border-t border-gray-100 my-1" />
+                      <button
+                        onClick={() => { setIsSuggestEditModalOpen(true); setShowActionsMenu(false); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                      >
+                        <FileEdit size={14} className="text-blue-600" />
+                        <span>Suggest an edit</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               </>
             )}
           </div>
-          {canEdit ? (
-            <>
-              <button
-                onClick={() => setIsEditModalOpen(true)}
-                className="p-2 bg-white/90 hover:bg-white rounded-lg shadow-md transition-colors"
-                title="Edit show"
-              >
-                <Edit size={16} className="text-blue-600" />
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="p-2 bg-white/90 hover:bg-white rounded-lg shadow-md transition-colors disabled:opacity-50"
-                title="Delete show"
-              >
-                <Trash2 size={16} className="text-red-600" />
-              </button>
-            </>
-          ) : user ? (
-            <button
-              onClick={() => setIsSuggestEditModalOpen(true)}
-              className="p-2 bg-white/90 hover:bg-white rounded-lg shadow-md transition-colors"
-              title="Suggest an edit"
-            >
-              <FileEdit size={16} className="text-blue-600" />
-            </button>
-          ) : null}
-        </div>
         {event.image_url && (
           <img
             src={event.image_url}
             alt={event.name}
-            className={`w-full h-48 object-cover ${collapsibleEnabled ? 'cursor-pointer' : ''}`}
-            onClick={handleCardClick}
+            className="w-full h-48 object-cover flex-shrink-0 rounded-t-lg"
           />
         )}
         <div className="p-6">
           <div className="flex items-start justify-between mb-2">
-            <h3
-              className={`text-xl font-bold text-gray-900 flex-1 ${collapsibleEnabled ? 'cursor-pointer hover:text-blue-600 transition-colors' : ''}`}
-              onClick={handleCardClick}
-            >
-              {event.name}
-            </h3>
-            {collapsibleEnabled && (
-              <button
-                onClick={handleCardClick}
-                className="ml-2 p-1 hover:bg-gray-100 rounded-full transition-colors"
-                title={isExpanded ? "Collapse" : "Expand"}
-              >
-                {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-              </button>
+            {viewHref && !onViewClick ? (
+              <a href={viewHref} className="text-xl font-bold text-gray-900 flex-1 block">
+                {event.name}
+              </a>
+            ) : (
+              <h3 className="text-xl font-bold text-gray-900 flex-1">
+                {event.name}
+              </h3>
             )}
           </div>
 
@@ -230,7 +244,7 @@ export default function EventCard({
             {event.city && (
               <button
                 onClick={() => onTagClick('city', event.city)}
-                className="px-2 py-1 rounded text-xs transition-all hover:opacity-80"
+                className="px-2 py-1 rounded-md text-xs transition-all hover:opacity-80"
                 style={{
                   backgroundColor: tagColors?.city_bg_color || '#dbeafe',
                   color: tagColors?.city_text_color || '#1e40af'
@@ -240,40 +254,60 @@ export default function EventCard({
                 {event.city}
               </button>
             )}
-            {event.season && (
-              <button
-                onClick={() => onTagClick('season', event.season)}
-                className="px-2 py-1 rounded text-xs transition-all hover:opacity-80"
-                style={{
-                  backgroundColor: tagColors?.season_bg_color || '#ffedd5',
-                  color: tagColors?.season_text_color || '#c2410c'
-                }}
-              >
-                <Calendar size={12} className="inline mr-1 -mt-0.5" />
-                {event.season}
-              </button>
-            )}
+            {(() => {
+              const season = event.season || getSeasonFromDate(event.date);
+              return (
+                <button
+                  onClick={() => onTagClick('season', season)}
+                  className="px-2 py-1 rounded-md text-xs transition-all hover:opacity-80"
+                  style={{
+                    backgroundColor: tagColors?.season_bg_color || '#ffedd5',
+                    color: tagColors?.season_text_color || '#c2410c'
+                  }}
+                >
+                  <Calendar size={12} className="inline mr-1 -mt-0.5" />
+                  {season}
+                </button>
+              );
+            })()}
           </div>
 
-          {event.header_tags && event.header_tags.length > 0 && (
-            <div className="mb-3">
-              <div className="flex flex-wrap gap-1">
-                {event.header_tags.map((tag, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => onTagClick('header_tags', tag)}
-                    className="text-xs px-2 py-1 rounded transition-colors hover:opacity-80"
-                    style={{
-                      backgroundColor: tagColors?.header_tags_bg_color || '#ccfbf1',
-                      color: tagColors?.header_tags_text_color || '#0f766e'
-                    }}
-                  >
-                    {tag}
-                  </button>
-                ))}
+          {(() => {
+            const genreTags = (event.genre || (event as Event & { header_tags?: string[] }).header_tags || []);
+            if (genreTags.length === 0) return null;
+            const tags = genreTags;
+            const showMore = tags.length > TAG_LIMIT && !expandedTagSections['header_tags'];
+            const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
+            return (
+              <div className="mb-3">
+                <div className="flex flex-wrap gap-1 items-center">
+                  {visible.map((tag: string, idx: number) => (
+                    <button
+                      key={idx}
+                      onClick={() => onTagClick('header_tags', tag)}
+                      className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                      style={{
+                        backgroundColor: tagColors?.header_tags_bg_color || '#ccfbf1',
+                        color: tagColors?.header_tags_text_color || '#0f766e'
+                      }}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                  {tags.length > TAG_LIMIT && (
+                    <button
+                      type="button"
+                      onClick={() => toggleTagSection('header_tags')}
+                      className="text-xs text-gray-400 hover:text-gray-600 inline-flex items-center shrink-0"
+                      title={expandedTagSections['header_tags'] ? 'Show less' : 'View more tags'}
+                    >
+                      {expandedTagSections['header_tags'] ? '−' : `+${tags.length - TAG_LIMIT}`}
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {event.description && (
             <p className="text-gray-600 mb-4 text-sm">{event.description}</p>
@@ -297,110 +331,148 @@ export default function EventCard({
             )}
           </div>
 
-          {(isExpanded || !collapsibleEnabled) && (
-            <div className="space-y-3 mb-4 pt-4 border-t">
-            {event.producers && event.producers.length > 0 && (
-              <div>
-                <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
-                  <Sparkles size={14} className="mr-1" />
-                  Produced By
+          <div className="space-y-3 mb-4 pt-4 border-t">
+            {event.producers && event.producers.length > 0 && (() => {
+              const tags = event.producers;
+              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['producers'];
+              const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
+              return (
+                <div>
+                  <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
+                    <Sparkles size={14} className="mr-1" />
+                    Produced By
+                  </div>
+                  <div className="flex flex-wrap gap-1 items-center">
+                    {visible.map((producer, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => onTagClick('producer', producer)}
+                        className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                        style={{
+                          backgroundColor: tagColors?.producer_bg_color || '#f3f4f6',
+                          color: tagColors?.producer_text_color || '#374151'
+                        }}
+                      >
+                        {producer}
+                      </button>
+                    ))}
+                    {tags.length > TAG_LIMIT && (
+                      <button type="button" onClick={() => toggleTagSection('producers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['producers'] ? 'Show less' : 'View more tags'}>
+                        {expandedTagSections['producers'] ? '−' : `+${tags.length - TAG_LIMIT}`}
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {event.producers.map((producer, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => onTagClick('producer', producer)}
-                      className="text-xs px-2 py-1 rounded transition-colors hover:opacity-80"
-                      style={{
-                        backgroundColor: tagColors?.producer_bg_color || '#f3f4f6',
-                        color: tagColors?.producer_text_color || '#374151'
-                      }}
-                    >
-                      {producer}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
-            {event.featured_designers && event.featured_designers.length > 0 && (
-              <div>
-                <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
-                  <Star size={14} className="mr-1" />
-                  Featured Designers
+            {event.featured_designers && event.featured_designers.length > 0 && (() => {
+              const tags = event.featured_designers;
+              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['designers'];
+              const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
+              return (
+                <div>
+                  <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
+                    <Star size={14} className="mr-1" />
+                    Featured Designers
+                  </div>
+                  <div className="flex flex-wrap gap-1 items-center">
+                    {visible.map((designer, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => onTagClick('designer', designer)}
+                        className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                        style={{
+                          backgroundColor: tagColors?.designer_bg_color || '#fef3c7',
+                          color: tagColors?.designer_text_color || '#b45309'
+                        }}
+                      >
+                        {designer}
+                      </button>
+                    ))}
+                    {tags.length > TAG_LIMIT && (
+                      <button type="button" onClick={() => toggleTagSection('designers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['designers'] ? 'Show less' : 'View more tags'}>
+                        {expandedTagSections['designers'] ? '−' : `+${tags.length - TAG_LIMIT}`}
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {event.featured_designers.map((designer, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => onTagClick('designer', designer)}
-                      className="text-xs px-2 py-1 rounded transition-colors hover:opacity-80"
-                      style={{
-                        backgroundColor: tagColors?.designer_bg_color || '#fef3c7',
-                        color: tagColors?.designer_text_color || '#b45309'
-                      }}
-                    >
-                      {designer}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
-            {event.models && event.models.length > 0 && (
-              <div>
-                <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
-                  <Users size={14} className="mr-1" />
-                  Featured Models
+            {event.models && event.models.length > 0 && (() => {
+              const tags = event.models;
+              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['models'];
+              const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
+              return (
+                <div>
+                  <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
+                    <Users size={14} className="mr-1" />
+                    Featured Models
+                  </div>
+                  <div className="flex flex-wrap gap-1 items-center">
+                    {visible.map((model, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => onTagClick('model', model)}
+                        className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                        style={{
+                          backgroundColor: tagColors?.model_bg_color || '#fce7f3',
+                          color: tagColors?.model_text_color || '#be185d'
+                        }}
+                      >
+                        {model}
+                      </button>
+                    ))}
+                    {tags.length > TAG_LIMIT && (
+                      <button type="button" onClick={() => toggleTagSection('models')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['models'] ? 'Show less' : 'View more tags'}>
+                        {expandedTagSections['models'] ? '−' : `+${tags.length - TAG_LIMIT}`}
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {event.models.map((model, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => onTagClick('model', model)}
-                      className="text-xs px-2 py-1 rounded transition-colors hover:opacity-80"
-                      style={{
-                        backgroundColor: tagColors?.model_bg_color || '#fce7f3',
-                        color: tagColors?.model_text_color || '#be185d'
-                      }}
-                    >
-                      {model}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
-            {event.hair_makeup && event.hair_makeup.length > 0 && (
-              <div>
-                <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
-                  <Scissors size={14} className="mr-1" />
-                  Hair & Makeup
+            {event.hair_makeup && event.hair_makeup.length > 0 && (() => {
+              const tags = event.hair_makeup;
+              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['hair_makeup'];
+              const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
+              return (
+                <div>
+                  <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
+                    <Scissors size={14} className="mr-1" />
+                    Hair & Makeup
+                  </div>
+                  <div className="flex flex-wrap gap-1 items-center">
+                    {visible.map((artist, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => onTagClick('hair_makeup', artist)}
+                        className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                        style={{
+                          backgroundColor: tagColors?.hair_makeup_bg_color || '#f3e8ff',
+                          color: tagColors?.hair_makeup_text_color || '#7e22ce'
+                        }}
+                      >
+                        {artist}
+                      </button>
+                    ))}
+                    {tags.length > TAG_LIMIT && (
+                      <button type="button" onClick={() => toggleTagSection('hair_makeup')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['hair_makeup'] ? 'Show less' : 'View more tags'}>
+                        {expandedTagSections['hair_makeup'] ? '−' : `+${tags.length - TAG_LIMIT}`}
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {event.hair_makeup.map((artist, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => onTagClick('hair_makeup', artist)}
-                      className="text-xs px-2 py-1 rounded transition-colors hover:opacity-80"
-                      style={{
-                        backgroundColor: tagColors?.hair_makeup_bg_color || '#f3e8ff',
-                        color: tagColors?.hair_makeup_text_color || '#7e22ce'
-                      }}
-                    >
-                      {artist}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+              );
+            })()}
             </div>
-          )}
 
           <div className="flex items-center justify-between pt-4 border-t">
             <button
               onClick={() => setIsViewRatingsModalOpen(true)}
-              className="flex items-center hover:bg-gray-50 rounded-lg p-2 -ml-2 transition-colors group"
+              className="flex items-center hover:bg-gray-50 p-2 -ml-2 transition-colors group"
               title="View all ratings"
             >
               <div className="flex items-center">
@@ -420,7 +492,7 @@ export default function EventCard({
             {user && (
               <button
                 onClick={() => setIsRatingModalOpen(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+                className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium"
               >
                 {userRating ? 'Update' : 'Rate Show'}
               </button>
@@ -438,25 +510,35 @@ export default function EventCard({
             </div>
           )}
 
-          {event.footer_tags && event.footer_tags.length > 0 && (
-            <div className="mt-3 pt-3 border-t">
-              <div className="flex flex-wrap gap-1">
-                {event.footer_tags.map((tag, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => onTagClick('footer_tags', tag)}
-                    className="text-xs px-2 py-1 rounded transition-colors hover:opacity-80"
-                    style={{
-                      backgroundColor: tagColors?.footer_tags_bg_color || '#d1fae5',
-                      color: tagColors?.footer_tags_text_color || '#065f46'
-                    }}
-                  >
-                    {tag}
-                  </button>
-                ))}
+          {event.footer_tags && event.footer_tags.length > 0 && (() => {
+            const tags = event.footer_tags;
+            const showMore = tags.length > TAG_LIMIT && !expandedTagSections['footer_tags'];
+            const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
+            return (
+              <div className="mt-3 pt-3 border-t">
+                <div className="flex flex-wrap gap-1 items-center">
+                  {visible.map((tag, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => onTagClick('footer_tags', tag)}
+                      className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                      style={{
+                        backgroundColor: tagColors?.footer_tags_bg_color || '#d1fae5',
+                        color: tagColors?.footer_tags_text_color || '#065f46'
+                      }}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                  {tags.length > TAG_LIMIT && (
+                    <button type="button" onClick={() => toggleTagSection('footer_tags')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['footer_tags'] ? 'Show less' : 'View more tags'}>
+                      {expandedTagSections['footer_tags'] ? '−' : `+${tags.length - TAG_LIMIT}`}
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </div>
 
