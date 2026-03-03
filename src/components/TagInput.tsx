@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X } from 'lucide-react';
+import { X, GripVertical } from 'lucide-react';
 import { fetchExistingTags, TagColumn } from '../lib/tags';
 
 interface TagInputProps {
@@ -51,6 +51,47 @@ export default function TagInput({
   const removeTag = useCallback((index: number) => {
     onChange(value.filter((_, i) => i !== index));
   }, [value, onChange]);
+
+  const reorderTags = useCallback((fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    const next = [...value];
+    const [removed] = next.splice(fromIndex, 1);
+    next.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, removed);
+    onChange(next);
+  }, [value, onChange]);
+
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+    e.dataTransfer.setData('application/json', JSON.stringify({ index }));
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDropTargetIndex(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragIndex !== null && dragIndex !== index) setDropTargetIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDropTargetIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    const from = dragIndex ?? parseInt(e.dataTransfer.getData('text/plain'), 10);
+    if (!Number.isNaN(from) && from !== dropIndex) reorderTags(from, dropIndex);
+    setDragIndex(null);
+    setDropTargetIndex(null);
+  };
 
   useEffect(() => {
     if (!inputValue.trim()) {
@@ -116,8 +157,17 @@ export default function TagInput({
         {value.map((tag, idx) => (
           <span
             key={`${tag}-${idx}`}
-            className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-sm"
+            draggable
+            onDragStart={(e) => handleDragStart(e, idx)}
+            onDragEnd={handleDragEnd}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, idx)}
+            className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-sm select-none ${
+              dragIndex === idx ? 'opacity-60 cursor-grabbing' : 'cursor-grab'
+            } ${dropTargetIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
           >
+            <GripVertical size={12} className="text-gray-400 shrink-0" aria-hidden />
             {tag}
             <button
               type="button"
@@ -125,6 +175,7 @@ export default function TagInput({
                 e.stopPropagation();
                 removeTag(idx);
               }}
+              onPointerDown={(e) => e.stopPropagation()}
               className="ml-0.5 p-0.5 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-700"
               aria-label={`Remove ${tag}`}
             >

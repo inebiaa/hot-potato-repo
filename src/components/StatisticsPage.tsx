@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, BarChart3 } from 'lucide-react';
 import { supabase, Event } from '../lib/supabase';
+import { getSeasonFromDate, sortSeasonsByDate } from '../lib/season';
 import TagRatingsModal from './TagRatingsModal';
 
 interface TagStats {
@@ -13,9 +14,19 @@ interface StatisticsPageProps {
   isOpen: boolean;
   onClose: () => void;
   tagColors: any;
+  /** Optional: open an event overlay from a tag (matches main page behavior). */
+  onOpenEvent?: (eventId: string) => void;
+  /** Optional: when this changes, refresh the tag ratings modal so counts stay in sync. */
+  tagModalRefreshTrigger?: number;
 }
 
-export default function StatisticsPage({ isOpen, onClose, tagColors }: StatisticsPageProps) {
+export default function StatisticsPage({
+  isOpen,
+  onClose,
+  tagColors,
+  onOpenEvent,
+  tagModalRefreshTrigger = 0,
+}: StatisticsPageProps) {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedCity, setSelectedCity] = useState<string>('');
@@ -58,7 +69,7 @@ export default function StatisticsPage({ isOpen, onClose, tagColors }: Statistic
     }
 
     if (selectedSeason) {
-      filteredEvents = filteredEvents.filter(e => e.season === selectedSeason);
+      filteredEvents = filteredEvents.filter(e => (e.season || getSeasonFromDate(e.date)) === selectedSeason);
     }
 
     filteredEvents.forEach((event) => {
@@ -161,7 +172,7 @@ export default function StatisticsPage({ isOpen, onClose, tagColors }: Statistic
   };
 
   const allCities = Array.from(new Set(events.map(e => e.city).filter(Boolean))).sort();
-  const allSeasons = Array.from(new Set(events.map(e => e.season).filter(Boolean))).sort();
+  const allSeasons = sortSeasonsByDate(Array.from(new Set(events.map(e => e.season || getSeasonFromDate(e.date)))));
 
   const tagStats = calculateTagStats();
 
@@ -240,7 +251,7 @@ export default function StatisticsPage({ isOpen, onClose, tagColors }: Statistic
                     color: selectedType === 'header_tags' ? getTagColors('header_tags').text : '#374151'
                   }}
                 >
-                  Header Tags
+                  Genre
                 </button>
                 <button
                   onClick={() => setSelectedType('footer_tags')}
@@ -382,6 +393,8 @@ export default function StatisticsPage({ isOpen, onClose, tagColors }: Statistic
         onClose={() => setIsTagRatingsModalOpen(false)}
         tagType={selectedTag?.type || ''}
         tagValue={selectedTag?.value || ''}
+        onEventClick={onOpenEvent}
+        refreshTrigger={tagModalRefreshTrigger}
       />
     </>
   );

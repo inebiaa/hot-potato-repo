@@ -31,7 +31,7 @@ export interface Event {
   featured_designers: string[] | null;
   models: string[] | null;
   hair_makeup: string[] | null;
-  header_tags: string[] | null;
+  genre: string[] | null;
   footer_tags: string[] | null;
   collection_id: string | null;
   created_by: string | null;
@@ -63,4 +63,21 @@ export interface EventWithRatings extends Event {
   average_rating: number;
   rating_count: number;
   user_rating?: Rating;
+}
+
+export interface UserList {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface UserListEvent {
+  id: string;
+  list_id: string;
+  event_id: string;
+  position: number;
+  created_at: string;
 }

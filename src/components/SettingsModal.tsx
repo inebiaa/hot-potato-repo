@@ -405,19 +405,6 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated }: Se
             />
           </div>
 
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <input
-              id="collapsibleCards"
-              type="checkbox"
-              checked={settings.collapsible_cards_enabled === 'true'}
-              onChange={(e) => setSettings({ ...settings, collapsible_cards_enabled: e.target.checked ? 'true' : 'false' })}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <label htmlFor="collapsibleCards" className="text-sm font-medium text-gray-700 cursor-pointer">
-              Enable Collapsible Event Cards (users can click to expand/collapse card details)
-            </label>
-          </div>
-
           <div>
             <label htmlFor="appIconUrl" className="block text-sm font-medium text-gray-700 mb-1">
               App Icon URL
@@ -512,7 +499,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated }: Se
               />
 
               <ColorPicker
-                label="Header Tags"
+                label="Genre"
                 bgValue={settings.header_tags_bg_color}
                 textValue={settings.header_tags_text_color}
                 onBgChange={(value) => setSettings(prev => ({ ...prev, header_tags_bg_color: value }))}

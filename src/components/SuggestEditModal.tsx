@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { supabase, Event } from '../lib/supabase';
+import { getSeasonFromDate } from '../lib/season';
 import { useAuth } from '../contexts/AuthContext';
 import TagInput from './TagInput';
 
@@ -16,7 +17,6 @@ export default function SuggestEditModal({ isOpen, onClose, onSuggestionSubmitte
   const [description, setDescription] = useState(event.description);
   const [date, setDate] = useState(event.date.slice(0, 10));
   const [city, setCity] = useState(event.city || '');
-  const [season, setSeason] = useState(event.season || '');
   const [location, setLocation] = useState(event.location || '');
   const [address, setAddress] = useState(event.address || '');
   const [imageUrl, setImageUrl] = useState(event.image_url || '');
@@ -170,20 +170,6 @@ export default function SuggestEditModal({ isOpen, onClose, onSuggestionSubmitte
           </div>
 
           <div>
-            <label htmlFor="season" className="block text-sm font-medium text-gray-700 mb-1">
-              Season
-            </label>
-            <input
-              id="season"
-              type="text"
-              value={season}
-              onChange={(e) => setSeason(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g., Spring 2024, Fall 2023"
-            />
-          </div>
-
-          <div>
             <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
               Venue
             </label>
@@ -253,7 +239,7 @@ export default function SuggestEditModal({ isOpen, onClose, onSuggestionSubmitte
 
           <TagInput
             id="headerTags"
-            label="Header Tags"
+            label="Genre"
             value={headerTags}
             onChange={setHeaderTags}
             tagColumn="header_tags"
