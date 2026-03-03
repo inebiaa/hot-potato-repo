@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, FileEdit, BarChart3, FolderOpen, LayoutGrid, Layers } from 'lucide-react';
+import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, FileEdit, BarChart3 } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating, EventCollection } from './lib/supabase';
 import EventCard from './components/EventCard';
@@ -9,7 +9,6 @@ import SettingsModal from './components/SettingsModal';
 import SuggestionsPanel from './components/SuggestionsPanel';
 import TagRatingsModal from './components/TagRatingsModal';
 import StatisticsPage from './components/StatisticsPage';
-import CollectionsModal from './components/CollectionsModal';
 
 interface EventWithStats extends Event {
   average_rating: number;
@@ -60,8 +59,6 @@ function App() {
   const [dateFilter, setDateFilter] = useState<'all' | 'past' | 'future'>('all');
   const [allCities, setAllCities] = useState<string[]>([]);
   const [collections, setCollections] = useState<EventCollection[]>([]);
-  const [viewByCollection, setViewByCollection] = useState(false);
-  const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
   const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasClearedFiltersForSharedLink = useRef(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -391,14 +388,6 @@ function App() {
                         <span className="hidden sm:inline text-sm">Suggestions</span>
                       </button>
                       <button
-                        onClick={() => setIsCollectionsModalOpen(true)}
-                        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                        title="Collections"
-                      >
-                        <FolderOpen size={20} />
-                        <span className="hidden sm:inline text-sm">Collections</span>
-                      </button>
-                      <button
                         onClick={() => setIsSettingsModalOpen(true)}
                         className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                         title="App Settings"
@@ -494,29 +483,6 @@ function App() {
                   </select>
                   <Filter className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none" size={14} />
                 </div>
-
-                {collections.length > 0 && (
-                  <div className="flex rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
-                    <button
-                      type="button"
-                      onClick={() => setViewByCollection(false)}
-                      className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${!viewByCollection ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                      title="Show all in grid"
-                    >
-                      <LayoutGrid size={16} />
-                      All
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewByCollection(true)}
-                      className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${viewByCollection ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                      title="Group by collection"
-                    >
-                      <Layers size={16} />
-                      By collection
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -610,69 +576,67 @@ function App() {
               </button>
             </div>
           </div>
-        ) : viewByCollection && collections.length > 0 ? (
-          (() => {
-            const sortedCollections = [...collections].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-            const byCollection = new Map<string, EventWithStats[]>();
-            const ungrouped: EventWithStats[] = [];
-            const byDate = (a: EventWithStats, b: EventWithStats) => new Date(b.date).getTime() - new Date(a.date).getTime();
-            filteredEvents.forEach((event) => {
-              if (event.collection_id) {
-                const list = byCollection.get(event.collection_id) || [];
-                list.push(event);
-                byCollection.set(event.collection_id, list);
-              } else {
-                ungrouped.push(event);
-              }
-            });
-            sortedCollections.forEach((c) => {
-              const list = byCollection.get(c.id) || [];
-              list.sort(byDate);
-              byCollection.set(c.id, list);
-            });
-            ungrouped.sort(byDate);
+        ) : (() => {
+          // Group by collection when any event has a collection (backend-controlled via collection_id)
+          const hasGroupedEvents = filteredEvents.some((e) => e.collection_id) && collections.length > 0;
+          if (!hasGroupedEvents) {
             return (
-              <div className="space-y-10">
-                {sortedCollections.map((coll) => {
-                  const eventsInColl = byCollection.get(coll.id) || [];
-                  if (eventsInColl.length === 0) return null;
-                  return (
-                    <section key={coll.id}>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                        <FolderOpen size={20} className="text-blue-600" />
-                        {coll.name}
-                        {coll.description && (
-                          <span className="text-sm font-normal text-gray-500">— {coll.description}</span>
-                        )}
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {eventsInColl.map((event) => (
-                          <div
-                            key={event.id}
-                            ref={(el) => { eventCardRefs.current[event.id] = el; }}
-                          >
-                            <EventCard
-                              event={event}
-                              averageRating={event.average_rating}
-                              ratingCount={event.rating_count}
-                              userRating={event.user_rating}
-                              onRatingSubmitted={fetchEvents}
-                              onEventUpdated={fetchEvents}
-                              onTagClick={handleTagClick}
-                              tagColors={appSettings}
-                              collapsibleEnabled={appSettings.collapsible_cards_enabled === 'true'}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  );
-                })}
-                {ungrouped.length > 0 && (
-                  <section>
-                    <h3 className="text-lg font-semibold text-gray-600 mb-3">Ungrouped</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {ungrouped.map((event) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredEvents.map((event) => (
+                  <div
+                    key={event.id}
+                    ref={(el) => { eventCardRefs.current[event.id] = el; }}
+                  >
+                    <EventCard
+                      event={event}
+                      averageRating={event.average_rating}
+                      ratingCount={event.rating_count}
+                      userRating={event.user_rating}
+                      onRatingSubmitted={fetchEvents}
+                      onEventUpdated={fetchEvents}
+                      onTagClick={handleTagClick}
+                      tagColors={appSettings}
+                      collapsibleEnabled={appSettings.collapsible_cards_enabled === 'true'}
+                    />
+                  </div>
+                ))}
+              </div>
+            );
+          }
+          const sortedCollections = [...collections].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+          const byCollection = new Map<string, EventWithStats[]>();
+          const ungrouped: EventWithStats[] = [];
+          const byDate = (a: EventWithStats, b: EventWithStats) => new Date(b.date).getTime() - new Date(a.date).getTime();
+          filteredEvents.forEach((event) => {
+            if (event.collection_id) {
+              const list = byCollection.get(event.collection_id) || [];
+              list.push(event);
+              byCollection.set(event.collection_id, list);
+            } else {
+              ungrouped.push(event);
+            }
+          });
+          sortedCollections.forEach((c) => {
+            const list = byCollection.get(c.id) || [];
+            list.sort(byDate);
+            byCollection.set(c.id, list);
+          });
+          ungrouped.sort(byDate);
+          return (
+            <div className="space-y-6">
+              {sortedCollections.map((coll) => {
+                const eventsInColl = byCollection.get(coll.id) || [];
+                if (eventsInColl.length === 0) return null;
+                return (
+                  <div
+                    key={coll.id}
+                    className="rounded-xl border border-gray-200 bg-gray-50/60 overflow-hidden shadow-sm"
+                  >
+                    <div className="px-4 py-2.5 border-b border-gray-200 bg-white/90 text-sm font-medium text-gray-700">
+                      {coll.name}
+                    </div>
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {eventsInColl.map((event) => (
                         <div
                           key={event.id}
                           ref={(el) => { eventCardRefs.current[event.id] = el; }}
@@ -691,33 +655,39 @@ function App() {
                         </div>
                       ))}
                     </div>
-                  </section>
-                )}
-              </div>
-            );
-          })()
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredEvents.map((event) => (
-              <div
-                key={event.id}
-                ref={(el) => { eventCardRefs.current[event.id] = el; }}
-              >
-                <EventCard
-                  event={event}
-                  averageRating={event.average_rating}
-                  ratingCount={event.rating_count}
-                  userRating={event.user_rating}
-                  onRatingSubmitted={fetchEvents}
-                  onEventUpdated={fetchEvents}
-                  onTagClick={handleTagClick}
-                  tagColors={appSettings}
-                  collapsibleEnabled={appSettings.collapsible_cards_enabled === 'true'}
-                />
-              </div>
-            ))}
-          </div>
-        )}
+                  </div>
+                );
+              })}
+              {ungrouped.length > 0 && (
+                <div className="rounded-xl border border-gray-200 bg-gray-50/60 overflow-hidden shadow-sm">
+                  <div className="px-4 py-2.5 border-b border-gray-200 bg-white/90 text-sm font-medium text-gray-500">
+                    Other shows
+                  </div>
+                  <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {ungrouped.map((event) => (
+                      <div
+                        key={event.id}
+                        ref={(el) => { eventCardRefs.current[event.id] = el; }}
+                      >
+                        <EventCard
+                          event={event}
+                          averageRating={event.average_rating}
+                          ratingCount={event.rating_count}
+                          userRating={event.user_rating}
+                          onRatingSubmitted={fetchEvents}
+                          onEventUpdated={fetchEvents}
+                          onTagClick={handleTagClick}
+                          tagColors={appSettings}
+                          collapsibleEnabled={appSettings.collapsible_cards_enabled === 'true'}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </main>
 
       <AuthModal
@@ -754,12 +724,6 @@ function App() {
         isOpen={isStatisticsPageOpen}
         onClose={() => setIsStatisticsPageOpen(false)}
         tagColors={appSettings}
-      />
-
-      <CollectionsModal
-        isOpen={isCollectionsModalOpen}
-        onClose={() => setIsCollectionsModalOpen(false)}
-        onCollectionsUpdated={fetchEvents}
       />
     </div>
   );
