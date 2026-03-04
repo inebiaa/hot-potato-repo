@@ -1,19 +1,21 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Trash2 } from 'lucide-react';
 import { supabase, Event } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 import { useAuth } from '../contexts/AuthContext';
+import { ensureAlias, ensureIdentity, findIdentityByName, normalizeTagName, type TagType } from '../lib/tagIdentity';
 import TagInput from './TagInput';
-import type { CustomPerformerTag } from './SettingsModal';
+import IconPicker from './IconPicker';
 
 interface EditEventModalProps {
   isOpen: boolean;
   onClose: () => void;
   onEventUpdated: () => void;
   event: Event;
-  customPerformerTags?: CustomPerformerTag[];
 }
 
-export default function EditEventModal({ isOpen, onClose, onEventUpdated, event, customPerformerTags = [] }: EditEventModalProps) {
+export default function EditEventModal({ isOpen, onClose, onEventUpdated, event }: EditEventModalProps) {
   const [name, setName] = useState(event.name);
   const [description, setDescription] = useState(event.description || '');
   const [date, setDate] = useState(event.date.slice(0, 10));
@@ -30,11 +32,14 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event,
   const [headerTags, setHeaderTags] = useState<string[]>(event.header_tags || event.genre || []);
   const [footerTags, setFooterTags] = useState<string[]>(event.footer_tags || []);
   const [customTags, setCustomTags] = useState<Record<string, string[]>>(event.custom_tags || {});
-  const [inlineCustomTypes, setInlineCustomTypes] = useState<{ slug: string; label: string }[]>(() => {
+  const [inlineCustomTypes, setInlineCustomTypes] = useState<{ slug: string; label: string; icon: string }[]>(() => {
     const ct = event.custom_tags || {};
-    return Object.keys(ct)
-      .filter((slug) => !customPerformerTags.some((t) => t.slug === slug))
-      .map((slug) => ({ slug, label: slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') }));
+    const meta = event.custom_tag_meta || {};
+    return Object.keys(ct).map((slug) => ({
+      slug,
+      label: slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+      icon: meta[slug]?.icon || 'Tag',
+    }));
   });
   const [newCustomTypeLabel, setNewCustomTypeLabel] = useState('');
   const [error, setError] = useState('');
@@ -58,13 +63,16 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event,
       setFooterTags(event.footer_tags || []);
       setCustomTags(event.custom_tags || {});
       const ct = event.custom_tags || {};
+      const meta = event.custom_tag_meta || {};
       setInlineCustomTypes(
-        Object.keys(ct)
-          .filter((slug) => !customPerformerTags.some((t) => t.slug === slug))
-          .map((slug) => ({ slug, label: slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') }))
+        Object.keys(ct).map((slug) => ({
+          slug,
+          label: slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+          icon: meta[slug]?.icon || 'Tag',
+        }))
       );
     }
-  }, [isOpen, event, customPerformerTags]);
+  }, [isOpen, event]);
 
   if (!isOpen) return null;
 
@@ -92,6 +100,61 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event,
     setLoading(true);
 
     try {
+      const resolveTags = async (
+        tagType: TagType,
+        newTags: string[],
+        oldTags: string[]
+      ): Promise<string[]> => {
+        const resolved: string[] = [];
+        for (let i = 0; i < newTags.length; i++) {
+          const tag = newTags[i];
+          const identity = await ensureIdentity(tagType, tag, user.id);
+          const canon = identity?.canonical_name ?? tag.trim();
+          resolved.push(canon);
+          if (identity && oldTags.length === newTags.length && i < oldTags.length) {
+            const oldTag = oldTags[i];
+            if (normalizeTagName(oldTag) !== normalizeTagName(tag)) {
+              const existing = await findIdentityByName(tagType, oldTag);
+              if (!existing || existing.id === identity.id) {
+                await ensureAlias(identity.id, oldTag.trim(), user.id);
+              }
+            }
+          }
+        }
+        return resolved;
+      };
+
+      const oldProducers = toArray(event.producers);
+      const oldDesigners = toArray(event.featured_designers);
+      const oldModels = toArray(event.models || []);
+      const oldHairMakeup = toArray(event.hair_makeup || []);
+      const oldHeaderTags = toArray(event.header_tags || event.genre || []);
+      const oldFooterTags = toArray(event.footer_tags || []);
+
+      const [resolvedProducers, resolvedDesigners, resolvedModels, resolvedHairMakeup, resolvedHeaderTags, resolvedFooterTags] = await Promise.all([
+        resolveTags('producer', cleanProducers, oldProducers),
+        resolveTags('designer', cleanDesigners, oldDesigners),
+        resolveTags('model', clean(models), oldModels),
+        resolveTags('hair_makeup', clean(hairMakeup), oldHairMakeup),
+        resolveTags('header_tags', clean(headerTags), oldHeaderTags),
+        resolveTags('footer_tags', clean(footerTags), oldFooterTags),
+      ]);
+
+      const resolvedCustomTags: Record<string, string[]> = {};
+      for (const [slug, tags] of Object.entries(customTags)) {
+        const cleaned = (Array.isArray(tags) ? tags : []).map((s) => String(s).trim()).filter(Boolean);
+        const oldCustom = (event.custom_tags && typeof event.custom_tags === 'object'
+          ? (event.custom_tags as Record<string, string[]>)
+          : {})[slug] || [];
+        if (cleaned.length > 0) {
+          resolvedCustomTags[slug] = await resolveTags(
+            `custom:${slug}` as TagType,
+            cleaned,
+            Array.isArray(oldCustom) ? oldCustom : []
+          );
+        }
+      }
+
       const { error: updateError } = await supabase
         .from('events')
         .update({
@@ -103,13 +166,14 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event,
           location: location || null,
           address: address || null,
           image_url: imageUrl || null,
-          producers: cleanProducers.length ? cleanProducers : null,
-          featured_designers: cleanDesigners.length ? cleanDesigners : null,
-          models: clean(models).length ? clean(models) : null,
-          hair_makeup: clean(hairMakeup).length ? clean(hairMakeup) : null,
-          header_tags: clean(headerTags).length ? clean(headerTags) : null,
-          footer_tags: clean(footerTags).length ? clean(footerTags) : null,
-          custom_tags: Object.keys(customTags).length ? customTags : null,
+          producers: resolvedProducers.length ? resolvedProducers : null,
+          featured_designers: resolvedDesigners.length ? resolvedDesigners : null,
+          models: resolvedModels.length ? resolvedModels : null,
+          hair_makeup: resolvedHairMakeup.length ? resolvedHairMakeup : null,
+          header_tags: resolvedHeaderTags.length ? resolvedHeaderTags : null,
+          footer_tags: resolvedFooterTags.length ? resolvedFooterTags : null,
+          custom_tags: Object.keys(resolvedCustomTags).length ? resolvedCustomTags : null,
+          custom_tag_meta: inlineCustomTypes.length ? Object.fromEntries(inlineCustomTypes.map((t) => [t.slug, { icon: t.icon || 'Tag' }])) : null,
         })
         .eq('id', event.id);
 
@@ -126,16 +190,9 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event,
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="relative max-w-2xl w-full my-8">
-        <button
-          onClick={onClose}
-          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
-          aria-label="Close"
-        >
-          ×
-        </button>
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="relative max-w-2xl w-full my-8" onClick={(e) => e.stopPropagation()}>
         <div className="bg-white rounded-lg shadow-xl w-full p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-bold mb-6">Edit Fashion Show</h2>
 
@@ -288,18 +345,41 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event,
             hint="Optional tags; use a shared tag (e.g. NYFW Fall 2024) to group related shows"
           />
 
-          {inlineCustomTypes.map(({ slug, label }) => (
-            <TagInput
-              key={slug}
-              id={`custom-inline-${slug}`}
-              label={label}
-              value={customTags[slug] || []}
-              onChange={(v) => setCustomTags((prev) => ({ ...prev, [slug]: v }))}
-              tagColumn="header_tags"
-              customTagSlug={slug}
-              placeholder={`e.g., ${label}...`}
-              hint={`Optional ${label.toLowerCase()}`}
-            />
+          {inlineCustomTypes.map(({ slug, label, icon }) => (
+            <div key={slug} className="flex items-start gap-3">
+              <div className="shrink-0 w-28">
+                <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                <IconPicker label="" value={icon} onChange={(v) => setInlineCustomTypes((prev) => prev.map((t) => (t.slug === slug ? { ...t, icon: v } : t)))} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <TagInput
+                  id={`custom-inline-${slug}`}
+                  label=""
+                  value={customTags[slug] || []}
+                  onChange={(v) => setCustomTags((prev) => ({ ...prev, [slug]: v }))}
+                  tagColumn="header_tags"
+                  customTagSlug={slug}
+                  placeholder={`e.g., ${label}...`}
+                  hint={`Optional ${label.toLowerCase()}`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setInlineCustomTypes((prev) => prev.filter((t) => t.slug !== slug));
+                  setCustomTags((prev) => {
+                    const next = { ...prev };
+                    delete next[slug];
+                    return next;
+                  });
+                }}
+                className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded shrink-0 mt-6"
+                title="Remove this category"
+                aria-label={`Remove ${label} category`}
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
           ))}
 
           <div className="flex gap-2 items-end">
@@ -325,7 +405,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event,
                 const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
                 if (!slug) return;
                 if (inlineCustomTypes.some((t) => t.slug === slug)) return;
-                setInlineCustomTypes((prev) => [...prev, { slug, label }]);
+                setInlineCustomTypes((prev) => [...prev, { slug, label, icon: 'Tag' }]);
                 setNewCustomTypeLabel('');
               }}
               className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium shrink-0"
@@ -364,6 +444,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event,
         </form>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

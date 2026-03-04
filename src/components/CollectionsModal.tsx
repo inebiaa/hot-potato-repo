@@ -150,15 +150,11 @@ export default function CollectionsModal({ isOpen, onClose, onCollectionsUpdated
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="relative max-w-lg w-full my-8">
-        <button
-          onClick={onClose}
-          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
-          aria-label="Close"
-        >
-          ×
-        </button>
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="relative max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
         <div className="bg-white rounded-lg shadow-xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="p-4 border-b flex items-center gap-2">
           <FolderOpen size={24} />

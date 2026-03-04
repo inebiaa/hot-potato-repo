@@ -4,6 +4,7 @@ import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
 import { getSeasonFromDate } from './lib/season';
 import { normalizeForSearch } from './lib/normalize';
+import { readableTextForBg } from './lib/colorUtils';
 import EventCard from './components/EventCard';
 import AuthModal from './components/AuthModal';
 import AddEventModal from './components/AddEventModal';
@@ -23,6 +24,7 @@ interface AppSettings {
   app_icon_url: string;
   app_logo_url: string;
   tagline: string;
+  color_scheme?: string;
   collapsible_cards_enabled?: string;
   producer_bg_color?: string;
   producer_text_color?: string;
@@ -48,16 +50,8 @@ interface AppSettings {
   season_icon?: string;
   header_tags_icon?: string;
   footer_tags_icon?: string;
-}
-
-export interface CustomPerformerTag {
-  id: string;
-  label: string;
-  slug: string;
-  icon: string;
-  bg_color: string;
-  text_color: string;
-  sort_order: number;
+  optional_tags_bg_color?: string;
+  optional_tags_text_color?: string;
 }
 
 function App() {
@@ -67,6 +61,8 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
+  const [authModalPrompt, setAuthModalPrompt] = useState<string | undefined>(undefined);
   const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isTagRatingsModalOpen, setIsTagRatingsModalOpen] = useState(false);
@@ -79,6 +75,9 @@ function App() {
   const [allCities, setAllCities] = useState<string[]>([]);
   const [overlayEventId, setOverlayEventId] = useState<string | null>(null);
   const [overlaySource, setOverlaySource] = useState<'tagModal' | 'viewRatings' | null>(null);
+  const [overlayOpenWithWiggle, setOverlayOpenWithWiggle] = useState(false);
+  const [overlaySuggestSection, setOverlaySuggestSection] = useState<keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | undefined>(undefined);
+  const [overlaySuggestCustomSlug, setOverlaySuggestCustomSlug] = useState<string | undefined>(undefined);
   const [tagModalRefreshTrigger, setTagModalRefreshTrigger] = useState(0);
   const [upcomingExpanded, setUpcomingExpanded] = useState(false);
   const [showProfileView, setShowProfileView] = useState(false);
@@ -89,9 +88,11 @@ function App() {
     app_icon_url: '',
     app_logo_url: '',
     tagline: 'Fashion Show Reviews',
+    color_scheme: 'custom',
   });
-  const [customPerformerTags, setCustomPerformerTags] = useState<CustomPerformerTag[]>([]);
   const [searchFocused, setSearchFocused] = useState(false);
+
+  const isHex = (value: string | undefined) => !!value && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value);
 
   const fetchSettings = async () => {
     try {
@@ -106,28 +107,44 @@ function App() {
         settingsObj[item.key] = item.value || '';
       });
 
+      const scheme = settingsObj.color_scheme || 'custom';
+      const useAutoText = scheme === 'faded' || scheme === 'bright';
+      const resolveText = (bg: string, explicit: string | undefined, fallback: string) =>
+        useAutoText ? readableTextForBg(bg) : (explicit || fallback);
+
+      const producerBg = settingsObj.producer_bg_color || '#f3f4f6';
+      const designerBg = settingsObj.designer_bg_color || '#fef3c7';
+      const modelBg = settingsObj.model_bg_color || '#fce7f3';
+      const hairBg = settingsObj.hair_makeup_bg_color || '#f3e8ff';
+      const cityBg = settingsObj.city_bg_color || '#dbeafe';
+      const seasonBg = settingsObj.season_bg_color || '#ffedd5';
+      const headerBg = settingsObj.header_tags_bg_color || '#ccfbf1';
+      const footerBg = settingsObj.footer_tags_bg_color || '#d1fae5';
+      const optionalBg = settingsObj.optional_tags_bg_color || '#e0e7ff';
+
       setAppSettings({
         app_name: settingsObj.app_name || 'Runway Rate',
         app_icon_url: settingsObj.app_icon_url || '',
         app_logo_url: settingsObj.app_logo_url || '',
         tagline: settingsObj.tagline || 'Fashion Show Reviews',
+        color_scheme: scheme,
         collapsible_cards_enabled: settingsObj.collapsible_cards_enabled || 'true',
-        producer_bg_color: settingsObj.producer_bg_color || 'bg-gray-100',
-        producer_text_color: settingsObj.producer_text_color || 'text-gray-700',
-        designer_bg_color: settingsObj.designer_bg_color || 'bg-amber-100',
-        designer_text_color: settingsObj.designer_text_color || 'text-amber-700',
-        model_bg_color: settingsObj.model_bg_color || 'bg-pink-100',
-        model_text_color: settingsObj.model_text_color || 'text-pink-700',
-        hair_makeup_bg_color: settingsObj.hair_makeup_bg_color || 'bg-purple-100',
-        hair_makeup_text_color: settingsObj.hair_makeup_text_color || 'text-purple-700',
-        city_bg_color: settingsObj.city_bg_color || 'bg-blue-100',
-        city_text_color: settingsObj.city_text_color || 'text-blue-700',
-        season_bg_color: settingsObj.season_bg_color || '#ffedd5',
-        season_text_color: settingsObj.season_text_color || '#c2410c',
-        header_tags_bg_color: settingsObj.header_tags_bg_color || 'bg-teal-100',
-        header_tags_text_color: settingsObj.header_tags_text_color || 'text-teal-700',
-        footer_tags_bg_color: settingsObj.footer_tags_bg_color || 'bg-emerald-100',
-        footer_tags_text_color: settingsObj.footer_tags_text_color || 'text-emerald-700',
+        producer_bg_color: producerBg,
+        producer_text_color: resolveText(producerBg, settingsObj.producer_text_color, '#374151'),
+        designer_bg_color: designerBg,
+        designer_text_color: resolveText(designerBg, settingsObj.designer_text_color, '#b45309'),
+        model_bg_color: modelBg,
+        model_text_color: resolveText(modelBg, settingsObj.model_text_color, '#be185d'),
+        hair_makeup_bg_color: hairBg,
+        hair_makeup_text_color: resolveText(hairBg, settingsObj.hair_makeup_text_color, '#7e22ce'),
+        city_bg_color: cityBg,
+        city_text_color: resolveText(cityBg, settingsObj.city_text_color, '#1e40af'),
+        season_bg_color: seasonBg,
+        season_text_color: resolveText(seasonBg, settingsObj.season_text_color, '#c2410c'),
+        header_tags_bg_color: headerBg,
+        header_tags_text_color: resolveText(headerBg, settingsObj.header_tags_text_color, '#0f766e'),
+        footer_tags_bg_color: footerBg,
+        footer_tags_text_color: resolveText(footerBg, settingsObj.footer_tags_text_color, '#065f46'),
         producer_icon: settingsObj.producer_icon || 'Sparkles',
         designer_icon: settingsObj.designer_icon || 'Star',
         model_icon: settingsObj.model_icon || 'Users',
@@ -136,17 +153,9 @@ function App() {
         season_icon: settingsObj.season_icon || 'Calendar',
         header_tags_icon: settingsObj.header_tags_icon || 'Tag',
         footer_tags_icon: settingsObj.footer_tags_icon || 'Tag',
+        optional_tags_bg_color: optionalBg,
+        optional_tags_text_color: resolveText(optionalBg, settingsObj.optional_tags_text_color, '#3730a3'),
       });
-      const customJson = settingsObj.custom_performer_tags;
-      if (customJson) {
-        try {
-          setCustomPerformerTags(JSON.parse(customJson));
-        } catch {
-          setCustomPerformerTags([]);
-        }
-      } else {
-        setCustomPerformerTags([]);
-      }
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
@@ -198,10 +207,22 @@ function App() {
         if (!customTags || Array.isArray(customTags) || typeof customTags !== 'object') {
           customTags = {};
         }
+        let customTagMeta: Record<string, { icon?: string }> | null = event.custom_tag_meta ?? null;
+        if (typeof customTagMeta === 'string') {
+          try {
+            customTagMeta = JSON.parse(customTagMeta);
+          } catch {
+            customTagMeta = {};
+          }
+        }
+        if (!customTagMeta || Array.isArray(customTagMeta) || typeof customTagMeta !== 'object') {
+          customTagMeta = {};
+        }
 
         return {
           ...event,
           custom_tags: customTags,
+          custom_tag_meta: customTagMeta,
           average_rating: average,
           rating_count: eventRatings.length,
           user_rating: userRating,
@@ -475,9 +496,18 @@ function App() {
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
   const overlayEvent = overlayEventId ? (events.find((e) => e.id === overlayEventId) ?? filteredEvents.find((e) => e.id === overlayEventId)) : null;
 
-  const openEventOverlay = (eventId: string, source?: 'tagModal' | 'viewRatings') => {
+  const openEventOverlay = (
+    eventId: string,
+    source?: 'tagModal' | 'viewRatings',
+    openWithWiggle?: boolean,
+    suggestSection?: keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] },
+    suggestCustomSlug?: string
+  ) => {
     setOverlayEventId(eventId);
     setOverlaySource(source ?? null);
+    setOverlayOpenWithWiggle(!!openWithWiggle);
+    setOverlaySuggestSection(openWithWiggle && !suggestCustomSlug ? (suggestSection ?? 'header_tags') : undefined);
+    setOverlaySuggestCustomSlug(openWithWiggle ? suggestCustomSlug : undefined);
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.set('event', eventId);
@@ -488,6 +518,9 @@ function App() {
   const closeEventOverlay = () => {
     setOverlayEventId(null);
     setOverlaySource(null);
+    setOverlayOpenWithWiggle(false);
+    setOverlaySuggestSection(undefined);
+    setOverlaySuggestCustomSlug(undefined);
     setTagModalRefreshTrigger((t) => t + 1);
     if (typeof window !== 'undefined') window.history.replaceState(null, '', pathname);
   };
@@ -506,6 +539,18 @@ function App() {
     if (typeof window !== 'undefined') {
       window.history.pushState(null, '', `${pathname}?profile=1`);
     }
+  };
+
+  const openAuthModal = (mode: 'signin' | 'signup' = 'signin', prompt?: string) => {
+    setAuthModalMode(mode);
+    setAuthModalPrompt(prompt);
+    setIsAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setIsAuthModalOpen(false);
+    setAuthModalMode('signin');
+    setAuthModalPrompt(undefined);
   };
 
   // Embed mode: show only the single event card, minimal layout
@@ -536,8 +581,9 @@ function App() {
             onRatingSubmitted={fetchEvents}
             onEventUpdated={fetchEvents}
             onTagClick={handleTagClick}
+            onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
             tagColors={appSettings}
-            customPerformerTags={customPerformerTags}
+            customPerformerTags={[]}
           />
         </div>
         <TagRatingsModal
@@ -621,15 +667,15 @@ function App() {
             </div>
           </div>
         </header>
-        <main className="max-w-3xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 overflow-visible">
           <ProfilePage
             userId={user.id}
             pathname={pathname}
             onClose={goBack}
             onTagClick={handleTagClick}
-            onOpenEvent={(id) => openEventOverlay(id, 'viewRatings')}
+            onOpenEvent={(id, openWithWiggle, suggestSection, suggestCustomSlug) => openEventOverlay(id, 'viewRatings', openWithWiggle, suggestSection, suggestCustomSlug)}
             tagColors={appSettings}
-            customPerformerTags={customPerformerTags}
+            customPerformerTags={[]}
           />
         </main>
 
@@ -650,17 +696,7 @@ function App() {
             aria-modal="true"
             aria-label="Event details"
           >
-            <div className="relative max-w-md w-full my-8 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-              {(overlaySource === 'tagModal' || overlaySource === 'viewRatings') && (
-                <button
-                  type="button"
-                  onClick={closeEventOverlay}
-                  className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
-                  aria-label="Close"
-                >
-                  ×
-                </button>
-              )}
+            <div className="relative max-w-md w-full my-8 flex-shrink-0" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
               <EventCard
                 event={overlayEvent}
                 averageRating={overlayEvent.average_rating}
@@ -669,8 +705,11 @@ function App() {
                 onRatingSubmitted={() => { fetchEvents(); }}
                 onEventUpdated={() => { fetchEvents(); }}
                 onTagClick={handleTagClick}
+                onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
                 tagColors={appSettings}
-                customPerformerTags={customPerformerTags}
+                customPerformerTags={[]}
+                initialReorderSection={overlaySuggestCustomSlug ? undefined : overlaySuggestSection}
+                initialCustomReorderSlug={overlaySuggestCustomSlug}
               />
             </div>
           </div>
@@ -680,13 +719,13 @@ function App() {
           isOpen={isAddEventModalOpen}
           onClose={() => setIsAddEventModalOpen(false)}
           onEventAdded={fetchEvents}
-          customPerformerTags={customPerformerTags}
         />
 
         <SettingsModal
           isOpen={isSettingsModalOpen}
-          onClose={() => setIsSettingsModalOpen(false)}
+          onClose={() => { setIsSettingsModalOpen(false); fetchSettings(); }}
           onSettingsUpdated={fetchSettings}
+          onSettingsPreview={setAppSettings}
         />
 
         <StatisticsPage
@@ -745,7 +784,7 @@ function App() {
                     title="My Profile"
                   >
                     <User size={20} />
-                    <span className="hidden sm:inline text-sm">Profile</span>
+                    <span className="hidden sm:inline text-sm">My Profile</span>
                   </button>
                   {isAdmin && (
                     <>
@@ -776,7 +815,7 @@ function App() {
                 </>
               ) : (
                 <button
-                  onClick={() => setIsAuthModalOpen(true)}
+                  onClick={() => openAuthModal('signin')}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                 >
                   <LogIn size={20} />
@@ -897,7 +936,7 @@ function App() {
                         className="ml-0.5 opacity-80 hover:opacity-100"
                         aria-label={`Remove ${val} filter`}
                       >
-                        ×
+                        Clear
                       </button>
                     </span>
                   );
@@ -1005,29 +1044,30 @@ function App() {
                 onRatingSubmitted={fetchEvents}
                 onEventUpdated={fetchEvents}
                 onTagClick={handleTagClick}
+                onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
                 tagColors={appSettings}
-                customPerformerTags={customPerformerTags}
+                customPerformerTags={[]}
                 viewHref={`${pathname}?event=${event.id}`}
-                onViewClick={openEventOverlay}
+                onViewClick={(id, openWithWiggle, suggestSection, suggestCustomSlug) => openEventOverlay(id, undefined, openWithWiggle, suggestSection, suggestCustomSlug)}
                 imageOpacity={upcoming ? 0.6 : undefined}
               />
             </div>
           );
 
-          const upcomingBlock = upcoming.length > 0 && nextUpcoming ? (
+          const upcomingBlock = upcoming.length > 1 && nextUpcoming ? (
             <div className={`flex flex-col ${!upcomingExpanded ? 'min-h-[520px] md:mr-6 md:mb-6' : 'min-h-0 h-full'}`}>
-              <div className={CARD_TOP_SPACER + ' flex items-center shrink-0'}>
+              <div className="flex items-center shrink-0 mb-3">
                 <button
                   type="button"
                   onClick={() => setUpcomingExpanded((v) => !v)}
-                  className="text-[11px] text-gray-400 hover:text-gray-500 tracking-wide"
+                  className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0"
                   aria-expanded={upcomingExpanded}
                   aria-label={upcomingExpanded ? 'Collapse upcoming shows' : 'Expand upcoming shows'}
                 >
-                  {upcomingExpanded ? '← Back to stack' : `Upcoming (${upcoming.length})`}
+                  {upcomingExpanded ? `−${upcoming.length}` : `+${upcoming.length}`}
                 </button>
               </div>
-              <div className={`relative flex-1 min-h-[480px] ${!upcomingExpanded ? 'overflow-visible pl-[30px] pr-[30px] pb-[30px]' : 'overflow-hidden'}`}>
+              <div className={`relative flex-1 min-h-[480px] overflow-visible ${!upcomingExpanded ? 'pl-[30px] pr-[30px] pb-[30px]' : ''}`}>
                 {!upcomingExpanded && (() => {
                   const stacked = [...otherUpcoming.slice(0, 3), nextUpcoming];
                   const n = stacked.length;
@@ -1057,9 +1097,20 @@ function App() {
                           className="h-full w-full pointer-events-auto cursor-pointer"
                           role="button"
                           tabIndex={0}
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setUpcomingExpanded((v) => !v); }}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setUpcomingExpanded((v) => !v); } }}
-                          aria-label="Expand upcoming shows"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (n === 1) openEventOverlay(event.id);
+                            else setUpcomingExpanded((v) => !v);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              if (n === 1) openEventOverlay(event.id);
+                              else setUpcomingExpanded((v) => !v);
+                            }
+                          }}
+                          aria-label={n === 1 ? 'View event details' : 'Expand upcoming shows'}
                         >
                           <EventCard
                             event={event}
@@ -1069,8 +1120,9 @@ function App() {
                             onRatingSubmitted={fetchEvents}
                             onEventUpdated={fetchEvents}
                             onTagClick={handleTagClick}
+                            onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
                             tagColors={appSettings}
-                            customPerformerTags={customPerformerTags}
+                            customPerformerTags={[]}
                             imageOpacity={0.6}
                           />
                         </div>
@@ -1083,8 +1135,9 @@ function App() {
                           onRatingSubmitted={fetchEvents}
                           onEventUpdated={fetchEvents}
                           onTagClick={handleTagClick}
+                          onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
                           tagColors={appSettings}
-                          customPerformerTags={customPerformerTags}
+                          customPerformerTags={[]}
                           stackPhotoOnly
                         />
                       )}
@@ -1095,11 +1148,11 @@ function App() {
                   );
                 })()}
                 {upcomingExpanded && (
-                    <div className="absolute inset-0 flex">
-                      <div className="flex-1 min-h-0">
-                        {renderCard(nextUpcoming, true)}
-                      </div>
+                  <div className="flex h-full">
+                    <div className="flex-1 min-h-0">
+                      {renderCard(nextUpcoming, true)}
                     </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -1114,12 +1167,19 @@ function App() {
 
           return (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-visible">
-                <div className="overflow-visible self-start">{upcomingBlock}</div>
+                {upcomingBlock && (
+                  <div className="overflow-visible self-start">{upcomingBlock}</div>
+                )}
                 {upcomingExpanded && otherUpcoming.map((event) => (
                   <div key={event.id} className="min-h-0 flex flex-col">
                     {cardCell(renderCard(event, true))}
                   </div>
                 ))}
+                {upcoming.length === 1 && nextUpcoming && (
+                  <div key={nextUpcoming.id} className="min-h-0 flex flex-col">
+                    {cardCell(renderCard(nextUpcoming, false))}
+                  </div>
+                )}
                 {latestPast && (
                   <div key={latestPast.id} className="min-h-0 flex flex-col">
                     {cardCell(renderCard(latestPast), true)}
@@ -1137,20 +1197,23 @@ function App() {
 
       <AuthModal
         isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
+        onClose={closeAuthModal}
+        initialMode={authModalMode}
+        promptMessage={authModalPrompt}
       />
 
       <AddEventModal
         isOpen={isAddEventModalOpen}
         onClose={() => setIsAddEventModalOpen(false)}
         onEventAdded={fetchEvents}
-        customPerformerTags={customPerformerTags}
+        customPerformerTags={[]}
       />
 
       <SettingsModal
         isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
+        onClose={() => { setIsSettingsModalOpen(false); fetchSettings(); }}
         onSettingsUpdated={fetchSettings}
+        onSettingsPreview={setAppSettings}
       />
 
       <TagRatingsModal
@@ -1170,17 +1233,7 @@ function App() {
           aria-modal="true"
           aria-label="Event details"
         >
-          <div className="relative max-w-md w-full my-8 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-            {(overlaySource === 'tagModal' || overlaySource === 'viewRatings') && (
-              <button
-                type="button"
-                onClick={closeEventOverlay}
-                className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
-                aria-label="Close"
-              >
-                ×
-              </button>
-            )}
+          <div className="relative max-w-md w-full my-8 flex-shrink-0" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
             <EventCard
               event={overlayEvent}
               averageRating={overlayEvent.average_rating}
@@ -1189,8 +1242,11 @@ function App() {
               onRatingSubmitted={() => { fetchEvents(); }}
               onEventUpdated={() => { fetchEvents(); }}
               onTagClick={handleTagClick}
+              onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
               tagColors={appSettings}
-              customPerformerTags={customPerformerTags}
+              customPerformerTags={[]}
+              initialReorderSection={overlaySuggestCustomSlug ? undefined : overlaySuggestSection}
+              initialCustomReorderSlug={overlaySuggestCustomSlug}
             />
           </div>
         </div>

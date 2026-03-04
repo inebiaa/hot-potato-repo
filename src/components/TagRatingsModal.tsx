@@ -151,15 +151,11 @@ export default function TagRatingsModal({
   };
 
   const modal = (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[70]">
-      <div className="relative max-w-2xl w-full my-8">
-        <button
-          onClick={onClose}
-          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
-          aria-label="Close"
-        >
-          ×
-        </button>
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[70]"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="relative max-w-2xl w-full my-8" onClick={(e) => e.stopPropagation()}>
         <div className="bg-white rounded-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="p-6 border-b">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -168,6 +164,15 @@ export default function TagRatingsModal({
           <p className="text-sm text-gray-600">{getTagTypeLabel()}</p>
         </div>
 
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center py-16">
+            <div className="text-center text-gray-500">
+              <div className="inline-block w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin mb-3" />
+              <p>Loading…</p>
+            </div>
+          </div>
+        ) : (
+          <>
         <div className="p-6 border-b bg-gray-50">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -201,9 +206,7 @@ export default function TagRatingsModal({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {loading ? (
-            <div className="text-center py-8 text-gray-500">Loading...</div>
-          ) : eventRatings.length === 0 ? (
+          {eventRatings.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               No rated shows yet for this {getTagTypeLabel().toLowerCase()}. {totalShows > 0 ? `${totalShows} show${totalShows === 1 ? '' : 's'} with this tag.` : ''}
             </div>
@@ -257,6 +260,8 @@ export default function TagRatingsModal({
             </div>
           )}
         </div>
+          </>
+        )}
         </div>
       </div>
     </div>

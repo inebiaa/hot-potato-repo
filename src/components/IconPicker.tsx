@@ -8,7 +8,7 @@ interface IconPickerProps {
   onChange: (iconName: string) => void;
 }
 
-const ICON_NAMES = Object.keys(EVENT_CARD_ICONS);
+const ICON_NAMES = ['Tag', 'Star', 'Users', 'Scissors', 'MapPin', 'Calendar', 'Sparkles', 'Palette'];
 
 export default function IconPicker({ label, value, onChange }: IconPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -21,11 +21,12 @@ export default function IconPicker({ label, value, onChange }: IconPickerProps) 
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full flex items-center justify-center gap-1 px-3 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          title={value || 'Tag'}
+          aria-label={label || `Icon: ${value || 'Tag'}`}
         >
-          <IconComponent size={18} className="text-gray-600 shrink-0" />
-          <span className="text-sm">{value || 'Sparkles'}</span>
-          <ChevronDown size={16} className={`ml-auto text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <IconComponent size={20} className="text-gray-700 shrink-0" />
+          <ChevronDown size={14} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </button>
         {isOpen && (
           <>
