@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface AuthModalProps {
@@ -48,14 +47,15 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 relative">
+      <div className="relative max-w-md w-full my-8">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+          aria-label="Close"
         >
-          <X size={24} />
+          ×
         </button>
-
+        <div className="bg-white rounded-lg shadow-xl w-full p-6">
         <h2 className="text-2xl font-bold mb-6">
           {isLogin ? 'Sign In' : 'Create Account'}
         </h2>
@@ -159,6 +159,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           >
             {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>
+        </div>
         </div>
       </div>
     </div>

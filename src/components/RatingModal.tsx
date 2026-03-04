@@ -1,7 +1,28 @@
-import { useState } from 'react';
-import { X, Star } from 'lucide-react';
+import { useState, useRef, useMemo, useEffect } from 'react';
+import { Star } from 'lucide-react';
 import { supabase, Event, Rating } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import CommentEditor from './CommentEditor';
+import { getEventTagStyles } from './CommentWithTags';
+
+interface RatingModalTagColors {
+  producer_bg_color?: string;
+  producer_text_color?: string;
+  designer_bg_color?: string;
+  designer_text_color?: string;
+  model_bg_color?: string;
+  model_text_color?: string;
+  hair_makeup_bg_color?: string;
+  hair_makeup_text_color?: string;
+  city_bg_color?: string;
+  city_text_color?: string;
+  season_bg_color?: string;
+  season_text_color?: string;
+  header_tags_bg_color?: string;
+  header_tags_text_color?: string;
+  footer_tags_bg_color?: string;
+  footer_tags_text_color?: string;
+}
 
 interface RatingModalProps {
   isOpen: boolean;
@@ -9,6 +30,8 @@ interface RatingModalProps {
   event: Event;
   existingRating?: Rating;
   onRatingSubmitted: () => void;
+  tagColors?: RatingModalTagColors;
+  customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
 }
 
 export default function RatingModal({
@@ -16,14 +39,30 @@ export default function RatingModal({
   onClose,
   event,
   existingRating,
-  onRatingSubmitted
+  onRatingSubmitted,
+  tagColors,
+  customPerformerTags = []
 }: RatingModalProps) {
   const [rating, setRating] = useState(existingRating?.rating || 0);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [comment, setComment] = useState(existingRating?.comment || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const editorRef = useRef<{ insertAtCursor: (text: string) => void; focus: () => void }>(null);
   const { user } = useAuth();
+
+  const eventTags = useMemo(
+    () => getEventTagStyles(event, tagColors, customPerformerTags).map((t) => t.value),
+    [event, tagColors, customPerformerTags]
+  );
+
+  useEffect(() => {
+    if (isOpen) setComment(existingRating?.comment || '');
+  }, [isOpen, existingRating?.id, existingRating?.comment]);
+
+  const insertTag = (tag: string) => {
+    editorRef.current?.insertAtCursor(tag);
+  };
 
   if (!isOpen) return null;
 
@@ -100,14 +139,15 @@ export default function RatingModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 relative">
+      <div className="relative max-w-md w-full my-8">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+          aria-label="Close"
         >
-          <X size={24} />
+          ×
         </button>
-
+        <div className="bg-white rounded-lg shadow-xl w-full p-6">
         <h2 className="text-2xl font-bold mb-4">
           {existingRating ? 'Update Your Rating' : 'Rate Event'}
         </h2>
@@ -145,13 +185,30 @@ export default function RatingModal({
             <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">
               Comment (optional)
             </label>
-            <textarea
-              id="comment"
+            {eventTags.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1 items-center">
+                <span className="text-xs text-gray-500 self-center mr-1">Insert tag:</span>
+                {eventTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => insertTag(tag)}
+                    className="text-xs px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+            <CommentEditor
+              ref={editorRef}
               value={comment}
-              onChange={(e) => setComment(e.target.value)}
+              onChange={setComment}
+              event={event}
+              tagColors={tagColors}
+              customPerformerTags={customPerformerTags}
+              placeholder="Share your thoughts... Tags appear styled as you type."
               rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Share your thoughts about this event..."
             />
           </div>
 
@@ -182,6 +239,7 @@ export default function RatingModal({
             )}
           </div>
         </form>
+        </div>
       </div>
     </div>
   );

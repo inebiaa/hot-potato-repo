@@ -31,9 +31,10 @@ export interface Event {
   featured_designers: string[] | null;
   models: string[] | null;
   hair_makeup: string[] | null;
-  genre: string[] | null;
+  genre?: string[] | null;
+  header_tags?: string[] | null;
   footer_tags: string[] | null;
-  collection_id: string | null;
+  custom_tags?: Record<string, string[]> | null;
   created_by: string | null;
   created_at: string;
 }

@@ -1,16 +1,40 @@
 import { useState, useEffect } from 'react';
-import { Star, List, Plus, Trash2, X, ChevronRight } from 'lucide-react';
+import { Star, List, Plus, Trash2, X, ChevronRight, Copy, RefreshCw } from 'lucide-react';
 import { supabase, UserList, UserListEvent, Rating, Event } from '../lib/supabase';
+import ViewRatingsModal from './ViewRatingsModal';
+import CommentWithTags from './CommentWithTags';
+import { USER_LISTS_SETUP_SQL, getSupabaseSqlEditorUrl } from '../lib/userListsSetupSql';
 
 interface ProfilePageProps {
   userId: string;
   pathname: string;
   onClose: () => void;
   onTagClick?: (type: string, value: string) => void;
+  onOpenEvent?: (eventId: string) => void;
+  tagColors?: {
+    producer_bg_color?: string;
+    producer_text_color?: string;
+    designer_bg_color?: string;
+    designer_text_color?: string;
+    model_bg_color?: string;
+    model_text_color?: string;
+    hair_makeup_bg_color?: string;
+    hair_makeup_text_color?: string;
+    city_bg_color?: string;
+    city_text_color?: string;
+    season_bg_color?: string;
+    season_text_color?: string;
+    header_tags_bg_color?: string;
+    header_tags_text_color?: string;
+    footer_tags_bg_color?: string;
+    footer_tags_text_color?: string;
+  };
+  customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
 }
 
 interface ReviewRow {
   rating: Rating;
+  event: Event;
   eventName: string;
   eventDate: string;
 }
@@ -19,7 +43,7 @@ interface ListWithCount extends UserList {
   event_count: number;
 }
 
-export default function ProfilePage({ userId, pathname, onClose }: ProfilePageProps) {
+export default function ProfilePage({ userId, pathname, onClose, tagColors, customPerformerTags = [], onOpenEvent }: ProfilePageProps) {
   const [username, setUsername] = useState<string>('');
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [lists, setLists] = useState<ListWithCount[]>([]);
@@ -31,8 +55,12 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
   const [newListName, setNewListName] = useState('');
   const [newListDescription, setNewListDescription] = useState('');
   const [createError, setCreateError] = useState('');
+  const [addEventError, setAddEventError] = useState('');
+  const [listsError, setListsError] = useState<string | null>(null);
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [addEventSearch, setAddEventSearch] = useState('');
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [viewRatingsFor, setViewRatingsFor] = useState<ReviewRow | null>(null);
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -50,37 +78,52 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
       const eventIds = [...new Set((ratingsData || []).map((r) => r.event_id))];
-      const { data: eventsData } = await supabase.from('events').select('id, name, date').in('id', eventIds);
+      const { data: eventsData } = await supabase.from('events').select('*').in('id', eventIds);
       const eventsMap = new Map((eventsData || []).map((e) => [e.id, e]));
-      setReviews(
-        (ratingsData || []).map((r) => ({
+      const reviewsUnsorted = (ratingsData || []).map((r) => {
+        const event = eventsMap.get(r.event_id);
+        return {
           rating: r,
-          eventName: eventsMap.get(r.event_id)?.name || 'Unknown',
-          eventDate: eventsMap.get(r.event_id)?.date || ''
-        }))
-      );
+          event: event || ({} as Event),
+          eventName: event?.name || 'Unknown',
+          eventDate: event?.date || ''
+        };
+      });
+      reviewsUnsorted.sort((a, b) => (b.eventDate || '').localeCompare(a.eventDate || ''));
+      setReviews(reviewsUnsorted);
 
-      const { data: listsData } = await supabase
+      const { data: listsData, error: listsErr } = await supabase
         .from('user_lists')
         .select('*')
         .eq('user_id', userId)
         .order('sort_order')
         .order('created_at', { ascending: false });
-      const listIds = (listsData || []).map((l) => l.id);
-      const { data: countsData } = await supabase
-        .from('user_list_events')
-        .select('list_id')
-        .in('list_id', listIds);
-      const countByList = (countsData || []).reduce<Record<string, number>>((acc, row) => {
-        acc[row.list_id] = (acc[row.list_id] || 0) + 1;
-        return acc;
-      }, {});
-      setLists(
-        (listsData || []).map((l) => ({
-          ...l,
-          event_count: countByList[l.id] || 0
-        }))
-      );
+      if (listsErr) {
+        setListsError(listsErr.message || 'Could not load lists');
+        setLists([]);
+      } else {
+        setListsError(null);
+        const listIds = (listsData || []).map((l) => l.id);
+        let countByList: Record<string, number> = {};
+        if (listIds.length > 0) {
+          const { data: countsData, error: countsErr } = await supabase
+            .from('user_list_events')
+            .select('list_id')
+            .in('list_id', listIds);
+          if (!countsErr && countsData) {
+            countByList = countsData.reduce<Record<string, number>>((acc, row) => {
+              acc[row.list_id] = (acc[row.list_id] || 0) + 1;
+              return acc;
+            }, {});
+          }
+        }
+        setLists(
+          (listsData || []).map((l) => ({
+            ...l,
+            event_count: countByList[l.id] || 0
+          }))
+        );
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -102,12 +145,14 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
     const ids = (listEventsData || []).map((e) => e.event_id);
     const { data: eventsData } = await supabase.from('events').select('*').in('id', ids);
     const eventsMap = new Map((eventsData || []).map((e) => [e.id, e]));
-    setListEvents(
-      (listEventsData || []).map((le) => ({
+    const eventsList = (listEventsData || [])
+      .map((le) => ({
         listEvent: le,
         event: eventsMap.get(le.event_id)!
-      })).filter((x) => x.event)
-    );
+      }))
+      .filter((x) => x.event);
+    eventsList.sort((a, b) => (b.event.date || '').localeCompare(a.event.date || ''));
+    setListEvents(eventsList);
   };
 
   const removeFromList = async (listEventId: string) => {
@@ -130,7 +175,8 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
       sort_order: lists.length
     });
     if (error) {
-      setCreateError(error.message);
+      const msg = error.message || (error as { message?: string })?.message || 'Failed to create list';
+      setCreateError(msg);
       return;
     }
     setNewListName('');
@@ -147,6 +193,7 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
   };
 
   const openAddEvent = async () => {
+    setAddEventError('');
     const { data } = await supabase.from('events').select('*').order('date', { ascending: false });
     setAllEvents(data || []);
     setAddEventSearch('');
@@ -156,14 +203,32 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
   const addEventToList = async (eventId: string) => {
     if (!manageListId) return;
     const maxPos = listEvents.length ? Math.max(...listEvents.map((e) => e.listEvent.position), 0) : 0;
-    await supabase.from('user_list_events').insert({
+    const { error } = await supabase.from('user_list_events').insert({
       list_id: manageListId,
       event_id: eventId,
       position: maxPos + 1
     });
+    if (error) {
+      setAddEventError(error.message || 'Failed to add show to list');
+      return;
+    }
+    setAddEventError('');
     openManageList(manageListId);
     fetchProfile();
     setIsAddEventOpen(false);
+  };
+
+  const enableLists = async () => {
+    setCopyFeedback(null);
+    try {
+      await navigator.clipboard.writeText(USER_LISTS_SETUP_SQL);
+      setCopyFeedback('SQL copied!');
+      const url = getSupabaseSqlEditorUrl();
+      if (url) window.open(url, '_blank', 'noopener');
+      setTimeout(() => setCopyFeedback(null), 3000);
+    } catch {
+      setCopyFeedback('Failed to copy');
+    }
   };
 
   const filteredAddEvents = allEvents.filter(
@@ -224,9 +289,16 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
                 key={listEvent.id}
                 className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
               >
-                <a href={`${pathname}?event=${event.id}`} className="text-gray-900 hover:text-blue-600 font-medium">
-                  {event.name}
-                </a>
+                <div>
+                  <a href={`${pathname}?event=${event.id}`} className="text-gray-900 hover:text-blue-600 font-medium">
+                    {event.name}
+                  </a>
+                  {event.date && (
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  )}
+                </div>
                 <button
                   onClick={() => removeFromList(listEvent.id)}
                   className="text-gray-400 hover:text-red-600 p-1"
@@ -244,13 +316,19 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
 
         {isAddEventOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl max-w-lg w-full max-h-[80vh] flex flex-col">
-              <div className="p-4 border-b flex justify-between items-center">
+            <div className="relative max-w-lg w-full my-8">
+              <button
+                onClick={() => { setIsAddEventOpen(false); setAddEventError(''); }}
+                className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+                aria-label="Close"
+              >
+                ×
+              </button>
+              <div className="bg-white rounded-xl w-full max-h-[80vh] flex flex-col">
+              <div className="p-4 border-b">
                 <h3 className="font-semibold">Add show to list</h3>
-                <button onClick={() => setIsAddEventOpen(false)} className="p-1 hover:bg-gray-100 rounded">
-                  <X size={20} />
-                </button>
               </div>
+              {addEventError && <p className="px-4 py-2 text-sm text-red-600 bg-red-50">{addEventError}</p>}
               <div className="p-4 border-b">
                 <input
                   type="text"
@@ -276,6 +354,7 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
                   <li className="text-gray-500 py-4 text-sm">No matching shows or all are already in this list.</li>
                 )}
               </ul>
+              </div>
             </div>
           </div>
         )}
@@ -306,15 +385,19 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
             <p className="p-6 text-gray-500 text-sm">You haven’t rated any shows yet.</p>
           ) : (
             <ul className="divide-y divide-gray-100">
-              {reviews.map(({ rating, eventName, eventDate }) => (
-                <li key={rating.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              {reviews.map(({ rating, event, eventName, eventDate }) => (
+                <li
+                  key={rating.id}
+                  className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setViewRatingsFor({ rating, event, eventName, eventDate })}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setViewRatingsFor({ rating, event, eventName, eventDate }); } }}
+                >
                   <div>
-                    <a
-                      href={`${pathname}?event=${rating.event_id}`}
-                      className="font-medium text-gray-900 hover:text-blue-600"
-                    >
+                    <span className="font-medium text-gray-900 hover:text-blue-600">
                       {eventName}
-                    </a>
+                    </span>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {eventDate ? new Date(eventDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : ''}
                     </p>
@@ -330,8 +413,17 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
                       ))}
                     </div>
                     {rating.comment && (
-                      <p className="text-sm text-gray-600 max-w-xs truncate" title={rating.comment}>
-                        {rating.comment}
+                      <p className="text-sm text-gray-600 max-w-xs line-clamp-2 italic" title={rating.comment}>
+                        {event?.id ? (
+                          <>"<CommentWithTags
+                            comment={rating.comment}
+                            event={event}
+                            tagColors={tagColors}
+                            customPerformerTags={customPerformerTags}
+                          />"</>
+                        ) : (
+                          <>"{rating.comment}"</>
+                        )}
                       </p>
                     )}
                   </div>
@@ -347,6 +439,32 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
           <List size={20} />
           My lists
         </h2>
+        {listsError ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 mb-4">
+            <p className="text-sm text-amber-800 mb-3">
+              Lists need a one-time setup. Click below to copy the setup SQL and open your Supabase SQL Editor.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={enableLists}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700"
+              >
+                <Copy size={16} />
+                Copy SQL & open Supabase
+              </button>
+              <button
+                onClick={fetchProfile}
+                className="flex items-center gap-2 px-4 py-2 border border-amber-300 rounded-lg text-sm text-amber-800 hover:bg-amber-100"
+              >
+                <RefreshCw size={16} />
+                I&apos;ve run it — Refresh
+              </button>
+              {copyFeedback && (
+                <span className="self-center text-sm text-amber-700">{copyFeedback}</span>
+              )}
+            </div>
+          </div>
+        ) : null}
         <p className="text-sm text-gray-500 mb-3">
           Create lists like “Greatest shows of all time” or a model resume.
         </p>
@@ -373,6 +491,21 @@ export default function ProfilePage({ userId, pathname, onClose }: ProfilePagePr
           ))}
         </div>
       </section>
+
+      {viewRatingsFor && viewRatingsFor.event.id && (
+        <ViewRatingsModal
+          isOpen={true}
+          onClose={() => setViewRatingsFor(null)}
+          eventId={viewRatingsFor.event.id}
+          eventName={viewRatingsFor.eventName}
+          event={viewRatingsFor.event}
+          currentUserId={userId}
+          onRatingSubmitted={fetchProfile}
+          tagColors={tagColors}
+          customPerformerTags={customPerformerTags}
+          onViewEvent={onOpenEvent}
+        />
+      )}
 
       {isCreateListOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">

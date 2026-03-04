@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
-import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, BarChart3 } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
+import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, BarChart3, User } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
-import { supabase, Event, Rating, EventCollection } from './lib/supabase';
+import { supabase, Event, Rating } from './lib/supabase';
 import { getSeasonFromDate } from './lib/season';
+import { normalizeForSearch } from './lib/normalize';
 import EventCard from './components/EventCard';
 import AuthModal from './components/AuthModal';
 import AddEventModal from './components/AddEventModal';
@@ -39,10 +40,28 @@ interface AppSettings {
   header_tags_text_color?: string;
   footer_tags_bg_color?: string;
   footer_tags_text_color?: string;
+  producer_icon?: string;
+  designer_icon?: string;
+  model_icon?: string;
+  hair_makeup_icon?: string;
+  city_icon?: string;
+  season_icon?: string;
+  header_tags_icon?: string;
+  footer_tags_icon?: string;
+}
+
+export interface CustomPerformerTag {
+  id: string;
+  label: string;
+  slug: string;
+  icon: string;
+  bg_color: string;
+  text_color: string;
+  sort_order: number;
 }
 
 function App() {
-  const { user, signOut, isAdmin } = useAuth();
+  const { user, loading: authLoading, signOut, isAdmin } = useAuth();
   const [events, setEvents] = useState<EventWithStats[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<EventWithStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,13 +74,14 @@ function App() {
   const [isStatisticsPageOpen, setIsStatisticsPageOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
-  const [selectedTag, setSelectedTag] = useState<{ type: string; value: string } | null>(null);
+  const [selectedTags, setSelectedTags] = useState<{ type: string; value: string }[]>([]);
   const [dateFilter, setDateFilter] = useState<'all' | 'past' | 'future'>('all');
   const [allCities, setAllCities] = useState<string[]>([]);
-  const [collections, setCollections] = useState<EventCollection[]>([]);
   const [overlayEventId, setOverlayEventId] = useState<string | null>(null);
+  const [overlaySource, setOverlaySource] = useState<'tagModal' | 'viewRatings' | null>(null);
   const [tagModalRefreshTrigger, setTagModalRefreshTrigger] = useState(0);
   const [upcomingExpanded, setUpcomingExpanded] = useState(false);
+  const [showProfileView, setShowProfileView] = useState(false);
   const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasClearedFiltersForSharedLink = useRef(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -70,6 +90,8 @@ function App() {
     app_logo_url: '',
     tagline: 'Fashion Show Reviews',
   });
+  const [customPerformerTags, setCustomPerformerTags] = useState<CustomPerformerTag[]>([]);
+  const [searchFocused, setSearchFocused] = useState(false);
 
   const fetchSettings = async () => {
     try {
@@ -106,7 +128,25 @@ function App() {
         header_tags_text_color: settingsObj.header_tags_text_color || 'text-teal-700',
         footer_tags_bg_color: settingsObj.footer_tags_bg_color || 'bg-emerald-100',
         footer_tags_text_color: settingsObj.footer_tags_text_color || 'text-emerald-700',
+        producer_icon: settingsObj.producer_icon || 'Sparkles',
+        designer_icon: settingsObj.designer_icon || 'Star',
+        model_icon: settingsObj.model_icon || 'Users',
+        hair_makeup_icon: settingsObj.hair_makeup_icon || 'Scissors',
+        city_icon: settingsObj.city_icon || 'MapPin',
+        season_icon: settingsObj.season_icon || 'Calendar',
+        header_tags_icon: settingsObj.header_tags_icon || 'Tag',
+        footer_tags_icon: settingsObj.footer_tags_icon || 'Tag',
       });
+      const customJson = settingsObj.custom_performer_tags;
+      if (customJson) {
+        try {
+          setCustomPerformerTags(JSON.parse(customJson));
+        } catch {
+          setCustomPerformerTags([]);
+        }
+      } else {
+        setCustomPerformerTags([]);
+      }
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
@@ -147,8 +187,21 @@ function App() {
           ? eventRatings.find((r) => r.user_id === user.id)
           : undefined;
 
+        let customTags: Record<string, string[]> | null = event.custom_tags ?? null;
+        if (typeof customTags === 'string') {
+          try {
+            customTags = JSON.parse(customTags);
+          } catch {
+            customTags = {};
+          }
+        }
+        if (!customTags || Array.isArray(customTags) || typeof customTags !== 'object') {
+          customTags = {};
+        }
+
         return {
           ...event,
+          custom_tags: customTags,
           average_rating: average,
           rating_count: eventRatings.length,
           user_rating: userRating,
@@ -165,18 +218,6 @@ function App() {
         }
       });
       setAllCities(Array.from(citiesSet).sort());
-
-      // Fetch collections separately so a missing table or RLS issue doesn't hide events
-      try {
-        const { data: collectionsData } = await supabase
-          .from('event_collections')
-          .select('*')
-          .order('sort_order')
-          .order('name');
-        setCollections(collectionsData || []);
-      } catch {
-        setCollections([]);
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setEventsError(message);
@@ -193,22 +234,100 @@ function App() {
     fetchEvents();
   }, [user]);
 
+  const searchableTags = useMemo(() => {
+    const seen = new Set<string>();
+    const tags: { type: string; value: string; label: string }[] = [];
+    const add = (type: string, value: string) => {
+      const key = `${type}:${value}`;
+      if (!seen.has(key) && value) {
+        seen.add(key);
+        tags.push({ type, value, label: value });
+      }
+    };
+    events.forEach((e) => {
+      (e.producers || []).forEach((v) => add('producer', v));
+      (e.featured_designers || []).forEach((v) => add('designer', v));
+      (e.models || []).forEach((v) => add('model', v));
+      (e.hair_makeup || []).forEach((v) => add('hair_makeup', v));
+      (e.genre || e.header_tags || []).forEach((v: string) => add('header_tags', v));
+      (e.footer_tags || []).forEach((v) => add('footer_tags', v));
+      if (e.city) add('city', e.city);
+      add('season', getSeasonFromDate(e.date));
+      if (e.custom_tags && typeof e.custom_tags === 'object') {
+        Object.entries(e.custom_tags).forEach(([slug, vals]) => {
+          (vals || []).forEach((v) => {
+            const key = `custom_performer:${slug}:${v}`;
+            if (!seen.has(key) && v) {
+              seen.add(key);
+              tags.push({ type: 'custom_performer', value: `${slug}\x00${v}`, label: v });
+            }
+          });
+        });
+      }
+    });
+    return tags.sort((a, b) => a.label.localeCompare(b.label));
+  }, [events]);
+
+  const tagSuggestions = useMemo(() => {
+    const q = normalizeForSearch(searchQuery);
+    if (!q || q.length < 2) return [];
+    return searchableTags.filter((t) => normalizeForSearch(t.label).includes(q)).slice(0, 8);
+  }, [searchQuery, searchableTags]);
+
   const handleTagClick = (type: string, value: string) => {
+    if (type === 'footer_tags' || type === 'custom_performer') {
+      if (overlayEventId) closeEventOverlay();
+      setShowProfileView(false);
+      setIsTagRatingsModalOpen(false);
+      setIsStatisticsPageOpen(false);
+      setIsSettingsModalOpen(false);
+      setIsAddEventModalOpen(false);
+      setIsAuthModalOpen(false);
+      if (typeof window !== 'undefined') window.history.replaceState(null, '', pathname);
+      setSelectedTags((prev) => {
+        const key = `${type}:${value}`;
+        if (prev.some((t) => `${t.type}:${t.value}` === key)) return prev;
+        return [...prev, { type, value }];
+      });
+      return;
+    }
+    if (overlayEventId) closeEventOverlay();
     setTagRatingsData({ type, value });
     setIsTagRatingsModalOpen(true);
+  };
+
+  const selectTagFilter = (type: string, value: string) => {
+    setSelectedTags((prev) => {
+      const key = `${type}:${value}`;
+      if (prev.some((t) => `${t.type}:${t.value}` === key)) return prev;
+      return [...prev, { type, value }];
+    });
+    setSearchQuery('');
+  };
+
+  const removeTagFilter = (type: string, value: string) => {
+    setSelectedTags((prev) => prev.filter((t) => !(t.type === type && t.value === value)));
   };
 
   const clearFilters = () => {
     setSearchQuery('');
     setSelectedCity('');
-    setSelectedTag(null);
+    setSelectedTags([]);
     setDateFilter('all');
   };
 
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const embedMode = urlParams?.get('embed') === '1';
   const eventIdFromUrl = urlParams?.get('event') || null;
-  const showProfile = urlParams?.get('profile') === '1' && !!user;
+  const showProfile = showProfileView || urlParams?.get('profile') === '1';
+
+  // Sync profile view with URL (initial load + browser back/forward)
+  useEffect(() => {
+    const sync = () => setShowProfileView(new URLSearchParams(window.location.search).get('profile') === '1');
+    sync();
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
 
   // When opening shared link (?event=xxx), clear filters once so the event is visible (don't clear again when user searches)
   useEffect(() => {
@@ -276,68 +395,89 @@ function App() {
     }
 
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((event) => {
-        const nameMatch = event.name.toLowerCase().includes(query);
-        const descriptionMatch = event.description?.toLowerCase().includes(query) || false;
-        const cityMatch = event.city?.toLowerCase().includes(query) || false;
-        const locationMatch = event.location?.toLowerCase().includes(query) || false;
-        const designersMatch = event.featured_designers?.some((d) =>
-          d.toLowerCase().includes(query)
-        ) || false;
-        const modelsMatch = event.models?.some((m) => m.toLowerCase().includes(query)) || false;
-        const producersMatch = event.producers?.some((p) =>
-          p.toLowerCase().includes(query)
-        ) || false;
-        const headerTagsMatch = event.genre?.some((t: string) =>
-          t.toLowerCase().includes(query)
-        ) || false;
-        const footerTagsMatch = event.footer_tags?.some((t) =>
-          t.toLowerCase().includes(query)
-        ) || false;
-        return nameMatch || descriptionMatch || cityMatch || locationMatch || designersMatch || modelsMatch || producersMatch || headerTagsMatch || footerTagsMatch;
-      });
+      const queryNorm = normalizeForSearch(searchQuery);
+      if (queryNorm) {
+        filtered = filtered.filter((event) => {
+          const nameMatch = normalizeForSearch(event.name || '').includes(queryNorm);
+          const descriptionMatch = normalizeForSearch(event.description || '').includes(queryNorm);
+          const cityMatch = normalizeForSearch(event.city || '').includes(queryNorm);
+          const locationMatch = normalizeForSearch(event.location || '').includes(queryNorm);
+          const designersMatch = event.featured_designers?.some((d) =>
+            normalizeForSearch(d).includes(queryNorm)
+          ) || false;
+          const modelsMatch = event.models?.some((m) =>
+            normalizeForSearch(m).includes(queryNorm)
+          ) || false;
+          const producersMatch = event.producers?.some((p) =>
+            normalizeForSearch(p).includes(queryNorm)
+          ) || false;
+          const headerTagsMatch = (event.genre || event.header_tags)?.some((t: string) =>
+            normalizeForSearch(t).includes(queryNorm)
+          ) || false;
+          const footerTagsMatch = event.footer_tags?.some((t) =>
+            normalizeForSearch(t).includes(queryNorm)
+          ) || false;
+          const customTagsMatch = (event.custom_tags && typeof event.custom_tags === 'object')
+            ? Object.values(event.custom_tags).flat().some((v: string) =>
+                normalizeForSearch(v || '').includes(queryNorm)
+              )
+          : false;
+          const hairMakeupMatch = event.hair_makeup?.some((h) =>
+            normalizeForSearch(h).includes(queryNorm)
+          ) || false;
+          return nameMatch || descriptionMatch || cityMatch || locationMatch || designersMatch || modelsMatch || producersMatch || headerTagsMatch || footerTagsMatch || customTagsMatch || hairMakeupMatch;
+        });
+      }
     }
 
     if (selectedCity) {
       filtered = filtered.filter((event) => event.city === selectedCity);
     }
 
-    if (selectedTag) {
+    selectedTags.forEach((tag) => {
       filtered = filtered.filter((event) => {
-        switch (selectedTag.type) {
+        switch (tag.type) {
           case 'city':
-            return event.city === selectedTag.value;
+            return event.city === tag.value;
           case 'season':
-            return (event.season || getSeasonFromDate(event.date)) === selectedTag.value;
+            return getSeasonFromDate(event.date) === tag.value;
           case 'producer':
-            return event.producers?.includes(selectedTag.value);
+            return event.producers?.includes(tag.value);
           case 'designer':
-            return event.featured_designers?.includes(selectedTag.value);
+            return event.featured_designers?.includes(tag.value);
           case 'model':
-            return event.models?.includes(selectedTag.value);
+            return event.models?.includes(tag.value);
           case 'hair_makeup':
-            return event.hair_makeup?.includes(selectedTag.value);
+            return event.hair_makeup?.includes(tag.value);
           case 'header_tags':
-            return event.genre?.includes(selectedTag.value);
+            return (event.genre || event.header_tags)?.includes(tag.value);
           case 'footer_tags':
-            return event.footer_tags?.includes(selectedTag.value);
+            return event.footer_tags?.includes(tag.value);
+          case 'custom_performer': {
+            const [slug, tagValue] = tag.value.split('\x00');
+            return slug && tagValue && event.custom_tags?.[slug]?.includes(tagValue);
+          }
           default:
             return true;
         }
       });
-    }
+    });
 
     setFilteredEvents(filtered);
-  }, [searchQuery, selectedCity, selectedTag, dateFilter, events]);
+  }, [searchQuery, selectedCity, selectedTags, dateFilter, events]);
+
+  useEffect(() => {
+    setUpcomingExpanded(false);
+  }, [searchQuery, selectedCity, selectedTags, dateFilter]);
 
   console.log('Auth state:', { user: !!user, userId: user?.id, isAdmin });
 
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
   const overlayEvent = overlayEventId ? (events.find((e) => e.id === overlayEventId) ?? filteredEvents.find((e) => e.id === overlayEventId)) : null;
 
-  const openEventOverlay = (eventId: string) => {
+  const openEventOverlay = (eventId: string, source?: 'tagModal' | 'viewRatings') => {
     setOverlayEventId(eventId);
+    setOverlaySource(source ?? null);
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.set('event', eventId);
@@ -347,12 +487,25 @@ function App() {
 
   const closeEventOverlay = () => {
     setOverlayEventId(null);
+    setOverlaySource(null);
     setTagModalRefreshTrigger((t) => t + 1);
     if (typeof window !== 'undefined') window.history.replaceState(null, '', pathname);
   };
 
   const goBack = () => {
-    if (typeof window !== 'undefined') window.location.href = pathname;
+    if (showProfile) {
+      setShowProfileView(false);
+      if (typeof window !== 'undefined') window.history.replaceState(null, '', pathname);
+    } else if (typeof window !== 'undefined') {
+      window.location.href = pathname;
+    }
+  };
+
+  const openProfile = () => {
+    setShowProfileView(true);
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', `${pathname}?profile=1`);
+    }
   };
 
   // Embed mode: show only the single event card, minimal layout
@@ -384,6 +537,7 @@ function App() {
             onEventUpdated={fetchEvents}
             onTagClick={handleTagClick}
             tagColors={appSettings}
+            customPerformerTags={customPerformerTags}
           />
         </div>
         <TagRatingsModal
@@ -391,14 +545,31 @@ function App() {
           onClose={() => setIsTagRatingsModalOpen(false)}
           tagType={tagRatingsData?.type || ''}
           tagValue={tagRatingsData?.value || ''}
-          onEventClick={openEventOverlay}
+          onEventClick={(eventId) => openEventOverlay(eventId, 'tagModal')}
           refreshTrigger={tagModalRefreshTrigger}
         />
       </div>
     );
   }
 
-  if (showProfile && user) {
+  if (showProfile) {
+    if (authLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+        </div>
+      );
+    }
+    if (!user) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 p-4">
+          <div className="text-center">
+            <p className="text-gray-700 mb-4">Sign in to view your profile.</p>
+            <a href={pathname} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Back to shows</a>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
         <header className="bg-white shadow-sm border-b sticky top-0 z-40">
@@ -416,6 +587,31 @@ function App() {
               </a>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsStatisticsPageOpen(true)}
+                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
+                title="View Statistics"
+              >
+                <BarChart3 size={18} />
+                <span className="hidden sm:inline">Stats</span>
+              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => setIsSettingsModalOpen(true)}
+                  className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
+                  title="App Settings"
+                >
+                  <Settings size={18} />
+                  <span className="hidden sm:inline">Settings</span>
+                </button>
+              )}
+              <button
+                onClick={() => setIsAddEventModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm"
+              >
+                <Plus size={18} />
+                <span className="hidden sm:inline">Add Show</span>
+              </button>
               <button onClick={goBack} className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50">
                 ← Back to shows
               </button>
@@ -431,6 +627,9 @@ function App() {
             pathname={pathname}
             onClose={goBack}
             onTagClick={handleTagClick}
+            onOpenEvent={(id) => openEventOverlay(id, 'viewRatings')}
+            tagColors={appSettings}
+            customPerformerTags={customPerformerTags}
           />
         </main>
 
@@ -439,19 +638,29 @@ function App() {
           onClose={() => setIsTagRatingsModalOpen(false)}
           tagType={tagRatingsData?.type || ''}
           tagValue={tagRatingsData?.value || ''}
-          onEventClick={openEventOverlay}
+          onEventClick={(eventId) => openEventOverlay(eventId, 'tagModal')}
           refreshTrigger={tagModalRefreshTrigger}
         />
 
         {overlayEvent && (
           <div
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 overflow-y-auto"
+            className={`fixed inset-0 flex items-center justify-center p-4 bg-black/50 overflow-y-auto ${overlaySource ? 'z-[75]' : 'z-[60]'}`}
             onClick={closeEventOverlay}
             role="dialog"
             aria-modal="true"
             aria-label="Event details"
           >
             <div className="relative max-w-md w-full my-8 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+              {(overlaySource === 'tagModal' || overlaySource === 'viewRatings') && (
+                <button
+                  type="button"
+                  onClick={closeEventOverlay}
+                  className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              )}
               <EventCard
                 event={overlayEvent}
                 averageRating={overlayEvent.average_rating}
@@ -461,10 +670,32 @@ function App() {
                 onEventUpdated={() => { fetchEvents(); }}
                 onTagClick={handleTagClick}
                 tagColors={appSettings}
+                customPerformerTags={customPerformerTags}
               />
             </div>
           </div>
         )}
+
+        <AddEventModal
+          isOpen={isAddEventModalOpen}
+          onClose={() => setIsAddEventModalOpen(false)}
+          onEventAdded={fetchEvents}
+          customPerformerTags={customPerformerTags}
+        />
+
+        <SettingsModal
+          isOpen={isSettingsModalOpen}
+          onClose={() => setIsSettingsModalOpen(false)}
+          onSettingsUpdated={fetchSettings}
+        />
+
+        <StatisticsPage
+          isOpen={isStatisticsPageOpen}
+          onClose={() => setIsStatisticsPageOpen(false)}
+          tagColors={appSettings}
+          onOpenEvent={openEventOverlay}
+          tagModalRefreshTrigger={tagModalRefreshTrigger}
+        />
       </div>
     );
   }
@@ -507,13 +738,15 @@ function App() {
               </button>
               {user ? (
                 <>
-                  <a
-                    href={`${pathname}?profile=1`}
+                  <button
+                    type="button"
+                    onClick={openProfile}
                     className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                     title="My Profile"
                   >
+                    <User size={20} />
                     <span className="hidden sm:inline text-sm">Profile</span>
-                  </a>
+                  </button>
                   {isAdmin && (
                     <>
                       <button
@@ -555,8 +788,8 @@ function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8">
+      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 overflow-visible">
+        <div className="mb-8 overflow-visible">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Fashion Shows</h2>
           <p className="text-gray-600 mb-6">
             {user ? 'Discover, rate, and review fashion shows from around the world' : 'Sign in to rate shows and add your own!'}
@@ -571,8 +804,26 @@ function App() {
                   placeholder="Search shows, designers, models..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 text-sm"
                 />
+                {searchFocused && tagSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                    <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-100">Filter by tag</div>
+                    {tagSuggestions.map((t) => (
+                      <button
+                        key={`${t.type}:${t.value}`}
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); selectTagFilter(t.type, t.value); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                      >
+                        <span className="text-gray-400 text-xs capitalize">{t.type.replace(/_/g, ' ')}:</span>
+                        <span className="text-gray-900">{t.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <div className="relative">
@@ -605,23 +856,52 @@ function App() {
               </div>
             </div>
 
-            {(searchQuery || selectedCity || selectedTag || dateFilter !== 'all') && (
+            {(searchQuery || selectedCity || selectedTags.length || dateFilter !== 'all') && (
               <div className="mt-3 flex items-center gap-2 flex-wrap">
                 <span className="text-sm text-gray-600">
                   Showing {filteredEvents.length} of {events.length} shows
                 </span>
-                {selectedTag && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 text-sm">
-                    {selectedTag.type === 'designer' && 'Designer: '}
-                    {selectedTag.type === 'model' && 'Model: '}
-                    {selectedTag.type === 'producer' && 'Producer: '}
-                    {selectedTag.type === 'city' && 'City: '}
-                    {selectedTag.type === 'season' && 'Season: '}
-                    {selectedTag.type === 'hair_makeup' && 'Hair & Makeup: '}
-                    {selectedTag.type === 'header_tags' && 'Genre: '}
-                    {selectedTag.value}
-                  </span>
-                )}
+                {selectedTags.map((selectedTag) => {
+                  const isHex = (s: string | undefined) => s && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s);
+                  const type = selectedTag.type;
+                  const bg = (type === 'producer' && isHex(appSettings.producer_bg_color)) ? appSettings.producer_bg_color!
+                    : (type === 'designer' && isHex(appSettings.designer_bg_color)) ? appSettings.designer_bg_color!
+                    : (type === 'model' && isHex(appSettings.model_bg_color)) ? appSettings.model_bg_color!
+                    : (type === 'hair_makeup' && isHex(appSettings.hair_makeup_bg_color)) ? appSettings.hair_makeup_bg_color!
+                    : (type === 'city' && isHex(appSettings.city_bg_color)) ? appSettings.city_bg_color!
+                    : (type === 'season' && isHex(appSettings.season_bg_color)) ? appSettings.season_bg_color!
+                    : (type === 'header_tags' && isHex(appSettings.header_tags_bg_color)) ? appSettings.header_tags_bg_color!
+                    : (type === 'footer_tags' && isHex(appSettings.footer_tags_bg_color)) ? appSettings.footer_tags_bg_color!
+                    : '#dbeafe';
+                  const text = (type === 'producer' && isHex(appSettings.producer_text_color)) ? appSettings.producer_text_color!
+                    : (type === 'designer' && isHex(appSettings.designer_text_color)) ? appSettings.designer_text_color!
+                    : (type === 'model' && isHex(appSettings.model_text_color)) ? appSettings.model_text_color!
+                    : (type === 'hair_makeup' && isHex(appSettings.hair_makeup_text_color)) ? appSettings.hair_makeup_text_color!
+                    : (type === 'city' && isHex(appSettings.city_text_color)) ? appSettings.city_text_color!
+                    : (type === 'season' && isHex(appSettings.season_text_color)) ? appSettings.season_text_color!
+                    : (type === 'header_tags' && isHex(appSettings.header_tags_text_color)) ? appSettings.header_tags_text_color!
+                    : (type === 'footer_tags' && isHex(appSettings.footer_tags_text_color)) ? appSettings.footer_tags_text_color!
+                    : '#1e40af';
+                  const label = type === 'designer' ? 'Designer: ' : type === 'model' ? 'Model: ' : type === 'producer' ? 'Producer: ' : type === 'city' ? 'City: ' : type === 'season' ? 'Season: ' : type === 'hair_makeup' ? 'Hair & Makeup: ' : type === 'header_tags' ? 'Genre: ' : type === 'footer_tags' ? 'Collection: ' : type === 'custom_performer' ? 'Custom: ' : '';
+                  const val = type === 'custom_performer' ? selectedTag.value.split('\x00')[1] : selectedTag.value;
+                  return (
+                    <span
+                      key={`${type}:${selectedTag.value}`}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs"
+                      style={{ backgroundColor: bg, color: text }}
+                    >
+                      {label}{val}
+                      <button
+                        type="button"
+                        onClick={() => removeTagFilter(type, selectedTag.value)}
+                        className="ml-0.5 opacity-80 hover:opacity-100"
+                        aria-label={`Remove ${val} filter`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
                 <button
                   onClick={clearFilters}
                   className="text-sm text-blue-600 hover:text-blue-700"
@@ -698,8 +978,6 @@ function App() {
             </div>
           </div>
         ) : (() => {
-          // Group by collection when any event has a collection (backend-controlled via collection_id)
-          const hasGroupedEvents = filteredEvents.some((e) => e.collection_id) && collections.length > 0;
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const byDateDesc = (a: EventWithStats, b: EventWithStats) => new Date(b.date).getTime() - new Date(a.date).getTime();
@@ -711,11 +989,13 @@ function App() {
           const otherUpcoming = upcoming.slice(1);
           const restPast = pastEvents.slice(1);
 
-          const renderCard = (event: EventWithStats, greyed = false) => (
+          const CARD_TOP_SPACER = 'h-6 shrink-0';
+
+          const renderCard = (event: EventWithStats, upcoming = false) => (
             <div
               key={event.id}
               ref={(el) => { eventCardRefs.current[event.id] = el; }}
-              className={greyed ? 'opacity-60 hover:opacity-90 transition-opacity' : ''}
+              className={upcoming ? 'hover:opacity-90 transition-opacity' : ''}
             >
               <EventCard
                 event={event}
@@ -726,107 +1006,61 @@ function App() {
                 onEventUpdated={fetchEvents}
                 onTagClick={handleTagClick}
                 tagColors={appSettings}
+                customPerformerTags={customPerformerTags}
                 viewHref={`${pathname}?event=${event.id}`}
                 onViewClick={openEventOverlay}
+                imageOpacity={upcoming ? 0.6 : undefined}
               />
             </div>
           );
 
-          if (!hasGroupedEvents) {
-            return (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {upcoming.length > 0 && nextUpcoming && (
-                  <div className="relative min-h-[280px] overflow-visible">
-                    {!upcomingExpanded && (
-                      <>
-                        {otherUpcoming.slice(0, 3).map((event, i) => (
-                          <div
-                            key={event.id}
-                            className="absolute inset-0 opacity-60 pointer-events-none"
-                            style={{
-                              zIndex: i,
-                              transform: `translate(${(i + 1) * 10}px, ${(i + 1) * 10}px)`,
-                            }}
-                          >
-                            <EventCard
-                              event={event}
-                              averageRating={event.average_rating}
-                              ratingCount={event.rating_count}
-                              userRating={event.user_rating}
-                              onRatingSubmitted={fetchEvents}
-                              onEventUpdated={fetchEvents}
-                              onTagClick={handleTagClick}
-                              tagColors={appSettings}
-                viewHref={`${pathname}?event=${event.id}`}
-                              onViewClick={openEventOverlay}
-                            />
-                          </div>
-                        ))}
+          const upcomingBlock = upcoming.length > 0 && nextUpcoming ? (
+            <div className={`flex flex-col ${!upcomingExpanded ? 'min-h-[520px] md:mr-6 md:mb-6' : 'min-h-0 h-full'}`}>
+              <div className={CARD_TOP_SPACER + ' flex items-center shrink-0'}>
+                <button
+                  type="button"
+                  onClick={() => setUpcomingExpanded((v) => !v)}
+                  className="text-[11px] text-gray-400 hover:text-gray-500 tracking-wide"
+                  aria-expanded={upcomingExpanded}
+                  aria-label={upcomingExpanded ? 'Collapse upcoming shows' : 'Expand upcoming shows'}
+                >
+                  {upcomingExpanded ? '← Back to stack' : `Upcoming (${upcoming.length})`}
+                </button>
+              </div>
+              <div className={`relative flex-1 min-h-[480px] ${!upcomingExpanded ? 'overflow-visible pl-[30px] pr-[30px] pb-[30px]' : 'overflow-hidden'}`}>
+                {!upcomingExpanded && (() => {
+                  const stacked = [...otherUpcoming.slice(0, 3), nextUpcoming];
+                  const n = stacked.length;
+                  const offset = (n - 1) * 10;
+                  return (
+                    <div
+                      className="absolute top-0 left-0 overflow-visible"
+                      style={{ right: -offset, bottom: -offset }}
+                    >
+                      <div className="absolute inset-0" style={{ right: offset, bottom: offset }}>
+                      {stacked.map((event, i) => {
+                        const isFront = i === stacked.length - 1;
+                        const stackOpacity = 0.38 + (i / Math.max(1, n - 1)) * 0.22;
+                        return (
+                    <div
+                      key={event.id}
+                      ref={isFront ? (el) => { eventCardRefs.current[event.id] = el; } : undefined}
+                      className={`absolute top-0 left-0 w-full pointer-events-none ${isFront ? 'inset-0' : 'h-48 overflow-hidden'}`}
+                      style={{
+                        zIndex: i,
+                        transform: `translate(${i * 10}px, ${i * 10}px)`,
+                        opacity: isFront ? 1 : stackOpacity,
+                      }}
+                    >
+                      {isFront ? (
                         <div
-                          className="relative z-10 opacity-60"
+                          className="h-full w-full pointer-events-auto cursor-pointer"
                           role="button"
                           tabIndex={0}
-                          onClick={() => setUpcomingExpanded((v) => !v)}
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setUpcomingExpanded((v) => !v); }}
                           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setUpcomingExpanded((v) => !v); } }}
-                          aria-expanded={upcomingExpanded}
-                          aria-label={upcomingExpanded ? 'Collapse upcoming' : 'Show all upcoming'}
+                          aria-label="Expand upcoming shows"
                         >
-                          {renderCard(nextUpcoming, true)}
-                        </div>
-                      </>
-                    )}
-                    {upcomingExpanded && (
-                      <div className="relative z-10" onClick={() => setUpcomingExpanded(false)}>
-                        {renderCard(nextUpcoming)}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {upcomingExpanded && otherUpcoming.map((event) => (
-                  <div key={event.id}>{renderCard(event, true)}</div>
-                ))}
-                {latestPast && <div>{renderCard(latestPast)}</div>}
-                {restPast.map((event) => (
-                  <div key={event.id}>{renderCard(event)}</div>
-                ))}
-              </div>
-            );
-          }
-          const sortedCollections = [...collections].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-          const byCollection = new Map<string, EventWithStats[]>();
-          const ungrouped: EventWithStats[] = [];
-          const byDate = (a: EventWithStats, b: EventWithStats) => new Date(b.date).getTime() - new Date(a.date).getTime();
-          filteredEvents.forEach((event) => {
-            if (event.collection_id) {
-              const list = byCollection.get(event.collection_id) || [];
-              list.push(event);
-              byCollection.set(event.collection_id, list);
-            } else {
-              ungrouped.push(event);
-            }
-          });
-          sortedCollections.forEach((c) => {
-            const list = byCollection.get(c.id) || [];
-            list.sort(byDate);
-            byCollection.set(c.id, list);
-          });
-          ungrouped.sort(byDate);
-          return (
-            <div className="space-y-6">
-              {sortedCollections.map((coll) => {
-                const eventsInColl = byCollection.get(coll.id) || [];
-                if (eventsInColl.length === 0) return null;
-                return (
-                  <div
-                    key={coll.id}
-                    className="border border-gray-200 rounded-lg bg-gray-50/60 overflow-hidden shadow-sm"
-                  >
-                    <div className="px-4 py-2.5 border-b border-gray-200 bg-white/90 text-sm font-medium text-gray-700">
-                      {coll.name}
-                    </div>
-                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {eventsInColl.map((event) => (
-                        <div key={event.id} ref={(el) => { eventCardRefs.current[event.id] = el; }}>
                           <EventCard
                             event={event}
                             averageRating={event.average_rating}
@@ -836,23 +1070,11 @@ function App() {
                             onEventUpdated={fetchEvents}
                             onTagClick={handleTagClick}
                             tagColors={appSettings}
-                            viewHref={`${pathname}?event=${event.id}`}
-                            onViewClick={openEventOverlay}
+                            customPerformerTags={customPerformerTags}
+                            imageOpacity={0.6}
                           />
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-              {ungrouped.length > 0 && (
-                <div className="border border-gray-200 rounded-lg bg-gray-50/60 overflow-hidden shadow-sm">
-                  <div className="px-4 py-2.5 border-b border-gray-200 bg-white/90 text-sm font-medium text-gray-500">
-                    Other shows
-                  </div>
-                  <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {ungrouped.map((event) => (
-                      <div key={event.id} ref={(el) => { eventCardRefs.current[event.id] = el; }}>
+                      ) : (
                         <EventCard
                           event={event}
                           averageRating={event.average_rating}
@@ -862,16 +1084,54 @@ function App() {
                           onEventUpdated={fetchEvents}
                           onTagClick={handleTagClick}
                           tagColors={appSettings}
-                          viewHref={`${pathname}?event=${event.id}`}
-                          onViewClick={openEventOverlay}
+                          customPerformerTags={customPerformerTags}
+                          stackPhotoOnly
                         />
+                      )}
+                    </div>
+                  );})}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    </div>
+                  );
+                })()}
+                {upcomingExpanded && (
+                    <div className="absolute inset-0 flex">
+                      <div className="flex-1 min-h-0">
+                        {renderCard(nextUpcoming, true)}
+                      </div>
+                    </div>
+                )}
+              </div>
+            </div>
+          ) : null;
+
+          const cardCell = (content: ReactNode, withSpacer = true) => (
+            <div className="flex flex-col h-full">
+              {withSpacer && <div className={CARD_TOP_SPACER} />}
+              <div className="flex-1 min-h-0">{content}</div>
             </div>
           );
+
+          return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-visible">
+                <div className="overflow-visible self-start">{upcomingBlock}</div>
+                {upcomingExpanded && otherUpcoming.map((event) => (
+                  <div key={event.id} className="min-h-0 flex flex-col">
+                    {cardCell(renderCard(event, true))}
+                  </div>
+                ))}
+                {latestPast && (
+                  <div key={latestPast.id} className="min-h-0 flex flex-col">
+                    {cardCell(renderCard(latestPast), true)}
+                  </div>
+                )}
+                {restPast.map((event) => (
+                  <div key={event.id} className="min-h-0 flex flex-col">
+                    {cardCell(renderCard(event), true)}
+                  </div>
+                ))}
+              </div>
+            );
         })()}
       </main>
 
@@ -884,6 +1144,7 @@ function App() {
         isOpen={isAddEventModalOpen}
         onClose={() => setIsAddEventModalOpen(false)}
         onEventAdded={fetchEvents}
+        customPerformerTags={customPerformerTags}
       />
 
       <SettingsModal
@@ -897,19 +1158,29 @@ function App() {
         onClose={() => setIsTagRatingsModalOpen(false)}
         tagType={tagRatingsData?.type || ''}
         tagValue={tagRatingsData?.value || ''}
-        onEventClick={openEventOverlay}
+        onEventClick={(eventId) => openEventOverlay(eventId, 'tagModal')}
         refreshTrigger={tagModalRefreshTrigger}
       />
 
       {overlayEvent && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 overflow-y-auto"
+          className={`fixed inset-0 flex items-center justify-center p-4 bg-black/50 overflow-y-auto ${overlaySource ? 'z-[75]' : 'z-[60]'}`}
           onClick={closeEventOverlay}
           role="dialog"
           aria-modal="true"
           aria-label="Event details"
         >
           <div className="relative max-w-md w-full my-8 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            {(overlaySource === 'tagModal' || overlaySource === 'viewRatings') && (
+              <button
+                type="button"
+                onClick={closeEventOverlay}
+                className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            )}
             <EventCard
               event={overlayEvent}
               averageRating={overlayEvent.average_rating}
@@ -919,6 +1190,7 @@ function App() {
               onEventUpdated={() => { fetchEvents(); }}
               onTagClick={handleTagClick}
               tagColors={appSettings}
+              customPerformerTags={customPerformerTags}
             />
           </div>
         </div>

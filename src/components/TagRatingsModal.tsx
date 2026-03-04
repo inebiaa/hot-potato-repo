@@ -1,5 +1,6 @@
-import { X, Star } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 
@@ -65,7 +66,7 @@ export default function TagRatingsModal({
         case 'season':
           break;
         case 'header_tags':
-          query = query.contains('genre', [tagValue]);
+          query = query.contains('header_tags', [tagValue]);
           break;
         case 'footer_tags':
           query = query.contains('footer_tags', [tagValue]);
@@ -74,7 +75,7 @@ export default function TagRatingsModal({
 
       let { data: events, error: eventsError } = await query;
       if (tagType === 'season' && events) {
-        events = events.filter((e: { date: string; season?: string | null }) => (e.season || getSeasonFromDate(e.date)) === tagValue);
+        events = events.filter((e: { date: string }) => getSeasonFromDate(e.date) === tagValue);
       }
       if (eventsError) throw eventsError;
 
@@ -135,8 +136,6 @@ export default function TagRatingsModal({
     }
   };
 
-  if (!isOpen) return null;
-
   const getTagTypeLabel = () => {
     switch (tagType) {
       case 'producer': return 'Producer';
@@ -151,22 +150,22 @@ export default function TagRatingsModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="p-6 border-b flex justify-between items-start">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {tagValue}
-            </h2>
-            <p className="text-sm text-gray-600">{getTagTypeLabel()}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X size={24} />
-          </button>
+  const modal = (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[70]">
+      <div className="relative max-w-2xl w-full my-8">
+        <button
+          onClick={onClose}
+          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+          aria-label="Close"
+        >
+          ×
+        </button>
+        <div className="bg-white rounded-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-6 border-b">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            {tagValue}
+          </h2>
+          <p className="text-sm text-gray-600">{getTagTypeLabel()}</p>
         </div>
 
         <div className="p-6 border-b bg-gray-50">
@@ -258,7 +257,12 @@ export default function TagRatingsModal({
             </div>
           )}
         </div>
+        </div>
       </div>
     </div>
   );
+
+  return isOpen && typeof document !== 'undefined'
+    ? createPortal(modal, document.body)
+    : null;
 }
