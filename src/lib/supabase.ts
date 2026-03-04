@@ -35,6 +35,7 @@ export interface Event {
   header_tags?: string[] | null;
   footer_tags: string[] | null;
   custom_tags?: Record<string, string[]> | null;
+  custom_tag_meta?: Record<string, { icon?: string }> | null;
   created_by: string | null;
   created_at: string;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, BarChart3 } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
 import { supabase, Event } from '../lib/supabase';
 import { getSeasonFromDate, sortSeasonsByDate } from '../lib/season';
 import TagRatingsModal from './TagRatingsModal';
@@ -177,23 +177,19 @@ export default function StatisticsPage({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div className="relative w-full max-w-6xl my-8">
-          <button
-            onClick={onClose}
-            className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
-            aria-label="Close"
-          >
-            ×
-          </button>
+      <div
+        className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+      >
+        <div className="relative w-full max-w-6xl my-8" onClick={(e) => e.stopPropagation()}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center gap-3">
-            <div className="bg-white bg-opacity-20 p-2 rounded-lg">
-              <BarChart3 className="text-white" size={24} />
+          <div className="px-6 py-4 border-b bg-white flex items-center gap-3">
+            <div className="bg-stone-100 p-2 rounded-lg">
+              <BarChart3 className="text-stone-600" size={20} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Tag Statistics</h2>
-              <p className="text-blue-100 text-sm">Click any tag to view shows and ratings</p>
+              <h2 className="text-xl font-bold text-gray-900">Tag Statistics</h2>
+              <p className="text-gray-500 text-sm">Click any tag to view shows and ratings</p>
             </div>
           </div>
 
@@ -202,19 +198,19 @@ export default function StatisticsPage({
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setSelectedType('all')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`text-xs px-2 py-1 rounded-md transition-colors ${
                     selectedType === 'all'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      ? 'bg-stone-200 text-stone-700'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
                   All
                 </button>
                 <button
                   onClick={() => setSelectedType('designer')}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                  className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
                   style={{
-                    backgroundColor: selectedType === 'designer' ? getTagColors('designer').bg : '#e5e7eb',
+                    backgroundColor: selectedType === 'designer' ? getTagColors('designer').bg : '#f3f4f6',
                     color: selectedType === 'designer' ? getTagColors('designer').text : '#374151'
                   }}
                 >
@@ -222,9 +218,9 @@ export default function StatisticsPage({
                 </button>
                 <button
                   onClick={() => setSelectedType('model')}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                  className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
                   style={{
-                    backgroundColor: selectedType === 'model' ? getTagColors('model').bg : '#e5e7eb',
+                    backgroundColor: selectedType === 'model' ? getTagColors('model').bg : '#f3f4f6',
                     color: selectedType === 'model' ? getTagColors('model').text : '#374151'
                   }}
                 >
@@ -232,9 +228,9 @@ export default function StatisticsPage({
                 </button>
                 <button
                   onClick={() => setSelectedType('producer')}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                  className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
                   style={{
-                    backgroundColor: selectedType === 'producer' ? getTagColors('producer').bg : '#e5e7eb',
+                    backgroundColor: selectedType === 'producer' ? getTagColors('producer').bg : '#f3f4f6',
                     color: selectedType === 'producer' ? getTagColors('producer').text : '#374151'
                   }}
                 >
@@ -242,9 +238,9 @@ export default function StatisticsPage({
                 </button>
                 <button
                   onClick={() => setSelectedType('hair_makeup')}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                  className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
                   style={{
-                    backgroundColor: selectedType === 'hair_makeup' ? getTagColors('hair_makeup').bg : '#e5e7eb',
+                    backgroundColor: selectedType === 'hair_makeup' ? getTagColors('hair_makeup').bg : '#f3f4f6',
                     color: selectedType === 'hair_makeup' ? getTagColors('hair_makeup').text : '#374151'
                   }}
                 >
@@ -252,9 +248,9 @@ export default function StatisticsPage({
                 </button>
                 <button
                   onClick={() => setSelectedType('header_tags')}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                  className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
                   style={{
-                    backgroundColor: selectedType === 'header_tags' ? getTagColors('header_tags').bg : '#e5e7eb',
+                    backgroundColor: selectedType === 'header_tags' ? getTagColors('header_tags').bg : '#f3f4f6',
                     color: selectedType === 'header_tags' ? getTagColors('header_tags').text : '#374151'
                   }}
                 >
@@ -306,28 +302,28 @@ export default function StatisticsPage({
               <div className="mt-3 flex items-center gap-2">
                 <span className="text-sm text-gray-600">Filtered by:</span>
                 {selectedCity && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium"
+                  <span className="inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs"
                     style={{
                       backgroundColor: getTagColors('city').bg,
                       color: getTagColors('city').text
                     }}
                   >
                     {selectedCity}
-                    <button onClick={() => setSelectedCity('')} className="ml-1 hover:opacity-70">
-                      <X size={14} />
+                    <button onClick={() => setSelectedCity('')} className="text-[11px] opacity-80 hover:opacity-100">
+                      Clear
                     </button>
                   </span>
                 )}
                 {selectedSeason && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium"
+                  <span className="inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs"
                     style={{
                       backgroundColor: getTagColors('season').bg,
                       color: getTagColors('season').text
                     }}
                   >
                     {selectedSeason}
-                    <button onClick={() => setSelectedSeason('')} className="ml-1 hover:opacity-70">
-                      <X size={14} />
+                    <button onClick={() => setSelectedSeason('')} className="text-[11px] opacity-80 hover:opacity-100">
+                      Clear
                     </button>
                   </span>
                 )}
@@ -354,14 +350,14 @@ export default function StatisticsPage({
                     <button
                       key={idx}
                       onClick={() => handleTagClick(stat)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all hover:opacity-80 hover:shadow-md"
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
                       style={{
                         backgroundColor: colors.bg,
                         color: colors.text
                       }}
                     >
                       <span>{stat.name}</span>
-                      <span className="font-bold">{stat.count}</span>
+                      <span className="font-semibold">{stat.count}</span>
                     </button>
                   );
                 })}

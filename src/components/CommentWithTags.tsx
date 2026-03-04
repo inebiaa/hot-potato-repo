@@ -28,9 +28,13 @@ interface CommentWithTagsProps {
     header_tags_text_color?: string;
     footer_tags_bg_color?: string;
     footer_tags_text_color?: string;
+    optional_tags_bg_color?: string;
+    optional_tags_text_color?: string;
   };
   customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
   className?: string;
+  /** When true, tag pills get the wiggle animation (e.g. when card is in reorder mode) */
+  wiggle?: boolean;
 }
 
 function escapeRegex(s: string): string {
@@ -86,8 +90,10 @@ export function getEventTagStyles(
       text = isValidCssColor(tagColors?.footer_tags_text_color) ? tagColors!.footer_tags_text_color! : '#065f46';
     } else if (type === 'custom' && slug) {
       const cp = customPerformerTags.find((c) => c.slug === slug);
-      bg = cp && isValidCssColor(cp.bg_color) ? cp.bg_color : '#e5e7eb';
-      text = cp && isValidCssColor(cp.text_color) ? cp.text_color : '#374151';
+      const fallbackBg = isValidCssColor(tagColors?.optional_tags_bg_color) ? tagColors!.optional_tags_bg_color! : '#e0e7ff';
+      const fallbackText = isValidCssColor(tagColors?.optional_tags_text_color) ? tagColors!.optional_tags_text_color! : '#3730a3';
+      bg = cp && isValidCssColor(cp.bg_color) ? cp.bg_color : fallbackBg;
+      text = cp && isValidCssColor(cp.text_color) ? cp.text_color : fallbackText;
     }
     tags.push({ value, bg, text });
   };
@@ -157,7 +163,8 @@ export default function CommentWithTags({
   event,
   tagColors,
   customPerformerTags = [],
-  className = ''
+  className = '',
+  wiggle = false
 }: CommentWithTagsProps) {
   if (!comment || typeof comment !== 'string') return <span className={className}>{comment ?? ''}</span>;
   if (!event || !event.id) return <span className={className}>"{comment}"</span>;
@@ -193,8 +200,10 @@ export default function CommentWithTags({
       text = isValidCssColor(tagColors?.footer_tags_text_color) ? tagColors!.footer_tags_text_color! : '#065f46';
     } else if (type === 'custom' && slug) {
       const cp = customPerformerTags.find((c) => c.slug === slug);
-      bg = cp && isValidCssColor(cp.bg_color) ? cp.bg_color : '#e5e7eb';
-      text = cp && isValidCssColor(cp.text_color) ? cp.text_color : '#374151';
+      const fallbackBg = isValidCssColor(tagColors?.optional_tags_bg_color) ? tagColors!.optional_tags_bg_color! : '#e0e7ff';
+      const fallbackText = isValidCssColor(tagColors?.optional_tags_text_color) ? tagColors!.optional_tags_text_color! : '#3730a3';
+      bg = cp && isValidCssColor(cp.bg_color) ? cp.bg_color : fallbackBg;
+      text = cp && isValidCssColor(cp.text_color) ? cp.text_color : fallbackText;
     }
     tags.push({ value, bg, text });
   };
@@ -254,8 +263,9 @@ export default function CommentWithTags({
         seg.type === 'tag' && seg.tag ? (
           <span
             key={i}
-            className="inline-block px-1.5 py-0.5 rounded-md text-xs not-italic font-normal mx-0.5 align-baseline"
-            style={{ backgroundColor: seg.tag.bg, color: seg.tag.text }}
+            data-tag-pill
+            className={`inline-block px-1.5 py-0.5 rounded-md not-italic font-normal mx-0.5 align-baseline ${wiggle ? 'pill-wiggle' : ''}`}
+            style={{ backgroundColor: seg.tag.bg, color: seg.tag.text, fontSize: '1em', lineHeight: 'inherit' }}
           >
             {seg.value}
           </span>

@@ -1,31 +1,45 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialMode?: 'signin' | 'signup';
+  promptMessage?: string;
 }
 
-export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
+export default function AuthModal({ isOpen, onClose, initialMode = 'signin', promptMessage }: AuthModalProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [emailOrUserId, setEmailOrUserId] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [yourName, setYourName] = useState('');
   const [username, setUsername] = useState('');
-  const [userId, setUserId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsLogin(initialMode !== 'signup');
+      setError('');
+    }
+  }, [isOpen, initialMode]);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!isLogin && password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
     setLoading(true);
 
     const { error } = isLogin
       ? await signIn(emailOrUserId, password)
-      : await signUp(emailOrUserId, password, username, userId);
+      : await signUp(emailOrUserId, password, yourName, username);
 
     setLoading(false);
 
@@ -40,25 +54,25 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       }
       setEmailOrUserId('');
       setPassword('');
+      setConfirmPassword('');
+      setYourName('');
       setUsername('');
-      setUserId('');
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="relative max-w-md w-full my-8">
-        <button
-          onClick={onClose}
-          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
-          aria-label="Close"
-        >
-          ×
-        </button>
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="relative max-w-md w-full my-8" onClick={(e) => e.stopPropagation()}>
         <div className="bg-white rounded-lg shadow-xl w-full p-6">
-        <h2 className="text-2xl font-bold mb-6">
+        <h2 className="text-2xl font-bold mb-3">
           {isLogin ? 'Sign In' : 'Create Account'}
         </h2>
+        {promptMessage && (
+          <p className="text-sm text-gray-600 mb-5">{promptMessage}</p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -79,6 +93,22 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           {!isLogin && (
             <>
               <div>
+                <label htmlFor="yourName" className="block text-sm font-medium text-gray-700 mb-1">
+                  Your Name
+                </label>
+                <input
+                  id="yourName"
+                  type="text"
+                  value={yourName}
+                  onChange={(e) => setYourName(e.target.value)}
+                  required={!isLogin}
+                  maxLength={80}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Jane Doe"
+                />
+                <p className="text-xs text-gray-500 mt-1">Display name; can act as a credit when connected</p>
+              </div>
+              <div>
                 <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
                   Username
                 </label>
@@ -88,33 +118,14 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required={!isLogin}
-                  minLength={3}
-                  maxLength={20}
-                  pattern="[a-zA-Z0-9_]+"
-                  title="Username must be 3-20 characters and contain only letters, numbers, and underscores"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., fashionlover123"
-                />
-                <p className="text-xs text-gray-500 mt-1">Letters, numbers, and underscores only</p>
-              </div>
-              <div>
-                <label htmlFor="userId" className="block text-sm font-medium text-gray-700 mb-1">
-                  User ID (for sign-in)
-                </label>
-                <input
-                  id="userId"
-                  type="text"
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value)}
-                  required={!isLogin}
                   minLength={4}
                   maxLength={30}
                   pattern="[a-zA-Z0-9_-]+"
-                  title="User ID must be 4-30 characters and contain only letters, numbers, underscores, and hyphens"
+                  title="Username must be 4-30 characters and contain only letters, numbers, underscores, and hyphens"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., fashion_user_2024"
+                  placeholder="e.g., janedoe2024"
                 />
-                <p className="text-xs text-gray-500 mt-1">Create a unique ID for signing in</p>
+                <p className="text-xs text-gray-500 mt-1">Your unique ID for signing in</p>
               </div>
             </>
           )}
@@ -133,6 +144,24 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+
+          {!isLogin && (
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                Confirm Password
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required={!isLogin}
+                minLength={6}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Re-enter your password"
+              />
+            </div>
+          )}
 
           {error && (
             <div className={`text-sm ${error.includes('created') ? 'text-green-600' : 'text-red-600'}`}>

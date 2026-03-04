@@ -1,14 +1,14 @@
-import { Calendar, MapPin, Star, Edit, Trash2, FileEdit, Share2, MoreVertical } from 'lucide-react';
+import { Calendar, MapPin, Star, Edit, Trash2, Share2, MoreVertical, Plus, Check, X } from 'lucide-react';
 import { Event, Rating, supabase } from '../lib/supabase';
 import { getIcon } from '../lib/eventCardIcons';
 import { getSeasonFromDate } from '../lib/season';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import RatingModal from './RatingModal';
 import EditEventModal from './EditEventModal';
-import SuggestEditModal from './SuggestEditModal';
 import ViewRatingsModal from './ViewRatingsModal';
 import CommentWithTags from './CommentWithTags';
 import { useAuth } from '../contexts/AuthContext';
+import { ensureAlias, ensureIdentity, findIdentityByName, normalizeTagName, type TagType } from '../lib/tagIdentity';
 
 interface EventCardProps {
   event: Event;
@@ -20,8 +20,8 @@ interface EventCardProps {
   onTagClick: (type: string, value: string) => void;
   /** When set, the card title links to this URL (e.g. single-event view) */
   viewHref?: string;
-  /** When set, clicking the title opens overlay instead of navigating (e.g. openEventOverlay) */
-  onViewClick?: (eventId: string) => void;
+  /** When set, clicking the title opens overlay instead of navigating (e.g. openEventOverlay). Second param: open overlay with wiggle mode active. */
+  onViewClick?: (eventId: string, openWithWiggle?: boolean, suggestSection?: keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | 'custom', suggestCustomSlug?: string) => void;
   tagColors?: {
     producer_bg_color?: string;
     producer_text_color?: string;
@@ -47,12 +47,37 @@ interface EventCardProps {
     season_icon?: string;
     header_tags_icon?: string;
     footer_tags_icon?: string;
+    optional_tags_bg_color?: string;
+    optional_tags_text_color?: string;
   };
-  customPerformerTags?: { id: string; label: string; slug: string; icon: string; bg_color: string; text_color: string; sort_order?: number }[];
   /** When true, only show the photo (for stacked upcoming cards) */
   stackPhotoOnly?: boolean;
   /** Opacity for the image only (for stack front card photo blending) */
   imageOpacity?: number;
+  customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
+  onRequireAuth?: () => void;
+  /** When set, card mounts in reorder/wiggle mode (e.g. overlay opened from a wiggling list card) */
+  initialReorderSection?: keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] };
+  /** When set with initialReorderSection='custom', which custom slug was in suggest mode */
+  initialCustomReorderSlug?: string;
+  /** When true (overlay card), clicking on the card does not clear wiggle – only click-away does */
+  wiggleOnlyClearsOnClickAway?: boolean;
+}
+
+interface PendingTagSuggestion {
+  id: string;
+  event_id: string;
+  section_key: string;
+  custom_slug: string | null;
+  proposed_name: string;
+  normalized_name: string;
+  linked_identity_id: string | null;
+  suggested_by: string;
+  connect_as_credit: boolean;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
 }
 
 export default function EventCard({
@@ -68,22 +93,361 @@ export default function EventCard({
   tagColors,
   customPerformerTags = [],
   stackPhotoOnly = false,
-  imageOpacity
+  imageOpacity,
+  onRequireAuth,
+  initialReorderSection,
+  initialCustomReorderSlug,
+  wiggleOnlyClearsOnClickAway = false
 }: EventCardProps) {
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [isViewRatingsModalOpen, setIsViewRatingsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isSuggestEditModalOpen, setIsSuggestEditModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [shareCopied, setShareCopied] = useState<'link' | 'embed' | 'embedcode' | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [expandedTagSections, setExpandedTagSections] = useState<Record<string, boolean>>({});
+  const [orderedTags, setOrderedTags] = useState({
+    producers: event.producers || [],
+    featured_designers: event.featured_designers || [],
+    models: event.models || [],
+    hair_makeup: event.hair_makeup || [],
+    header_tags: (event.genre || event.header_tags || []) as string[],
+    footer_tags: event.footer_tags || []
+  });
+  const [reorderSection, setReorderSection] = useState<keyof typeof orderedTags | null>(
+    (initialReorderSection as keyof typeof orderedTags) ?? null
+  );
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [orderedCustomTags, setOrderedCustomTags] = useState<Record<string, string[]>>(
+    (event.custom_tags && typeof event.custom_tags === 'object' && !Array.isArray(event.custom_tags))
+      ? (event.custom_tags as Record<string, string[]>)
+      : {}
+  );
+  const [customReorderSlug, setCustomReorderSlug] = useState<string | null>(initialCustomReorderSlug ?? null);
+  const [customDragIndex, setCustomDragIndex] = useState<number | null>(null);
+  const [customDropIndex, setCustomDropIndex] = useState<number | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const cardRootRef = useRef<HTMLDivElement | null>(null);
+  const reorderModeEnteredAtRef = useRef<number>(0);
+  const longPressActivatedRef = useRef(false);
+  const TAG_ORDER_STORAGE_KEY = 'event_tag_order_v1';
+  const isAnyReorderMode = reorderSection !== null || customReorderSlug !== null;
+  const showWiggle = isAnyReorderMode;
 
   const TAG_LIMIT = 8; // ~2 lines of tags; beyond this show "View more"
   const toggleTagSection = (key: string) => {
     setExpandedTagSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
   const { user, isAdmin } = useAuth();
+  const isApprover = !!user && (isAdmin || event.created_by === user.id);
+  const [pendingSuggestions, setPendingSuggestions] = useState<PendingTagSuggestion[]>([]);
+  const [pendingError, setPendingError] = useState<string | null>(null);
+  const [addingFor, setAddingFor] = useState<{ section: keyof typeof orderedTags | 'custom' | 'footer_tags'; customSlug?: string; label?: string } | null>(null);
+  const [newTagValue, setNewTagValue] = useState('');
+  const [processingSuggestionId, setProcessingSuggestionId] = useState<string | null>(null);
+
+  const sectionToTagType = (section: keyof typeof orderedTags | 'custom', customSlug?: string): TagType => {
+    if (section === 'producers') return 'producer';
+    if (section === 'featured_designers') return 'designer';
+    if (section === 'models') return 'model';
+    if (section === 'hair_makeup') return 'hair_makeup';
+    if (section === 'header_tags') return 'header_tags';
+    if (section === 'custom') return `custom:${customSlug || 'general'}`;
+    return 'footer_tags';
+  };
+
+  const visiblePending = pendingSuggestions.filter((s) => {
+    if (s.status !== 'pending') return false;
+    if (isApprover) return true;
+    return !!user && s.suggested_by === user.id;
+  });
+
+  const readSavedOrder = () => {
+    try {
+      const raw = window.localStorage.getItem(TAG_ORDER_STORAGE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw) as Record<string, {
+        producers?: string[];
+        featured_designers?: string[];
+        models?: string[];
+        hair_makeup?: string[];
+        header_tags?: string[];
+        footer_tags?: string[];
+        custom_tags?: Record<string, string[]>;
+      }>;
+      return data[event.id] || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const saveOrder = (next: {
+    orderedTags: typeof orderedTags;
+    orderedCustomTags: Record<string, string[]>;
+  }) => {
+    try {
+      const raw = window.localStorage.getItem(TAG_ORDER_STORAGE_KEY);
+      const data = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+      data[event.id] = {
+        producers: next.orderedTags.producers,
+        featured_designers: next.orderedTags.featured_designers,
+        models: next.orderedTags.models,
+        hair_makeup: next.orderedTags.hair_makeup,
+        header_tags: next.orderedTags.header_tags,
+        footer_tags: next.orderedTags.footer_tags,
+        custom_tags: next.orderedCustomTags
+      };
+      window.localStorage.setItem(TAG_ORDER_STORAGE_KEY, JSON.stringify(data));
+    } catch {
+      // Ignore storage errors.
+    }
+  };
+
+  useEffect(() => {
+    const fallbackOrdered = {
+      producers: event.producers || [],
+      featured_designers: event.featured_designers || [],
+      models: event.models || [],
+      hair_makeup: event.hair_makeup || [],
+      header_tags: (event.genre || event.header_tags || []) as string[],
+      footer_tags: event.footer_tags || []
+    };
+    const fallbackCustom = (event.custom_tags && typeof event.custom_tags === 'object' && !Array.isArray(event.custom_tags))
+      ? (event.custom_tags as Record<string, string[]>)
+      : {};
+    const saved = readSavedOrder();
+
+    setOrderedTags({
+      producers: saved?.producers || fallbackOrdered.producers,
+      featured_designers: saved?.featured_designers || fallbackOrdered.featured_designers,
+      models: saved?.models || fallbackOrdered.models,
+      hair_makeup: saved?.hair_makeup || fallbackOrdered.hair_makeup,
+      header_tags: saved?.header_tags || fallbackOrdered.header_tags,
+      footer_tags: saved?.footer_tags || fallbackOrdered.footer_tags
+    });
+    setReorderSection(null);
+    setDragIndex(null);
+    setDropIndex(null);
+    setOrderedCustomTags(saved?.custom_tags || fallbackCustom);
+    setCustomReorderSlug(null);
+    setCustomDragIndex(null);
+    setCustomDropIndex(null);
+  }, [event.id, event.producers, event.featured_designers, event.models, event.hair_makeup, event.genre, event.header_tags, event.footer_tags, event.custom_tags]);
+
+  const fetchPendingSuggestions = async () => {
+    const { data, error } = await supabase
+      .from('pending_tag_suggestions')
+      .select('*')
+      .eq('event_id', event.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true });
+    if (error) {
+      // Missing table or policy issues should not break cards.
+      setPendingError(error.message || 'Could not load pending tag suggestions');
+      setPendingSuggestions([]);
+      return;
+    }
+    setPendingError(null);
+    setPendingSuggestions((data || []) as PendingTagSuggestion[]);
+  };
+
+  useEffect(() => {
+    if (user) fetchPendingSuggestions();
+    else {
+      setPendingError(null);
+      setPendingSuggestions([]);
+    }
+  }, [event.id, user]);
+
+  const suggestionMatchesSection = (
+    suggestion: PendingTagSuggestion,
+    section: keyof typeof orderedTags | 'custom' | 'footer_tags',
+    customSlug?: string
+  ) => {
+    if (section === 'custom') return suggestion.section_key === 'custom' && suggestion.custom_slug === (customSlug || null);
+    return suggestion.section_key === section;
+  };
+
+  const submitPendingSuggestion = async (section: keyof typeof orderedTags | 'custom' | 'footer_tags', customSlug?: string) => {
+    if (!user) {
+      onRequireAuth?.();
+      return;
+    }
+    const raw = newTagValue.trim();
+    if (!raw) return;
+    const normalized = normalizeTagName(raw);
+    if (!normalized) return;
+
+    const tagType = sectionToTagType(section, customSlug);
+    const existingIdentity = await findIdentityByName(tagType, raw);
+
+    const { error } = await supabase.from('pending_tag_suggestions').insert({
+      event_id: event.id,
+      section_key: section === 'custom' ? 'custom' : section,
+      custom_slug: section === 'custom' ? (customSlug || null) : null,
+      proposed_name: raw,
+      normalized_name: normalized,
+      linked_identity_id: existingIdentity?.id || null,
+      suggested_by: user.id,
+      connect_as_credit: true,
+      status: 'pending',
+    });
+    if (error) {
+      alert(error.message || 'Unable to submit suggestion');
+      return;
+    }
+
+    setNewTagValue('');
+    setAddingFor(null);
+    fetchPendingSuggestions();
+  };
+
+  const appendTagToSection = (sectionKey: string, customSlug: string | null, value: string) => {
+    if (sectionKey === 'custom') {
+      const slug = customSlug || '';
+      if (!slug) return;
+      const source = orderedCustomTags[slug] || [];
+      if (source.some((x) => normalizeTagName(x) === normalizeTagName(value))) return;
+      const nextCustom = { ...orderedCustomTags, [slug]: [...source, value] };
+      setOrderedCustomTags(nextCustom);
+      saveOrder({ orderedTags, orderedCustomTags: nextCustom });
+      return;
+    }
+
+    if (!(sectionKey in orderedTags)) return;
+    const k = sectionKey as keyof typeof orderedTags;
+    const source = orderedTags[k] || [];
+    if (source.some((x) => normalizeTagName(x) === normalizeTagName(value))) return;
+    const nextOrdered = { ...orderedTags, [k]: [...source, value] };
+    setOrderedTags(nextOrdered);
+    saveOrder({ orderedTags: nextOrdered, orderedCustomTags });
+  };
+
+  const approveSuggestion = async (suggestion: PendingTagSuggestion) => {
+    if (!user || !isApprover) return;
+    setProcessingSuggestionId(suggestion.id);
+    try {
+      const tagType = sectionToTagType(
+        suggestion.section_key === 'custom' ? 'custom' : (suggestion.section_key as keyof typeof orderedTags),
+        suggestion.custom_slug || undefined
+      );
+
+      let identityId = suggestion.linked_identity_id;
+      let finalName = suggestion.proposed_name.trim();
+
+      if (identityId) {
+        const { data: identity } = await supabase
+          .from('tag_identities')
+          .select('id, canonical_name')
+          .eq('id', identityId)
+          .maybeSingle();
+        if (identity?.canonical_name) finalName = identity.canonical_name;
+      } else {
+        const identity = await ensureIdentity(tagType, suggestion.proposed_name, user.id);
+        if (identity) {
+          identityId = identity.id;
+          finalName = identity.canonical_name;
+        }
+      }
+
+      if (identityId && normalizeTagName(finalName) !== normalizeTagName(suggestion.proposed_name)) {
+        await ensureAlias(identityId, suggestion.proposed_name, user.id);
+      }
+
+      appendTagToSection(suggestion.section_key, suggestion.custom_slug, finalName);
+
+      const eventUpdate: Record<string, unknown> = {};
+      if (suggestion.section_key === 'custom') {
+        const slug = suggestion.custom_slug || '';
+        if (slug) {
+          const source = (event.custom_tags && typeof event.custom_tags === 'object' ? event.custom_tags : {}) as Record<string, string[]>;
+          const existing = source[slug] || [];
+          const nextVals = existing.some((x) => normalizeTagName(x) === normalizeTagName(finalName)) ? existing : [...existing, finalName];
+          eventUpdate.custom_tags = { ...source, [slug]: nextVals };
+        }
+      } else if (suggestion.section_key === 'header_tags') {
+        const source = (event.header_tags || event.genre || []) as string[];
+        const nextVals = source.some((x) => normalizeTagName(x) === normalizeTagName(finalName)) ? source : [...source, finalName];
+        eventUpdate.header_tags = nextVals;
+      } else {
+        const map: Record<string, keyof Event> = {
+          producers: 'producers',
+          featured_designers: 'featured_designers',
+          models: 'models',
+          hair_makeup: 'hair_makeup',
+          footer_tags: 'footer_tags',
+        };
+        const eventKey = map[suggestion.section_key];
+        if (eventKey) {
+          const source = ((event[eventKey] || []) as string[]);
+          const nextVals = source.some((x) => normalizeTagName(x) === normalizeTagName(finalName)) ? source : [...source, finalName];
+          eventUpdate[eventKey] = nextVals;
+        }
+      }
+
+      if (Object.keys(eventUpdate).length > 0) {
+        const { error: updateErr } = await supabase.from('events').update(eventUpdate).eq('id', event.id);
+        if (updateErr) throw updateErr;
+      }
+
+      await supabase
+        .from('pending_tag_suggestions')
+        .update({
+          status: 'approved',
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+          linked_identity_id: identityId || null,
+        })
+        .eq('id', suggestion.id);
+
+      if (identityId && suggestion.connect_as_credit) {
+        const { data: existingCredit } = await supabase
+          .from('user_tag_credits')
+          .select('id')
+          .eq('user_id', suggestion.suggested_by)
+          .eq('identity_id', identityId)
+          .maybeSingle();
+        if (!existingCredit) {
+          await supabase.from('user_tag_credits').insert({
+            user_id: suggestion.suggested_by,
+            identity_id: identityId,
+          });
+        }
+      }
+
+      onEventUpdated();
+      fetchPendingSuggestions();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not approve suggestion');
+    } finally {
+      setProcessingSuggestionId(null);
+    }
+  };
+
+  const rejectSuggestion = async (suggestion: PendingTagSuggestion) => {
+    if (!user || !isApprover) return;
+    setProcessingSuggestionId(suggestion.id);
+    try {
+      const { error } = await supabase
+        .from('pending_tag_suggestions')
+        .update({
+          status: 'rejected',
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', suggestion.id);
+      if (error) throw error;
+      fetchPendingSuggestions();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not reject suggestion');
+    } finally {
+      setProcessingSuggestionId(null);
+    }
+  };
+
+  const pendingForSection = (section: keyof typeof orderedTags | 'custom' | 'footer_tags', customSlug?: string) =>
+    visiblePending.filter((s) => suggestionMatchesSection(s, section, customSlug));
 
   const ProducerIcon = getIcon(tagColors?.producer_icon, 'producer_icon');
   const DesignerIcon = getIcon(tagColors?.designer_icon, 'designer_icon');
@@ -119,6 +483,163 @@ export default function EventCard({
 
   const canEdit = user && (isAdmin || event.created_by === user.id);
 
+  const startLongPress = (section: keyof typeof orderedTags) => {
+    if (reorderSection || customReorderSlug) return;
+    clearLongPress();
+    longPressActivatedRef.current = false;
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressActivatedRef.current = true;
+      reorderModeEnteredAtRef.current = Date.now();
+      setReorderSection(section);
+      setDragIndex(null);
+    }, 450);
+  };
+
+  const clearLongPress = (e?: React.MouseEvent | React.TouchEvent) => {
+    const didActivate = longPressActivatedRef.current;
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressActivatedRef.current = false;
+    if (didActivate && e) {
+      e.preventDefault();
+      e.nativeEvent?.preventDefault?.();
+    }
+  };
+
+  const clearReorderMode = () => {
+    setReorderSection(null);
+    setDragIndex(null);
+    setDropIndex(null);
+    setCustomReorderSlug(null);
+    setCustomDragIndex(null);
+    setCustomDropIndex(null);
+    setAddingFor(null);
+    setNewTagValue('');
+  };
+
+  const persistTagOrder = async (section: keyof typeof orderedTags, next: string[]) => {
+    const nextOrdered = { ...orderedTags, [section]: next };
+    setOrderedTags(nextOrdered);
+    saveOrder({ orderedTags: nextOrdered, orderedCustomTags });
+  };
+
+  const moveTag = async (section: keyof typeof orderedTags, toIndex: number) => {
+    if (dragIndex === null || dragIndex === toIndex) return;
+    const source = [...orderedTags[section]];
+    const [moved] = source.splice(dragIndex, 1);
+    source.splice(toIndex, 0, moved);
+    setDragIndex(toIndex);
+    await persistTagOrder(section, source);
+  };
+
+  const tagInteractionProps = (section: keyof typeof orderedTags, idx: number) => ({
+    onMouseDown: () => startLongPress(section),
+    onMouseUp: (e: React.MouseEvent) => clearLongPress(e),
+    onMouseLeave: (e: React.MouseEvent) => clearLongPress(e),
+    onTouchStart: () => startLongPress(section),
+    onTouchEnd: (e: React.TouchEvent) => clearLongPress(e),
+    draggable: isAnyReorderMode,
+    onDragStart: () => setDragIndex(idx),
+    onDragEnd: () => {
+      setDragIndex(null);
+      setDropIndex(null);
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (isAnyReorderMode) {
+        e.preventDefault();
+        setDropIndex(idx);
+      }
+    },
+    onDragLeave: () => {
+      if (isAnyReorderMode && dropIndex === idx) setDropIndex(null);
+    },
+    onDrop: async () => {
+      if (isAnyReorderMode) {
+        await moveTag(section, idx);
+        setDropIndex(null);
+      }
+    }
+  });
+
+  const startCustomLongPress = (slug: string) => {
+    if (reorderSection || customReorderSlug) return;
+    clearLongPress();
+    longPressActivatedRef.current = false;
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressActivatedRef.current = true;
+      reorderModeEnteredAtRef.current = Date.now();
+      setCustomReorderSlug(slug);
+      setCustomDragIndex(null);
+      setCustomDropIndex(null);
+    }, 450);
+  };
+
+  const persistCustomTagOrder = async (slug: string, next: string[]) => {
+    const nextCustom = { ...orderedCustomTags, [slug]: next };
+    setOrderedCustomTags(nextCustom);
+    saveOrder({ orderedTags, orderedCustomTags: nextCustom });
+  };
+
+  const moveCustomTag = async (slug: string, toIndex: number) => {
+    if (customDragIndex === null || customDragIndex === toIndex) return;
+    const source = [...(orderedCustomTags[slug] || [])];
+    const [moved] = source.splice(customDragIndex, 1);
+    source.splice(toIndex, 0, moved);
+    setCustomDragIndex(toIndex);
+    await persistCustomTagOrder(slug, source);
+  };
+
+  const customTagInteractionProps = (slug: string, idx: number) => ({
+    onMouseDown: () => startCustomLongPress(slug),
+    onMouseUp: (e: React.MouseEvent) => clearLongPress(e),
+    onMouseLeave: (e: React.MouseEvent) => clearLongPress(e),
+    onTouchStart: () => startCustomLongPress(slug),
+    onTouchEnd: (e: React.TouchEvent) => clearLongPress(e),
+    draggable: isAnyReorderMode,
+    onDragStart: () => setCustomDragIndex(idx),
+    onDragEnd: () => {
+      setCustomDragIndex(null);
+      setCustomDropIndex(null);
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (isAnyReorderMode) {
+        e.preventDefault();
+        setCustomDropIndex(idx);
+      }
+    },
+    onDragLeave: () => {
+      if (isAnyReorderMode && customDropIndex === idx) setCustomDropIndex(null);
+    },
+    onDrop: async () => {
+      if (isAnyReorderMode) {
+        await moveCustomTag(slug, idx);
+        setCustomDropIndex(null);
+      }
+    }
+  });
+
+  useEffect(() => {
+    return () => clearLongPress();
+  }, []);
+
+  useEffect(() => {
+    if (!isAnyReorderMode) return;
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (cardRootRef.current?.contains(target)) return;
+      clearReorderMode();
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('touchstart', onPointerDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('touchstart', onPointerDown);
+    };
+  }, [isAnyReorderMode]);
+
   const handleDelete = async () => {
     if (!user || !canEdit) return;
 
@@ -148,7 +669,7 @@ export default function EventCard({
     const [year, month, day] = dateString.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     return date.toLocaleDateString('en-US', {
-      weekday: 'long',
+      weekday: 'short',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -156,9 +677,18 @@ export default function EventCard({
   };
 
   const handleCardClick = (e: React.MouseEvent) => {
-    if (!onViewClick) return;
     const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('a') || target.closest('[data-event-actions]')) return;
+    const isInteractive = target.closest('button') || target.closest('a') || target.closest('[data-event-actions]');
+
+    if (isAnyReorderMode) {
+      if (Date.now() - reorderModeEnteredAtRef.current < 400) return;
+      e.stopPropagation();
+      clearReorderMode();
+      return;
+    }
+
+    if (isInteractive) return;
+    if (!onViewClick) return;
     onViewClick(event.id);
   };
 
@@ -176,14 +706,51 @@ export default function EventCard({
     );
   }
 
+  const suggestPlaceholder = (section: keyof typeof orderedTags | 'custom' | 'footer_tags', label?: string) =>
+    label ? `Suggest ${label}` : { header_tags: 'Suggest tag', producers: 'Suggest producer', featured_designers: 'Suggest designer', models: 'Suggest model', hair_makeup: 'Suggest artist', footer_tags: 'Suggest tag' }[section] || 'Suggest tag';
+
+  const suggestPill = (section: keyof typeof orderedTags | 'custom' | 'footer_tags', customSlug?: string, label?: string) => {
+    const isActive = addingFor?.section === section && (section !== 'custom' || addingFor?.customSlug === customSlug);
+    if (!isActive) return null;
+    return (
+      <span
+        data-tag-pill
+        className={`inline-flex items-center rounded-md bg-gray-300 text-gray-600 text-xs pl-2 pr-2 py-1 min-w-[100px] ${showWiggle ? 'pill-wiggle' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          type="text"
+          value={newTagValue}
+          onChange={(e) => setNewTagValue(e.target.value)}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === 'Escape') {
+              setAddingFor(null);
+              setNewTagValue('');
+            }
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              submitPendingSuggestion(section, section === 'custom' ? customSlug : undefined);
+            }
+          }}
+          placeholder={suggestPlaceholder(section, label)}
+          className="bg-transparent border-none outline-none focus:ring-0 w-full min-w-0 text-xs text-gray-700 placeholder-gray-500 py-0"
+          autoFocus
+          aria-label={suggestPlaceholder(section, label)}
+        />
+      </span>
+    );
+  };
+
   return (
     <>
       <div
+        ref={cardRootRef}
         className={`${imageOpacity !== undefined ? 'bg-transparent' : 'bg-white'} rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all relative ${onViewClick ? 'cursor-pointer' : ''}`}
         onClick={handleCardClick}
         role={onViewClick ? 'button' : undefined}
         tabIndex={onViewClick ? 0 : undefined}
-        onKeyDown={onViewClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewClick(event.id); } } : undefined}
+        onKeyDown={onViewClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (isAnyReorderMode) { clearReorderMode(); if (onViewClick) { const section = customReorderSlug ? undefined : (reorderSection ?? undefined); onViewClick(event.id, true, section, customReorderSlug ?? undefined); } } else { onViewClick(event.id); } } } : undefined}
       >
         {event.image_url && (
           <img
@@ -195,15 +762,17 @@ export default function EventCard({
         )}
         <div className={`p-6 ${imageOpacity !== undefined ? 'bg-white' : ''}`}>
           <div className="flex items-start justify-between gap-2 mb-2">
-            {viewHref && !onViewClick ? (
-              <a href={viewHref} className="text-xl font-bold text-gray-900 flex-1 block min-w-0">
-                {event.name}
-              </a>
-            ) : (
-              <h3 className="text-xl font-bold text-gray-900 flex-1 min-w-0">
-                {event.name}
-              </h3>
-            )}
+            <div className="flex-1 min-w-0">
+              {viewHref && !onViewClick ? (
+                <a href={viewHref} className="text-xl font-bold text-gray-900 block min-w-0">
+                  {event.name}
+                </a>
+              ) : (
+                <h3 className="text-xl font-bold text-gray-900 min-w-0">
+                  {event.name}
+                </h3>
+              )}
+            </div>
             <div className="relative shrink-0" data-event-actions>
               <button
                 onClick={(e) => { e.stopPropagation(); setShowActionsMenu(!showActionsMenu); }}
@@ -264,18 +833,6 @@ export default function EventCard({
                         </button>
                       </>
                     )}
-                    {!canEdit && user && (
-                      <>
-                        <div className="border-t border-gray-100 my-1" />
-                        <button
-                          onClick={() => { setIsSuggestEditModalOpen(true); setShowActionsMenu(false); }}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                        >
-                          <FileEdit size={14} className="text-blue-600" />
-                          <span>Suggest an edit</span>
-                        </button>
-                      </>
-                    )}
                   </div>
                 </>
               )}
@@ -285,8 +842,9 @@ export default function EventCard({
           <div className="flex items-center gap-2 flex-wrap mb-2">
             {event.city && (
                 <button
-                onClick={() => onTagClick('city', event.city)}
-                className="px-2 py-1 rounded-md text-xs transition-all hover:opacity-80"
+                data-tag-pill
+                onClick={() => { if (!isAnyReorderMode) onTagClick('city', event.city); }}
+                className={`px-2 py-1 rounded-md text-xs transition-all hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''}`}
                 style={{
                   backgroundColor: tagColors?.city_bg_color || '#dbeafe',
                   color: tagColors?.city_text_color || '#1e40af'
@@ -300,8 +858,9 @@ export default function EventCard({
               const season = getSeasonFromDate(event.date);
               return (
                 <button
-                  onClick={() => onTagClick('season', season)}
-                  className="px-2 py-1 rounded-md text-xs transition-all hover:opacity-80"
+                  data-tag-pill
+                  onClick={() => { if (!isAnyReorderMode) onTagClick('season', season); }}
+                  className={`px-2 py-1 rounded-md text-xs transition-all hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''}`}
                   style={{
                     backgroundColor: tagColors?.season_bg_color || '#ffedd5',
                     color: tagColors?.season_text_color || '#c2410c'
@@ -315,19 +874,23 @@ export default function EventCard({
           </div>
 
           {(() => {
-            const genreTags = (event.genre || event.header_tags || []);
-            if (genreTags.length === 0) return null;
-            const tags = genreTags;
-            const showMore = tags.length > TAG_LIMIT && !expandedTagSections['header_tags'];
+            const tags = orderedTags.header_tags || [];
+            const hasHeader = tags.length > 0 || pendingForSection('header_tags').length > 0 || isAnyReorderMode;
+            if (!hasHeader) return null;
+            const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['header_tags'];
             const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
             return (
               <div className="mb-3">
                 <div className="flex flex-wrap gap-1 items-center">
-                  {visible.map((tag: string, idx: number) => (
+                  {visible.map((tag, idx) => (
                     <button
                       key={idx}
-                      onClick={() => onTagClick('header_tags', tag)}
-                      className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                      onClick={() => {
+                        if (!isAnyReorderMode) onTagClick('header_tags', tag);
+                      }}
+                      data-tag-pill
+                      className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                      {...tagInteractionProps('header_tags', idx)}
                       style={{
                         backgroundColor: tagColors?.header_tags_bg_color || '#ccfbf1',
                         color: tagColors?.header_tags_text_color || '#0f766e'
@@ -337,6 +900,49 @@ export default function EventCard({
                       {tag}
                     </button>
                   ))}
+                    {pendingForSection('header_tags').map((suggestion) => (
+                    <span
+                      key={suggestion.id}
+                      data-tag-pill
+                      className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 ${showWiggle ? 'pill-wiggle' : ''}`}
+                    >
+                      <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full bg-gray-600 text-white text-[10px] font-semibold shadow-sm">?</span>
+                      <span>{suggestion.proposed_name}</span>
+                      {isApprover && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => approveSuggestion(suggestion)}
+                            className="text-gray-500 hover:text-gray-600"
+                            disabled={processingSuggestionId === suggestion.id}
+                            title="Approve tag"
+                          >
+                            <Check size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => rejectSuggestion(suggestion)}
+                            className="text-gray-500 hover:text-gray-600"
+                            disabled={processingSuggestionId === suggestion.id}
+                            title="Reject tag"
+                          >
+                            <X size={12} />
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  ))}
+                  {suggestPill('header_tags')}
+                  {isAnyReorderMode && addingFor?.section !== 'header_tags' && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'header_tags' }); setNewTagValue(''); }}
+                      className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
+                      title="Suggest tag"
+                    >
+                      <Plus size={12} />
+                    </button>
+                  )}
                   {tags.length > TAG_LIMIT && (
                     <button
                       type="button"
@@ -375,22 +981,33 @@ export default function EventCard({
           </div>
 
           <div className="space-y-3 mb-4 pt-4 border-t">
-            {event.producers && event.producers.length > 0 && (() => {
-              const tags = event.producers;
-              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['producers'];
+            {pendingError && (
+              <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+                Pending tag suggestions unavailable: {pendingError}
+              </div>
+            )}
+            {(orderedTags.producers?.length > 0 || pendingForSection('producers').length > 0 || isAnyReorderMode) && (() => {
+              const tags = orderedTags.producers;
+              const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['producers'];
               const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
               return (
                 <div>
-                  <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
-                    <ProducerIcon size={14} className="mr-1" />
-                    Produced By
+                  <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
+                    <div className="flex items-center">
+                      <ProducerIcon size={14} className="mr-1" />
+                      Produced By
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1 items-center">
                     {visible.map((producer, idx) => (
                       <button
                         key={idx}
-                        onClick={() => onTagClick('producer', producer)}
-                        className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                        onClick={() => {
+                          if (!isAnyReorderMode) onTagClick('producer', producer);
+                        }}
+                        data-tag-pill
+                        className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                        {...tagInteractionProps('producers', idx)}
                         style={{
                           backgroundColor: tagColors?.producer_bg_color || '#f3f4f6',
                           color: tagColors?.producer_text_color || '#374151'
@@ -399,6 +1016,37 @@ export default function EventCard({
                         {producer}
                       </button>
                     ))}
+                    {pendingForSection('producers').map((suggestion) => (
+                      <span
+                        key={suggestion.id}
+                        data-tag-pill
+                        className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 ${showWiggle ? 'pill-wiggle' : ''}`}
+                      >
+                        <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full bg-gray-600 text-white text-[10px] font-semibold shadow-sm">?</span>
+                        <span>{suggestion.proposed_name}</span>
+                        {isApprover && (
+                          <>
+                            <button type="button" onClick={() => approveSuggestion(suggestion)} className="text-gray-500 hover:text-gray-600" disabled={processingSuggestionId === suggestion.id}>
+                              <Check size={12} />
+                            </button>
+                            <button type="button" onClick={() => rejectSuggestion(suggestion)} className="text-gray-500 hover:text-gray-600" disabled={processingSuggestionId === suggestion.id}>
+                              <X size={12} />
+                            </button>
+                          </>
+                        )}
+                      </span>
+                    ))}
+                    {suggestPill('producers')}
+                    {isAnyReorderMode && addingFor?.section !== 'producers' && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'producers' }); setNewTagValue(''); }}
+                        className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
+                        title="Suggest producer"
+                      >
+                        <Plus size={12} />
+                      </button>
+                    )}
                     {tags.length > TAG_LIMIT && (
                       <button type="button" onClick={() => toggleTagSection('producers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['producers'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['producers'] ? '−' : `+${tags.length - TAG_LIMIT}`}
@@ -409,22 +1057,28 @@ export default function EventCard({
               );
             })()}
 
-            {event.featured_designers && event.featured_designers.length > 0 && (() => {
-              const tags = event.featured_designers;
-              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['designers'];
+            {(orderedTags.featured_designers?.length > 0 || pendingForSection('featured_designers').length > 0 || isAnyReorderMode) && (() => {
+              const tags = orderedTags.featured_designers;
+              const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['designers'];
               const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
               return (
                 <div>
-                  <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
-                    <DesignerIcon size={14} className="mr-1" />
-                    Featured Designers
+                  <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
+                    <div className="flex items-center">
+                      <DesignerIcon size={14} className="mr-1" />
+                      Featured Designers
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1 items-center">
                     {visible.map((designer, idx) => (
                       <button
                         key={idx}
-                        onClick={() => onTagClick('designer', designer)}
-                        className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                        onClick={() => {
+                          if (!isAnyReorderMode) onTagClick('designer', designer);
+                        }}
+                        data-tag-pill
+                        className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                        {...tagInteractionProps('featured_designers', idx)}
                         style={{
                           backgroundColor: tagColors?.designer_bg_color || '#fef3c7',
                           color: tagColors?.designer_text_color || '#b45309'
@@ -433,6 +1087,24 @@ export default function EventCard({
                         {designer}
                       </button>
                     ))}
+                    {pendingForSection('featured_designers').map((suggestion) => (
+                      <span key={suggestion.id} data-tag-pill className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 ${showWiggle ? 'pill-wiggle' : ''}`}>
+                        <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full bg-gray-600 text-white text-[10px] font-semibold shadow-sm">?</span>
+                        <span>{suggestion.proposed_name}</span>
+                        {isApprover && (
+                          <>
+                            <button type="button" onClick={() => approveSuggestion(suggestion)} className="text-gray-500 hover:text-gray-600" disabled={processingSuggestionId === suggestion.id}><Check size={12} /></button>
+                            <button type="button" onClick={() => rejectSuggestion(suggestion)} className="text-gray-500 hover:text-gray-600" disabled={processingSuggestionId === suggestion.id}><X size={12} /></button>
+                          </>
+                        )}
+                      </span>
+                    ))}
+                    {suggestPill('featured_designers')}
+                    {isAnyReorderMode && addingFor?.section !== 'featured_designers' && (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'featured_designers' }); setNewTagValue(''); }} className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest designer">
+                        <Plus size={12} />
+                      </button>
+                    )}
                     {tags.length > TAG_LIMIT && (
                       <button type="button" onClick={() => toggleTagSection('designers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['designers'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['designers'] ? '−' : `+${tags.length - TAG_LIMIT}`}
@@ -443,22 +1115,28 @@ export default function EventCard({
               );
             })()}
 
-            {event.models && event.models.length > 0 && (() => {
-              const tags = event.models;
-              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['models'];
+            {(orderedTags.models?.length > 0 || pendingForSection('models').length > 0 || isAnyReorderMode) && (() => {
+              const tags = orderedTags.models;
+              const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['models'];
               const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
               return (
                 <div>
-                  <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
-                    <ModelIcon size={14} className="mr-1" />
-                    Featured Models
+                  <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
+                    <div className="flex items-center">
+                      <ModelIcon size={14} className="mr-1" />
+                      Featured Models
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1 items-center">
                     {visible.map((model, idx) => (
                       <button
                         key={idx}
-                        onClick={() => onTagClick('model', model)}
-                        className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                        onClick={() => {
+                          if (!isAnyReorderMode) onTagClick('model', model);
+                        }}
+                        data-tag-pill
+                        className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                        {...tagInteractionProps('models', idx)}
                         style={{
                           backgroundColor: tagColors?.model_bg_color || '#fce7f3',
                           color: tagColors?.model_text_color || '#be185d'
@@ -467,6 +1145,24 @@ export default function EventCard({
                         {model}
                       </button>
                     ))}
+                    {pendingForSection('models').map((suggestion) => (
+                      <span key={suggestion.id} data-tag-pill className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 ${showWiggle ? 'pill-wiggle' : ''}`}>
+                        <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full bg-gray-600 text-white text-[10px] font-semibold shadow-sm">?</span>
+                        <span>{suggestion.proposed_name}</span>
+                        {isApprover && (
+                          <>
+                            <button type="button" onClick={() => approveSuggestion(suggestion)} className="text-gray-500 hover:text-gray-600" disabled={processingSuggestionId === suggestion.id}><Check size={12} /></button>
+                            <button type="button" onClick={() => rejectSuggestion(suggestion)} className="text-gray-500 hover:text-gray-600" disabled={processingSuggestionId === suggestion.id}><X size={12} /></button>
+                          </>
+                        )}
+                      </span>
+                    ))}
+                    {suggestPill('models')}
+                    {isAnyReorderMode && addingFor?.section !== 'models' && (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'models' }); setNewTagValue(''); }} className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest model">
+                        <Plus size={12} />
+                      </button>
+                    )}
                     {tags.length > TAG_LIMIT && (
                       <button type="button" onClick={() => toggleTagSection('models')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['models'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['models'] ? '−' : `+${tags.length - TAG_LIMIT}`}
@@ -477,22 +1173,28 @@ export default function EventCard({
               );
             })()}
 
-            {event.hair_makeup && event.hair_makeup.length > 0 && (() => {
-              const tags = event.hair_makeup;
-              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['hair_makeup'];
+            {(orderedTags.hair_makeup?.length > 0 || pendingForSection('hair_makeup').length > 0 || isAnyReorderMode) && (() => {
+              const tags = orderedTags.hair_makeup;
+              const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['hair_makeup'];
               const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
               return (
                 <div>
-                  <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
-                    <HairMakeupIcon size={14} className="mr-1" />
-                    Hair & Makeup
+                  <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
+                    <div className="flex items-center">
+                      <HairMakeupIcon size={14} className="mr-1" />
+                      Hair & Makeup
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1 items-center">
                     {visible.map((artist, idx) => (
                       <button
                         key={idx}
-                        onClick={() => onTagClick('hair_makeup', artist)}
-                        className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                        onClick={() => {
+                          if (!isAnyReorderMode) onTagClick('hair_makeup', artist);
+                        }}
+                        data-tag-pill
+                        className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                        {...tagInteractionProps('hair_makeup', idx)}
                         style={{
                           backgroundColor: tagColors?.hair_makeup_bg_color || '#f3e8ff',
                           color: tagColors?.hair_makeup_text_color || '#7e22ce'
@@ -501,6 +1203,28 @@ export default function EventCard({
                         {artist}
                       </button>
                     ))}
+                    {pendingForSection('hair_makeup').map((suggestion) => (
+                      <span
+                        key={suggestion.id}
+                        data-tag-pill
+                        className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 ${showWiggle ? 'pill-wiggle' : ''}`}
+                      >
+                        <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full bg-gray-600 text-white text-[10px] font-semibold shadow-sm">?</span>
+                        <span>{suggestion.proposed_name}</span>
+                        {isApprover && (
+                          <>
+                            <button type="button" onClick={() => approveSuggestion(suggestion)} className="text-gray-500 hover:text-gray-600" disabled={processingSuggestionId === suggestion.id}><Check size={12} /></button>
+                            <button type="button" onClick={() => rejectSuggestion(suggestion)} className="text-gray-500 hover:text-gray-600" disabled={processingSuggestionId === suggestion.id}><X size={12} /></button>
+                          </>
+                        )}
+                      </span>
+                    ))}
+                    {suggestPill('hair_makeup')}
+                    {isAnyReorderMode && addingFor?.section !== 'hair_makeup' && (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'hair_makeup' }); setNewTagValue(''); }} className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest artist">
+                        <Plus size={12} />
+                      </button>
+                    )}
                     {tags.length > TAG_LIMIT && (
                       <button type="button" onClick={() => toggleTagSection('hair_makeup')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['hair_makeup'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['hair_makeup'] ? '−' : `+${tags.length - TAG_LIMIT}`}
@@ -512,34 +1236,45 @@ export default function EventCard({
             })()}
 
             {(() => {
-              const ct = (event.custom_tags && typeof event.custom_tags === 'object' && !Array.isArray(event.custom_tags)) ? event.custom_tags : {};
-              const definedSlugs = new Set(customPerformerTags.map((t) => t.slug));
-              const adHocSlugs = Object.keys(ct).filter((slug) => !definedSlugs.has(slug));
+              const ct = orderedCustomTags;
+              const meta = (event.custom_tag_meta && typeof event.custom_tag_meta === 'object') ? event.custom_tag_meta : {};
               const slugToLabel = (s: string) => s.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-              const allTagDefs = [
-                ...customPerformerTags.map((t) => ({ ...t, slug: t.slug, label: t.label, icon: t.icon, bg_color: t.bg_color, text_color: t.text_color })),
-                ...adHocSlugs.map((slug) => ({ id: slug, slug, label: slugToLabel(slug), icon: 'Tag', bg_color: '#e0e7ff', text_color: '#3730a3' })),
-              ];
+              const sharedBg = tagColors?.optional_tags_bg_color ?? '#e0e7ff';
+              const sharedText = tagColors?.optional_tags_text_color ?? '#3730a3';
+              const allTagDefs = Object.keys(ct).map((slug) => ({
+                id: slug,
+                slug,
+                label: slugToLabel(slug),
+                icon: meta[slug]?.icon ?? 'Tag',
+                bg_color: sharedBg,
+                text_color: sharedText,
+              }));
               return allTagDefs
                 .sort((a, b) => ((a as { sort_order?: number }).sort_order ?? 999) - ((b as { sort_order?: number }).sort_order ?? 999))
                 .map((tagDef) => {
                   const tags = ct[tagDef.slug];
-                  if (!tags || tags.length === 0) return null;
+                  if (!tags || (tags.length === 0 && pendingForSection('custom', tagDef.slug).length === 0)) return null;
                   const CustomIcon = getIcon(tagDef.icon, 'producer_icon');
-                  const showMore = tags.length > TAG_LIMIT && !expandedTagSections[`custom_${tagDef.slug}`];
+                  const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections[`custom_${tagDef.slug}`];
                   const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
                   return (
                     <div key={tagDef.id ?? tagDef.slug}>
-                      <div className="flex items-center text-xs font-semibold text-gray-700 mb-1">
-                        <CustomIcon size={14} className="mr-1" />
-                        {tagDef.label}
+                      <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
+                        <div className="flex items-center">
+                          <CustomIcon size={14} className="mr-1" />
+                          {tagDef.label}
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-1 items-center">
                         {visible.map((val, idx) => (
                           <button
                             key={idx}
-                            onClick={() => onTagClick(`custom_performer`, `${tagDef.slug}\x00${val}`)}
-                            className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                            onClick={() => {
+                              if (!isAnyReorderMode) onTagClick(`custom_performer`, `${tagDef.slug}\x00${val}`);
+                            }}
+                            data-tag-pill
+                            className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && customDropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                            {...customTagInteractionProps(tagDef.slug, idx)}
                             style={{
                               backgroundColor: tagDef.bg_color || '#e0e7ff',
                               color: tagDef.text_color || '#3730a3',
@@ -548,6 +1283,33 @@ export default function EventCard({
                             {val}
                           </button>
                         ))}
+                        {pendingForSection('custom', tagDef.slug).map((suggestion) => (
+                          <span
+                            key={suggestion.id}
+                            data-tag-pill
+                            className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 ${showWiggle ? 'pill-wiggle' : ''}`}
+                          >
+                            <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full bg-gray-600 text-white text-[10px] font-semibold shadow-sm">?</span>
+                            <span>{suggestion.proposed_name}</span>
+                            {isApprover && (
+                              <>
+                                <button type="button" onClick={() => approveSuggestion(suggestion)} className="text-gray-500 hover:text-gray-600" disabled={processingSuggestionId === suggestion.id}><Check size={12} /></button>
+                                <button type="button" onClick={() => rejectSuggestion(suggestion)} className="text-gray-500 hover:text-gray-600" disabled={processingSuggestionId === suggestion.id}><X size={12} /></button>
+                              </>
+                            )}
+                          </span>
+                        ))}
+                        {suggestPill('custom', tagDef.slug, tagDef.label)}
+                        {isAnyReorderMode && (addingFor?.section !== 'custom' || addingFor?.customSlug !== tagDef.slug) && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'custom', customSlug: tagDef.slug, label: tagDef.label }); setNewTagValue(''); }}
+                            className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
+                            title={`Suggest ${tagDef.label}`}
+                          >
+                            <Plus size={12} />
+                          </button>
+                        )}
                         {tags.length > TAG_LIMIT && (
                           <button
                             type="button"
@@ -584,14 +1346,18 @@ export default function EventCard({
               </span>
             </button>
 
-            {user && (
-              <button
-                onClick={() => setIsRatingModalOpen(true)}
-                className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium"
-              >
-                {userRating ? 'Update' : 'Rate Show'}
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (user) {
+                  setIsRatingModalOpen(true);
+                  return;
+                }
+                onRequireAuth?.();
+              }}
+              className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              {user && userRating ? 'Update' : 'Rate Show'}
+            </button>
           </div>
 
           {userRating && (
@@ -606,15 +1372,16 @@ export default function EventCard({
                     event={event}
                     tagColors={tagColors}
                     customPerformerTags={customPerformerTags}
+                    wiggle={showWiggle}
                   />"
                 </p>
               )}
             </div>
           )}
 
-          {event.footer_tags && event.footer_tags.length > 0 && (() => {
-            const tags = event.footer_tags;
-            const showMore = tags.length > TAG_LIMIT && !expandedTagSections['footer_tags'];
+          {((orderedTags.footer_tags?.length > 0) || pendingForSection('footer_tags').length > 0 || isAnyReorderMode) && (() => {
+            const tags = orderedTags.footer_tags || [];
+            const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['footer_tags'];
             const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
             return (
               <div className="mt-3 pt-3 border-t">
@@ -622,8 +1389,12 @@ export default function EventCard({
                   {visible.map((tag, idx) => (
                     <button
                       key={idx}
-                      onClick={() => onTagClick('footer_tags', tag)}
-                      className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                      onClick={() => {
+                        if (!isAnyReorderMode) onTagClick('footer_tags', tag);
+                      }}
+                      data-tag-pill
+                      className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                      {...tagInteractionProps('footer_tags', idx)}
                       style={{
                         backgroundColor: tagColors?.footer_tags_bg_color || '#d1fae5',
                         color: tagColors?.footer_tags_text_color || '#065f46'
@@ -633,6 +1404,37 @@ export default function EventCard({
                       {tag}
                     </button>
                   ))}
+                    {pendingForSection('footer_tags').map((suggestion) => (
+                    <span
+                      key={suggestion.id}
+                      data-tag-pill
+                      className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 ${showWiggle ? 'pill-wiggle' : ''}`}
+                    >
+                      <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full bg-gray-600 text-white text-[10px] font-semibold shadow-sm">?</span>
+                      <span>{suggestion.proposed_name}</span>
+                      {isApprover && (
+                        <>
+                          <button type="button" onClick={() => approveSuggestion(suggestion)} className="text-gray-500 hover:text-gray-600" disabled={processingSuggestionId === suggestion.id}>
+                            <Check size={12} />
+                          </button>
+                          <button type="button" onClick={() => rejectSuggestion(suggestion)} className="text-gray-500 hover:text-gray-600" disabled={processingSuggestionId === suggestion.id}>
+                            <X size={12} />
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  ))}
+                  {suggestPill('footer_tags')}
+                  {isAnyReorderMode && addingFor?.section !== 'footer_tags' && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'footer_tags' }); setNewTagValue(''); }}
+                      className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
+                      title="Suggest footer tag"
+                    >
+                      <Plus size={12} />
+                    </button>
+                  )}
                   {tags.length > TAG_LIMIT && (
                     <button type="button" onClick={() => toggleTagSection('footer_tags')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['footer_tags'] ? 'Show less' : 'View more tags'}>
                       {expandedTagSections['footer_tags'] ? '−' : `+${tags.length - TAG_LIMIT}`}
@@ -672,19 +1474,8 @@ export default function EventCard({
         onClose={() => setIsEditModalOpen(false)}
         event={event}
         onEventUpdated={onEventUpdated}
-        customPerformerTags={customPerformerTags}
       />
 
-      <SuggestEditModal
-        isOpen={isSuggestEditModalOpen}
-        onClose={() => setIsSuggestEditModalOpen(false)}
-        event={event}
-        customPerformerTags={customPerformerTags}
-        onSuggestionSubmitted={() => {
-          setIsSuggestEditModalOpen(false);
-          alert('Your suggestion has been submitted and will be reviewed by an admin.');
-        }}
-      />
     </>
   );
 }
