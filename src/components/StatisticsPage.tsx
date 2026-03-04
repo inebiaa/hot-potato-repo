@@ -97,13 +97,10 @@ export default function StatisticsPage({
         if (event.city) addTag(event.city, 'city');
       }
       if (selectedType === 'all' || selectedType === 'season') {
-        if (event.season) addTag(event.season, 'season');
+        addTag(getSeasonFromDate(event.date), 'season');
       }
       if (selectedType === 'all' || selectedType === 'header_tags') {
-        event.header_tags?.forEach(t => addTag(t, 'header_tags'));
-      }
-      if (selectedType === 'all' || selectedType === 'footer_tags') {
-        event.footer_tags?.forEach(t => addTag(t, 'footer_tags'));
+        (event.header_tags || event.genre)?.forEach(t => addTag(t, 'header_tags'));
       }
     });
 
@@ -172,7 +169,7 @@ export default function StatisticsPage({
   };
 
   const allCities = Array.from(new Set(events.map(e => e.city).filter(Boolean))).sort();
-  const allSeasons = sortSeasonsByDate(Array.from(new Set(events.map(e => e.season || getSeasonFromDate(e.date)))));
+  const allSeasons = sortSeasonsByDate(Array.from(new Set(events.map(e => getSeasonFromDate(e.date)))));
 
   const tagStats = calculateTagStats();
 
@@ -181,23 +178,23 @@ export default function StatisticsPage({
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-white bg-opacity-20 p-2 rounded-lg">
-                <BarChart3 className="text-white" size={24} />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-white">Tag Statistics</h2>
-                <p className="text-blue-100 text-sm">Click any tag to view shows and ratings</p>
-              </div>
+        <div className="relative w-full max-w-6xl my-8">
+          <button
+            onClick={onClose}
+            className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center gap-3">
+            <div className="bg-white bg-opacity-20 p-2 rounded-lg">
+              <BarChart3 className="text-white" size={24} />
             </div>
-            <button
-              onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
-            >
-              <X size={24} />
-            </button>
+            <div>
+              <h2 className="text-xl font-bold text-white">Tag Statistics</h2>
+              <p className="text-blue-100 text-sm">Click any tag to view shows and ratings</p>
+            </div>
           </div>
 
           <div className="p-6 border-b bg-gray-50">
@@ -244,6 +241,16 @@ export default function StatisticsPage({
                   Producers
                 </button>
                 <button
+                  onClick={() => setSelectedType('hair_makeup')}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                  style={{
+                    backgroundColor: selectedType === 'hair_makeup' ? getTagColors('hair_makeup').bg : '#e5e7eb',
+                    color: selectedType === 'hair_makeup' ? getTagColors('hair_makeup').text : '#374151'
+                  }}
+                >
+                  Hair & Makeup
+                </button>
+                <button
                   onClick={() => setSelectedType('header_tags')}
                   className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
                   style={{
@@ -252,16 +259,6 @@ export default function StatisticsPage({
                   }}
                 >
                   Genre
-                </button>
-                <button
-                  onClick={() => setSelectedType('footer_tags')}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                  style={{
-                    backgroundColor: selectedType === 'footer_tags' ? getTagColors('footer_tags').bg : '#e5e7eb',
-                    color: selectedType === 'footer_tags' ? getTagColors('footer_tags').text : '#374151'
-                  }}
-                >
-                  Footer Tags
                 </button>
               </div>
 
@@ -377,14 +374,9 @@ export default function StatisticsPage({
               <div>
                 Showing {tagStats.length} {tagStats.length === 1 ? 'tag' : 'tags'} across {events.length} {events.length === 1 ? 'show' : 'shows'}
               </div>
-              <button
-                onClick={onClose}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
-              >
-                Close
-              </button>
             </div>
           </div>
+        </div>
         </div>
       </div>
 

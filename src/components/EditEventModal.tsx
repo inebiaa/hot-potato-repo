@@ -1,33 +1,42 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
-import { supabase, Event, EventCollection } from '../lib/supabase';
+import { supabase, Event } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 import { useAuth } from '../contexts/AuthContext';
 import TagInput from './TagInput';
+import type { CustomPerformerTag } from './SettingsModal';
 
 interface EditEventModalProps {
   isOpen: boolean;
   onClose: () => void;
   onEventUpdated: () => void;
   event: Event;
+  customPerformerTags?: CustomPerformerTag[];
 }
 
-export default function EditEventModal({ isOpen, onClose, onEventUpdated, event }: EditEventModalProps) {
+export default function EditEventModal({ isOpen, onClose, onEventUpdated, event, customPerformerTags = [] }: EditEventModalProps) {
   const [name, setName] = useState(event.name);
   const [description, setDescription] = useState(event.description || '');
   const [date, setDate] = useState(event.date.slice(0, 10));
-  const [city, setCity] = useState(event.city || '');
+  const [city, setCity] = useState<string[]>(event.city ? [event.city] : []);
   const [location, setLocation] = useState(event.location || '');
   const [address, setAddress] = useState(event.address || '');
   const [imageUrl, setImageUrl] = useState(event.image_url || '');
-  const [producers, setProducers] = useState<string[]>(event.producers || []);
-  const [designers, setDesigners] = useState<string[]>(event.featured_designers || []);
+  const toArray = (v: unknown): string[] =>
+    Array.isArray(v) ? v.map((s) => String(s).trim()).filter(Boolean) : [];
+  const [producers, setProducers] = useState<string[]>(() => toArray(event.producers));
+  const [designers, setDesigners] = useState<string[]>(() => toArray(event.featured_designers));
   const [models, setModels] = useState<string[]>(event.models || []);
   const [hairMakeup, setHairMakeup] = useState<string[]>(event.hair_makeup || []);
-  const [headerTags, setHeaderTags] = useState<string[]>(event.header_tags || []);
+  const [headerTags, setHeaderTags] = useState<string[]>(event.header_tags || event.genre || []);
   const [footerTags, setFooterTags] = useState<string[]>(event.footer_tags || []);
-  const [collectionId, setCollectionId] = useState<string>(event.collection_id || '');
-  const [collections, setCollections] = useState<EventCollection[]>([]);
+  const [customTags, setCustomTags] = useState<Record<string, string[]>>(event.custom_tags || {});
+  const [inlineCustomTypes, setInlineCustomTypes] = useState<{ slug: string; label: string }[]>(() => {
+    const ct = event.custom_tags || {};
+    return Object.keys(ct)
+      .filter((slug) => !customPerformerTags.some((t) => t.slug === slug))
+      .map((slug) => ({ slug, label: slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') }));
+  });
+  const [newCustomTypeLabel, setNewCustomTypeLabel] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
@@ -37,27 +46,25 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       setName(event.name);
       setDescription(event.description || '');
       setDate(event.date.slice(0, 10));
-      setCity(event.city || '');
+      setCity(event.city ? [event.city] : []);
       setLocation(event.location || '');
       setAddress(event.address || '');
       setImageUrl(event.image_url || '');
-      setProducers(event.producers || []);
-      setDesigners(event.featured_designers || []);
+      setProducers(toArray(event.producers));
+      setDesigners(toArray(event.featured_designers));
       setModels(event.models || []);
       setHairMakeup(event.hair_makeup || []);
-      setHeaderTags(event.header_tags || []);
+      setHeaderTags(event.header_tags || event.genre || []);
       setFooterTags(event.footer_tags || []);
-      setCollectionId(event.collection_id || '');
+      setCustomTags(event.custom_tags || {});
+      const ct = event.custom_tags || {};
+      setInlineCustomTypes(
+        Object.keys(ct)
+          .filter((slug) => !customPerformerTags.some((t) => t.slug === slug))
+          .map((slug) => ({ slug, label: slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') }))
+      );
     }
-  }, [isOpen, event]);
-
-  useEffect(() => {
-    if (isOpen) {
-      supabase.from('event_collections').select('*').order('sort_order').order('name').then(({ data }) => {
-        setCollections(data || []);
-      });
-    }
-  }, [isOpen]);
+  }, [isOpen, event, customPerformerTags]);
 
   if (!isOpen) return null;
 
@@ -68,8 +75,16 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       setError('You must be logged in to edit events');
       return;
     }
-    if (producers.length === 0 || designers.length === 0) {
+    const clean = (arr: string[] | null | undefined) =>
+      (Array.isArray(arr) ? arr : []).map((s) => String(s).trim()).filter(Boolean);
+    const cleanProducers = clean(producers);
+    const cleanDesigners = clean(designers);
+    if (cleanProducers.length === 0 || cleanDesigners.length === 0) {
       setError('Please add at least one producer and one designer');
+      return;
+    }
+    if (clean(city).length === 0) {
+      setError('Please add a city');
       return;
     }
 
@@ -83,18 +98,18 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           name,
           description: description || null,
           date,
-          city: city || '',
+          city: (city && city[0]) || '',
           season: date ? getSeasonFromDate(date) : null,
           location: location || null,
           address: address || null,
           image_url: imageUrl || null,
-          producers: producers.length ? producers : null,
-          featured_designers: designers.length ? designers : null,
-          models: models.length ? models : null,
-          hair_makeup: hairMakeup.length ? hairMakeup : null,
-          header_tags: headerTags.length ? headerTags : null,
-          footer_tags: footerTags.length ? footerTags : null,
-          collection_id: collectionId || null,
+          producers: cleanProducers.length ? cleanProducers : null,
+          featured_designers: cleanDesigners.length ? cleanDesigners : null,
+          models: clean(models).length ? clean(models) : null,
+          hair_makeup: clean(hairMakeup).length ? clean(hairMakeup) : null,
+          header_tags: clean(headerTags).length ? clean(headerTags) : null,
+          footer_tags: clean(footerTags).length ? clean(footerTags) : null,
+          custom_tags: Object.keys(customTags).length ? customTags : null,
         })
         .eq('id', event.id);
 
@@ -103,7 +118,9 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       onEventUpdated();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update event');
+      console.error('Failed to update event:', err);
+      const msg = err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err ? String((err as any).message) : 'Failed to update event');
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -111,14 +128,15 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+      <div className="relative max-w-2xl w-full my-8">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+          aria-label="Close"
         >
-          <X size={24} />
+          ×
         </button>
-
+        <div className="bg-white rounded-lg shadow-xl w-full p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-bold mb-6">Edit Fashion Show</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -166,17 +184,16 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             </div>
 
             <div>
-              <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
-                City *
-              </label>
-              <input
+              <TagInput
                 id="city"
-                type="text"
+                label="City"
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
+                onChange={setCity}
+                useCitySuggestions
+                maxTags={1}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="e.g., Paris, New York, Milan"
+                hint="Type and press Enter; suggestions from existing events"
               />
             </div>
           </div>
@@ -267,25 +284,54 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             value={footerTags}
             onChange={setFooterTags}
             tagColumn="footer_tags"
-            placeholder="e.g., Award Winning, Sustainable Fashion"
-            hint="Optional tags for the footer section"
+            placeholder="e.g., Award Winning, Sustainable Fashion, NYFW Fall 2024"
+            hint="Optional tags; use a shared tag (e.g. NYFW Fall 2024) to group related shows"
           />
 
-          <div>
-            <label htmlFor="collection" className="block text-sm font-medium text-gray-700 mb-1">
-              Collection
-            </label>
-            <select
-              id="collection"
-              value={collectionId}
-              onChange={(e) => setCollectionId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          {inlineCustomTypes.map(({ slug, label }) => (
+            <TagInput
+              key={slug}
+              id={`custom-inline-${slug}`}
+              label={label}
+              value={customTags[slug] || []}
+              onChange={(v) => setCustomTags((prev) => ({ ...prev, [slug]: v }))}
+              tagColumn="header_tags"
+              customTagSlug={slug}
+              placeholder={`e.g., ${label}...`}
+              hint={`Optional ${label.toLowerCase()}`}
+            />
+          ))}
+
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label htmlFor="newCustomType" className="block text-sm font-medium text-gray-700 mb-1">
+                Add custom performer category
+              </label>
+              <input
+                id="newCustomType"
+                type="text"
+                value={newCustomTypeLabel}
+                onChange={(e) => setNewCustomTypeLabel(e.target.value)}
+                placeholder="e.g., Hosted By, Music By"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-0.5">Add a custom tag type (e.g. Hosted By, Music By)</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const label = newCustomTypeLabel.trim();
+                if (!label) return;
+                const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                if (!slug) return;
+                if (inlineCustomTypes.some((t) => t.slug === slug)) return;
+                setInlineCustomTypes((prev) => [...prev, { slug, label }]);
+                setNewCustomTypeLabel('');
+              }}
+              className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium shrink-0"
             >
-              <option value="">No collection</option>
-              {collections.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+              Add
+            </button>
           </div>
 
           <div>
@@ -316,6 +362,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             {loading ? 'Updating...' : 'Update Show'}
           </button>
         </form>
+        </div>
       </div>
     </div>
   );

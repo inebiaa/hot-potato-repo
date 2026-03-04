@@ -1,9 +1,10 @@
 interface ColorPickerProps {
-  label: string;
+  label?: string;
   bgValue: string;
   textValue: string;
   onBgChange: (value: string) => void;
   onTextChange: (value: string) => void;
+  compact?: boolean;
 }
 
 const colors = [
@@ -19,32 +20,34 @@ const colors = [
   { name: 'Pink', bgHex: '#fce7f3', textHex: '#be185d', bgClass: 'bg-pink-100' },
 ];
 
-export default function ColorPicker({ label, bgValue, textValue, onBgChange, onTextChange }: ColorPickerProps) {
+export default function ColorPicker({ label, bgValue, textValue, onBgChange, onTextChange, compact }: ColorPickerProps) {
   const handleColorClick = (bgHex: string, textHex: string) => {
     onBgChange(bgHex);
     onTextChange(textHex);
   };
 
   return (
-    <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700">{label}</label>
-      <div className="flex items-center gap-3 mb-2">
-        <div
-          className="px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap"
-          style={{ backgroundColor: bgValue, color: textValue }}
-        >
-          Sample Tag
+    <div className={compact ? '' : 'space-y-2'}>
+      {!compact && label && <label className="block text-sm font-medium text-gray-700">{label}</label>}
+      {!compact && (
+        <div className="flex items-center gap-3 mb-2">
+          <div
+            className="px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap"
+            style={{ backgroundColor: bgValue, color: textValue }}
+          >
+            Sample Tag
+          </div>
         </div>
-      </div>
-      <div className="flex gap-2">
+      )}
+      <div className={`flex gap-1 ${compact ? 'flex-wrap' : ''}`}>
         {colors.map((color) => (
           <button
             key={color.name}
             type="button"
             onClick={() => handleColorClick(color.bgHex, color.textHex)}
-            className={`w-10 h-10 rounded-lg ${color.bgClass} border-2 ${
-              bgValue === color.bgHex ? 'border-gray-900 ring-2 ring-gray-900' : 'border-gray-300'
-            } hover:scale-110 transition-transform`}
+            className={`rounded-lg ${color.bgClass} border-2 ${
+              bgValue === color.bgHex ? 'border-gray-900 ring-1 ring-gray-900' : 'border-transparent'
+            } hover:scale-105 transition-transform ${compact ? 'w-6 h-6' : 'w-10 h-10'}`}
             title={color.name}
           />
         ))}

@@ -1,11 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, GripVertical } from 'lucide-react';
-import { fetchExistingTags, TagColumn } from '../lib/tags';
+import { fetchExistingTags, fetchCustomTagSuggestions, fetchExistingCities, TagColumn } from '../lib/tags';
+import { tagMatchesQuery } from '../lib/normalize';
 
 interface TagInputProps {
   value: string[];
   onChange: (tags: string[]) => void;
-  tagColumn: TagColumn;
+  tagColumn?: TagColumn;
+  customTagSlug?: string;
+  /** When true, fetches city suggestions (single-value field) */
+  useCitySuggestions?: boolean;
+  /** When 1, only a single tag is allowed (e.g. for city) */
+  maxTags?: number;
   placeholder?: string;
   required?: boolean;
   id?: string;
@@ -17,12 +23,16 @@ export default function TagInput({
   value,
   onChange,
   tagColumn,
+  customTagSlug,
+  useCitySuggestions = false,
+  maxTags,
   placeholder = 'Type and press Enter to add',
   required = false,
   id,
   label,
   hint,
 }: TagInputProps) {
+  const tags = Array.isArray(value) ? value : [];
   const [inputValue, setInputValue] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -33,32 +43,54 @@ export default function TagInput({
 
   useEffect(() => {
     let cancelled = false;
-    fetchExistingTags(tagColumn).then((tags) => {
-      if (!cancelled) setAllTags(tags);
-    });
+    if (useCitySuggestions) {
+      fetchExistingCities().then((tags) => {
+        if (!cancelled) setAllTags(tags);
+      });
+    } else if (customTagSlug) {
+      fetchCustomTagSuggestions(customTagSlug).then((tags) => {
+        if (!cancelled) setAllTags(tags);
+      });
+    } else if (tagColumn) {
+      fetchExistingTags(tagColumn).then((tags) => {
+        if (!cancelled) setAllTags(tags);
+      });
+    }
     return () => { cancelled = true; };
-  }, [tagColumn]);
+  }, [tagColumn, customTagSlug, useCitySuggestions]);
 
   const addTag = useCallback((tag: string) => {
     const trimmed = tag.trim();
-    if (!trimmed || value.includes(trimmed)) return;
-    onChange([...value, trimmed]);
+    if (!trimmed || tags.includes(trimmed)) return;
+    if (maxTags === 1) {
+      onChange([trimmed]);
+    } else {
+      onChange([...tags, trimmed]);
+    }
     setInputValue('');
     setShowSuggestions(false);
     setHighlightedIndex(-1);
-  }, [value, onChange]);
+  }, [tags, onChange, maxTags]);
 
   const removeTag = useCallback((index: number) => {
-    onChange(value.filter((_, i) => i !== index));
-  }, [value, onChange]);
+    onChange(tags.filter((_, i) => i !== index));
+  }, [tags, onChange]);
+
+  const canAddMore = maxTags == null || tags.length < maxTags;
 
   const reorderTags = useCallback((fromIndex: number, toIndex: number) => {
+    if (maxTags === 1) return;
     if (fromIndex === toIndex) return;
-    const next = [...value];
-    const [removed] = next.splice(fromIndex, 1);
-    next.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, removed);
-    onChange(next);
-  }, [value, onChange]);
+    if (fromIndex < 0 || fromIndex >= tags.length || toIndex < 0 || toIndex >= tags.length) return;
+    try {
+      const next = [...tags];
+      const [removed] = next.splice(fromIndex, 1);
+      next.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, removed);
+      onChange(next);
+    } catch (err) {
+      console.error('Tag reorder error:', err);
+    }
+  }, [tags, onChange, maxTags]);
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
@@ -87,10 +119,24 @@ export default function TagInput({
 
   const handleDrop = (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault();
-    const from = dragIndex ?? parseInt(e.dataTransfer.getData('text/plain'), 10);
-    if (!Number.isNaN(from) && from !== dropIndex) reorderTags(from, dropIndex);
-    setDragIndex(null);
-    setDropTargetIndex(null);
+    e.stopPropagation();
+    try {
+      const from = dragIndex ?? parseInt(e.dataTransfer.getData('text/plain') || '', 10);
+      if (Number.isNaN(from) || from < 0 || from >= tags.length || from === dropIndex) {
+        setDragIndex(null);
+        setDropTargetIndex(null);
+        return;
+      }
+      if (dropIndex < 0 || dropIndex >= tags.length) {
+        setDragIndex(null);
+        setDropTargetIndex(null);
+        return;
+      }
+      reorderTags(from, dropIndex);
+    } finally {
+      setDragIndex(null);
+      setDropTargetIndex(null);
+    }
   };
 
   useEffect(() => {
@@ -99,27 +145,26 @@ export default function TagInput({
       setShowSuggestions(false);
       return;
     }
-    const query = inputValue.toLowerCase();
     const filtered = allTags.filter(
-      (t) => t.toLowerCase().includes(query) && !value.includes(t)
+      (t) => tagMatchesQuery(t, inputValue) && !tags.includes(t)
     );
     setSuggestions(filtered.slice(0, 8));
     setShowSuggestions(filtered.length > 0);
     setHighlightedIndex(-1);
-  }, [inputValue, allTags, value]);
+  }, [inputValue, allTags, tags]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
       if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
         addTag(suggestions[highlightedIndex]);
-      } else if (inputValue.trim()) {
+      } else if (inputValue.trim() && (canAddMore || maxTags === 1)) {
         addTag(inputValue);
       }
       return;
     }
-    if (e.key === 'Backspace' && !inputValue && value.length > 0) {
-      removeTag(value.length - 1);
+    if (e.key === 'Backspace' && !inputValue && tags.length > 0) {
+      removeTag(tags.length - 1);
       return;
     }
     if (e.key === 'ArrowDown') {
@@ -154,20 +199,20 @@ export default function TagInput({
         className="flex flex-wrap gap-1.5 p-2 min-h-[42px] border border-gray-300 rounded-md focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white"
         onClick={() => inputRef.current?.focus()}
       >
-        {value.map((tag, idx) => (
+        {tags.map((tag, idx) => (
           <span
             key={`${tag}-${idx}`}
-            draggable
-            onDragStart={(e) => handleDragStart(e, idx)}
+            draggable={maxTags !== 1}
+            onDragStart={maxTags !== 1 ? (e) => handleDragStart(e, idx) : undefined}
             onDragEnd={handleDragEnd}
-            onDragOver={(e) => handleDragOver(e, idx)}
+            onDragOver={maxTags !== 1 ? (e) => handleDragOver(e, idx) : undefined}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, idx)}
+            onDrop={maxTags !== 1 ? (e) => handleDrop(e, idx) : undefined}
             className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-sm select-none ${
-              dragIndex === idx ? 'opacity-60 cursor-grabbing' : 'cursor-grab'
+              maxTags === 1 ? '' : dragIndex === idx ? 'opacity-60 cursor-grabbing' : 'cursor-grab'
             } ${dropTargetIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
           >
-            <GripVertical size={12} className="text-gray-400 shrink-0" aria-hidden />
+            {maxTags !== 1 && <GripVertical size={12} className="text-gray-400 shrink-0" aria-hidden />}
             {tag}
             <button
               type="button"
@@ -192,8 +237,8 @@ export default function TagInput({
           onKeyDown={handleKeyDown}
           onBlur={handleBlur}
           onFocus={() => inputValue.trim() && setShowSuggestions(true)}
-          placeholder={value.length === 0 ? placeholder : ''}
-          required={required && value.length === 0}
+          placeholder={tags.length === 0 ? placeholder : ''}
+          required={required && tags.length === 0}
           className="flex-1 min-w-[120px] outline-none text-sm py-1"
         />
       </div>

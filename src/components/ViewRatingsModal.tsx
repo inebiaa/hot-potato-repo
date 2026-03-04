@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, Star, ChevronDown, ChevronUp } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { Star, ChevronDown, ChevronUp, FileEdit } from 'lucide-react';
+import { supabase, Event } from '../lib/supabase';
+import RatingModal from './RatingModal';
+import CommentWithTags from './CommentWithTags';
 
 interface Rating {
   id: string;
@@ -17,12 +19,15 @@ interface ViewRatingsModalProps {
   onClose: () => void;
   eventId: string;
   eventName: string;
+  /** When set, shows a "View full event" button that opens the event card */
+  onViewEvent?: (eventId: string) => void;
 }
 
-export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName }: ViewRatingsModalProps) {
+export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, event, currentUserId, onRatingSubmitted, tagColors, customPerformerTags = [], onViewEvent }: ViewRatingsModalProps) {
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedRatingId, setExpandedRatingId] = useState<string | null>(null);
+  const [editingRating, setEditingRating] = useState<Rating | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -82,18 +87,18 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
-        <div className="p-6 border-b flex items-start justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-1">All Ratings</h2>
-            <p className="text-gray-600">{eventName}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X size={24} />
-          </button>
+      <div className="relative max-w-2xl w-full my-8">
+        <button
+          onClick={onClose}
+          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+          aria-label="Close"
+        >
+          ×
+        </button>
+        <div className="bg-white rounded-lg shadow-xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+        <div className="p-6 border-b">
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">All Ratings</h2>
+          <p className="text-gray-600">{eventName}</p>
         </div>
 
         <div className="p-6 border-b bg-gradient-to-br from-blue-50 to-slate-50">
@@ -138,6 +143,16 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName }
                         <span className="text-xl font-bold text-gray-900">{rating.rating}</span>
                         <span className="text-gray-500">/5</span>
                       </div>
+                      {currentUserId && event && rating.user_id === currentUserId && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditingRating(rating); }}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit review"
+                          aria-label="Edit review"
+                        >
+                          <FileEdit size={16} />
+                        </button>
+                      )}
                       {rating.comment && (
                         <div className="ml-2">
                           {expandedRatingId === rating.id ? (
@@ -151,7 +166,18 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName }
                   </div>
                   {rating.comment && expandedRatingId === rating.id && (
                     <div className="px-4 pb-4 pt-0 border-t border-gray-200">
-                      <p className="text-sm text-gray-700 italic mt-3">"{rating.comment}"</p>
+                      <p className="text-sm text-gray-700 italic mt-3">
+                        {event ? (
+                          <>"<CommentWithTags
+                            comment={rating.comment}
+                            event={event}
+                            tagColors={tagColors}
+                            customPerformerTags={customPerformerTags}
+                          />"</>
+                        ) : (
+                          <>"{rating.comment}"</>
+                        )}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -160,15 +186,37 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName }
           </div>
         )}
 
-        <div className="p-4 border-t bg-gray-50">
+        <div className="p-4 border-t bg-gray-50 flex gap-2">
+          {onViewEvent && (
+            <button
+              onClick={() => onViewEvent(eventId)}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              View full event
+            </button>
+          )}
           <button
             onClick={onClose}
-            className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+            className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors text-xl leading-none"
+            aria-label="Close"
           >
-            Close
+            ×
           </button>
         </div>
+        </div>
       </div>
+
+      {editingRating && event && (
+        <RatingModal
+          isOpen={true}
+          onClose={() => setEditingRating(null)}
+          event={event}
+          existingRating={editingRating}
+          onRatingSubmitted={() => { setEditingRating(null); fetchRatings(); onRatingSubmitted?.(); }}
+          tagColors={tagColors}
+          customPerformerTags={customPerformerTags}
+        />
+      )}
     </div>
   );
 }

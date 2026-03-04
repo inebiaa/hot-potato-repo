@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Plus, Pencil, Trash2, FolderOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, FolderOpen } from 'lucide-react';
 import { supabase, EventCollection } from '../lib/supabase';
 
 interface CollectionsModalProps {
@@ -151,15 +151,18 @@ export default function CollectionsModal({ isOpen, onClose, onCollectionsUpdated
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="p-4 border-b flex items-center justify-between">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <FolderOpen size={24} />
-            Collections
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X size={24} />
-          </button>
+      <div className="relative max-w-lg w-full my-8">
+        <button
+          onClick={onClose}
+          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+          aria-label="Close"
+        >
+          ×
+        </button>
+        <div className="bg-white rounded-lg shadow-xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-4 border-b flex items-center gap-2">
+          <FolderOpen size={24} />
+          <h2 className="text-xl font-bold">Collections</h2>
         </div>
         <div className="p-4 overflow-y-auto flex-1">
           {error && (
@@ -296,6 +299,7 @@ export default function CollectionsModal({ isOpen, onClose, onCollectionsUpdated
               )}
             </>
           )}
+        </div>
         </div>
       </div>
     </div>

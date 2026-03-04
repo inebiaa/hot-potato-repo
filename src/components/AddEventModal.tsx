@@ -1,21 +1,22 @@
-import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
-import { supabase, EventCollection } from '../lib/supabase';
+import { useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 import { useAuth } from '../contexts/AuthContext';
 import TagInput from './TagInput';
+import type { CustomPerformerTag } from './SettingsModal';
 
 interface AddEventModalProps {
   isOpen: boolean;
   onClose: () => void;
   onEventAdded: () => void;
+  customPerformerTags?: CustomPerformerTag[];
 }
 
-export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEventModalProps) {
+export default function AddEventModal({ isOpen, onClose, onEventAdded, customPerformerTags = [] }: AddEventModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState('');
-  const [city, setCity] = useState('');
+  const [city, setCity] = useState<string[]>([]);
   const [location, setLocation] = useState('');
   const [address, setAddress] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -25,19 +26,12 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
   const [hairMakeup, setHairMakeup] = useState<string[]>([]);
   const [headerTags, setHeaderTags] = useState<string[]>([]);
   const [footerTags, setFooterTags] = useState<string[]>([]);
-  const [collectionId, setCollectionId] = useState('');
-  const [collections, setCollections] = useState<EventCollection[]>([]);
+  const [customTags, setCustomTags] = useState<Record<string, string[]>>({});
+  const [inlineCustomTypes, setInlineCustomTypes] = useState<{ slug: string; label: string }[]>([]);
+  const [newCustomTypeLabel, setNewCustomTypeLabel] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
-
-  useEffect(() => {
-    if (isOpen) {
-      supabase.from('event_collections').select('*').order('sort_order').order('name').then(({ data }) => {
-        setCollections(data || []);
-      });
-    }
-  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -48,8 +42,13 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       setError('You must be logged in to create events');
       return;
     }
-    if (producers.length === 0 || designers.length === 0) {
+    const arr = (v: unknown) => (Array.isArray(v) ? v : []).map((s) => String(s).trim()).filter(Boolean);
+    if (arr(producers).length === 0 || arr(designers).length === 0) {
       setError('Please add at least one producer and one designer');
+      return;
+    }
+    if (arr(city).length === 0) {
+      setError('Please add a city');
       return;
     }
 
@@ -61,8 +60,8 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
         name,
         description: description || null,
         date,
-        city: city || '',
-        season: season || null,
+        city: (city && city[0]) || '',
+        season: date ? getSeasonFromDate(date) : null,
         location: location || null,
         address: address || null,
         image_url: imageUrl || null,
@@ -72,7 +71,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
         hair_makeup: hairMakeup.length ? hairMakeup : null,
         header_tags: headerTags.length ? headerTags : null,
         footer_tags: footerTags.length ? footerTags : null,
-        collection_id: collectionId || null,
+        custom_tags: Object.keys(customTags).length ? customTags : null,
         created_by: user.id,
       });
 
@@ -83,7 +82,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       setName('');
       setDescription('');
       setDate('');
-      setCity('');
+      setCity([]);
       setLocation('');
       setAddress('');
       setImageUrl('');
@@ -93,9 +92,18 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       setHairMakeup([]);
       setHeaderTags([]);
       setFooterTags([]);
-      setCollectionId('');
+      setCustomTags({});
+      setInlineCustomTypes([]);
+      setNewCustomTypeLabel('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create event');
+      console.error('Failed to create event', err);
+      if (err instanceof Error) {
+        setError(err.message || 'Failed to create event');
+      } else if (err && typeof err === 'object' && 'message' in (err as any)) {
+        setError((err as any).message || 'Failed to create event');
+      } else {
+        setError(String(err) || 'Failed to create event');
+      }
     } finally {
       setLoading(false);
     }
@@ -103,14 +111,15 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+      <div className="relative max-w-2xl w-full my-8">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+          aria-label="Close"
         >
-          <X size={24} />
+          ×
         </button>
-
+        <div className="bg-white rounded-lg shadow-xl w-full p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-bold mb-6">Create New Fashion Show</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -158,17 +167,16 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             </div>
 
             <div>
-              <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
-                City *
-              </label>
-              <input
+              <TagInput
                 id="city"
-                type="text"
+                label="City"
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
+                onChange={setCity}
+                useCitySuggestions
+                maxTags={1}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="e.g., Paris, New York, Milan"
+                hint="Type and press Enter; suggestions from existing events"
               />
             </div>
           </div>
@@ -259,25 +267,54 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             value={footerTags}
             onChange={setFooterTags}
             tagColumn="footer_tags"
-            placeholder="e.g., Award Winning, Sustainable Fashion"
-            hint="Optional tags for the footer section"
+            placeholder="e.g., Award Winning, Sustainable Fashion, NYFW Fall 2024"
+            hint="Optional tags; use a shared tag (e.g. NYFW Fall 2024) to group related shows"
           />
 
-          <div>
-            <label htmlFor="collection" className="block text-sm font-medium text-gray-700 mb-1">
-              Collection
-            </label>
-            <select
-              id="collection"
-              value={collectionId}
-              onChange={(e) => setCollectionId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          {inlineCustomTypes.map(({ slug, label }) => (
+            <TagInput
+              key={slug}
+              id={`custom-inline-${slug}`}
+              label={label}
+              value={customTags[slug] || []}
+              onChange={(v) => setCustomTags((prev) => ({ ...prev, [slug]: v }))}
+              tagColumn="header_tags"
+              customTagSlug={slug}
+              placeholder={`e.g., ${label}...`}
+              hint={`Optional ${label.toLowerCase()}`}
+            />
+          ))}
+
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label htmlFor="newCustomType" className="block text-sm font-medium text-gray-700 mb-1">
+                Add custom performer category
+              </label>
+              <input
+                id="newCustomType"
+                type="text"
+                value={newCustomTypeLabel}
+                onChange={(e) => setNewCustomTypeLabel(e.target.value)}
+                placeholder="e.g., Hosted By, Music By"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-0.5">Add a custom tag type (e.g. Hosted By, Music By)</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const label = newCustomTypeLabel.trim();
+                if (!label) return;
+                const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                if (!slug) return;
+                if (inlineCustomTypes.some((t) => t.slug === slug)) return;
+                setInlineCustomTypes((prev) => [...prev, { slug, label }]);
+                setNewCustomTypeLabel('');
+              }}
+              className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium shrink-0"
             >
-              <option value="">No collection</option>
-              {collections.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+              Add
+            </button>
           </div>
 
           <div>
@@ -308,6 +345,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             {loading ? 'Creating...' : 'Create Show'}
           </button>
         </form>
+        </div>
       </div>
     </div>
   );

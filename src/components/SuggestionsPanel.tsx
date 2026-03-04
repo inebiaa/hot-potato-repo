@@ -129,20 +129,20 @@ export default function SuggestionsPanel({ isOpen, onClose, onSuggestionProcesse
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="p-6 border-b flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">Edit Suggestions</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Review and approve suggested changes from users
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X size={24} />
-          </button>
+      <div className="relative max-w-4xl w-full my-8">
+        <button
+          onClick={onClose}
+          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+          aria-label="Close"
+        >
+          ×
+        </button>
+        <div className="bg-white rounded-lg shadow-xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-6 border-b">
+          <h2 className="text-2xl font-bold">Edit Suggestions</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Review and approve suggested changes from users
+          </p>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
@@ -206,20 +206,21 @@ export default function SuggestionsPanel({ isOpen, onClose, onSuggestionProcesse
             </div>
           )}
         </div>
+        </div>
       </div>
 
       {selectedSuggestion && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
-          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex items-start justify-between mb-4">
-              <h3 className="text-xl font-bold">Suggested Changes</h3>
-              <button
-                onClick={() => setSelectedSuggestion(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={24} />
-              </button>
-            </div>
+          <div className="relative max-w-3xl w-full my-8">
+            <button
+              onClick={() => setSelectedSuggestion(null)}
+              className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors text-xl leading-none"
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <div className="bg-white rounded-lg shadow-xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <h3 className="text-xl font-bold mb-4">Suggested Changes</h3>
 
             <div className="space-y-3">
               {Object.entries(selectedSuggestion.suggestion_data).map(([key, value]) => (
