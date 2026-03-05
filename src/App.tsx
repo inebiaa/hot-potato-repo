@@ -80,7 +80,15 @@ function App() {
   const [overlaySuggestCustomSlug, setOverlaySuggestCustomSlug] = useState<string | undefined>(undefined);
   const [tagModalRefreshTrigger, setTagModalRefreshTrigger] = useState(0);
   const [upcomingExpanded, setUpcomingExpanded] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
   const [showProfileView, setShowProfileView] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
   const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasClearedFiltersForSharedLink = useRef(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -1055,7 +1063,8 @@ function App() {
           );
 
           const upcomingBlock = upcoming.length > 1 && nextUpcoming ? (
-            <div className={`flex flex-col ${!upcomingExpanded ? 'min-h-[520px] md:mr-6 md:mb-6' : 'min-h-0 h-full'}`}>
+            <div className={`flex flex-col ${!upcomingExpanded && !isMobile ? 'min-h-[520px] mb-16 md:mb-6 md:mr-6' : 'min-h-0 h-full'}`}>
+              {!isMobile && (
               <div className="flex items-center shrink-0 mb-3">
                 <button
                   type="button"
@@ -1067,8 +1076,9 @@ function App() {
                   {upcomingExpanded ? `−${upcoming.length}` : `+${upcoming.length}`}
                 </button>
               </div>
-              <div className={`relative flex-1 min-h-[480px] overflow-visible ${!upcomingExpanded ? 'pl-[30px] pr-[30px] pb-[30px]' : ''}`}>
-                {!upcomingExpanded && (() => {
+              )}
+              <div className={`relative flex-1 min-h-[480px] overflow-visible ${!upcomingExpanded && !isMobile ? 'pl-[30px] pr-[30px] pb-[30px]' : ''}`}>
+                {!upcomingExpanded && !isMobile && (() => {
                   const stacked = [...otherUpcoming.slice(0, 3), nextUpcoming];
                   const n = stacked.length;
                   const offset = (n - 1) * 10;
@@ -1147,7 +1157,7 @@ function App() {
                     </div>
                   );
                 })()}
-                {upcomingExpanded && (
+                {(upcomingExpanded || isMobile) && (
                   <div className="flex h-full">
                     <div className="flex-1 min-h-0">
                       {renderCard(nextUpcoming, true)}
@@ -1170,7 +1180,7 @@ function App() {
                 {upcomingBlock && (
                   <div className="overflow-visible self-start">{upcomingBlock}</div>
                 )}
-                {upcomingExpanded && otherUpcoming.map((event) => (
+                {(upcomingExpanded || isMobile) && otherUpcoming.map((event) => (
                   <div key={event.id} className="min-h-0 flex flex-col">
                     {cardCell(renderCard(event, true))}
                   </div>
