@@ -13,12 +13,19 @@ interface ColorPickerProps {
 
 export const CUSTOM_COLORS_STORAGE_KEY = 'tag_custom_colors_v1';
 
-/** Preloaded swatches: one flat list, no presets */
+/** Curated swatches: faded (muted) first, then vibrant (saturated) */
 export const PRELOADED_HEX = [
-  '#f3f4f6', '#fef3c7', '#fce7f3', '#f3e8ff', '#dbeafe', '#ffedd5', '#ccfbf1', '#d1fae5', '#e0e7ff',
-  '#e5e7eb', '#fef08a', '#f9a8d4', '#86efac', '#67e8f9', '#bef264', '#fdba74', '#c4b5fd', '#5eead4', '#fda4af',
-  '#fff200', '#ff1493', '#39ff14', '#00e5ff', '#00f5ff', '#3b82f6', '#c400ff', '#ff3b30', '#ff00a8',
-  '#ff6a00', '#a3ff12',
+  /* Faded: neutrals and soft pastels */
+  '#f8fafc', '#f1f5f9', '#e2e8f0', '#cbd5e1', '#94a3b8',
+  '#fef3c7', '#fde68a', '#fce7f3', '#fbcfe8', '#f9a8d4',
+  '#e9d5ff', '#d8b4fe', '#dbeafe', '#93c5fd',
+  '#ccfbf1', '#5eead4', '#d1fae5', '#6ee7b7',
+  '#e0e7ff', '#a5b4fc', '#ffedd5', '#fdba74',
+  /* Vibrant: saturated accents */
+  '#fcd34d', '#fbbf24', '#f472b6', '#c084fc', '#a78bfa',
+  '#60a5fa', '#3b82f6', '#2dd4bf', '#14b8a6',
+  '#34d399', '#10b981', '#818cf8', '#6366f1',
+  '#fb923c', '#f97316',
 ];
 
 const uniqueHexList = (colors: string[]) => {
@@ -132,9 +139,9 @@ export default function ColorPicker({
         {isOpen && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} aria-hidden="true" />
-            <div className="absolute left-0 z-20 mt-1 min-w-[240px] w-max max-w-[min(100vw,320px)] max-h-80 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-2">
-              <div className="text-[11px] text-gray-500 mb-1.5">Preloaded</div>
-              <div className="grid grid-cols-6 gap-1.5">
+            <div className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,300px)] max-h-80 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+              <div className="text-xs font-medium text-gray-600 mb-2">Presets</div>
+              <div className="grid grid-cols-6 gap-2">
                 {PRELOADED_HEX.map((hex) => (
                   <button
                     key={hex}
@@ -150,16 +157,18 @@ export default function ColorPicker({
               </div>
 
               {savedColors.length > 0 && (
-                <div className="mt-3 pt-2 border-t border-gray-100">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] text-gray-500">Your colors</span>
-                    {manageMode && (
-                      <button type="button" onClick={() => setManageMode(false)} className="text-[11px] text-gray-600 hover:text-gray-800">
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-gray-600">Saved</span>
+                    {manageMode ? (
+                      <button type="button" onClick={() => setManageMode(false)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
                         Done
                       </button>
+                    ) : (
+                      <span className="text-[11px] text-gray-400">Long-press to remove</span>
                     )}
                   </div>
-                  <div className="grid grid-cols-6 gap-1.5">
+                  <div className="grid grid-cols-6 gap-2">
                     {savedColors.map((hex) => (
                       <div key={hex} className="relative">
                         <button
@@ -194,19 +203,19 @@ export default function ColorPicker({
                 </div>
               )}
 
-              <div className="mt-3 pt-2 border-t border-gray-100 flex flex-wrap items-center gap-2">
+              <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={addCurrent}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 text-gray-600 text-xs hover:bg-gray-200"
-                  title="Add current to your colors"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-gray-100 text-gray-700 text-xs font-medium hover:bg-gray-200"
+                  title="Save current color to Saved"
                 >
                   <Plus size={12} />
-                  Add
+                  Save current
                 </button>
-                <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-gray-200 hover:bg-gray-50 cursor-pointer text-xs text-gray-600">
-                  <Palette size={14} />
-                  Custom
+                <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 cursor-pointer text-xs font-medium text-gray-700">
+                  <Palette size={12} />
+                  Custom hex
                   <input
                     type="color"
                     value={bgValue}

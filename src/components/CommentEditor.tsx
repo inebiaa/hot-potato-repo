@@ -45,7 +45,7 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
       const html = segments
         .map((seg) =>
           seg.type === 'tag' && seg.tag
-            ? `<span contenteditable="false" class="inline-block px-1.5 py-0.5 rounded-md text-xs not-italic font-normal mx-0.5 align-baseline select-none" style="background-color:${seg.tag.bg};color:${seg.tag.text}">${escapeHtml(seg.value)}</span>`
+            ? `<span contenteditable="false" data-tag-pill class="inline-flex items-center justify-center text-xs px-2 py-1 rounded-md not-italic font-normal mx-0.5 select-none transition-colors" style="background-color:${seg.tag.bg};color:${seg.tag.text}">${escapeHtml(seg.value)}</span>`
             : escapeHtml(seg.value)
         )
         .join('');
@@ -139,7 +139,7 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
       const newValue = beforePart + insert + after;
       lastValueRef.current = newValue;
       onChange(newValue);
-      syncFromValue(newValue, Math.min(start + inserted.length, newValue.length));
+      syncFromValue(newValue, Math.min(start + insert.length, newValue.length));
     },
     [onChange, syncFromValue]
   );

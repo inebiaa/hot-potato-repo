@@ -37,16 +37,6 @@ interface CommentWithTagsProps {
   wiggle?: boolean;
 }
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/** Returns true if s looks like a valid CSS color (hex, rgb, etc), not a Tailwind class */
-function isValidCssColor(s: string | undefined): boolean {
-  if (!s || typeof s !== 'string') return false;
-  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(s) || s.startsWith('rgb') || s.startsWith('hsl');
-}
-
 export interface TagStyleResult {
   value: string;
   bg: string;
@@ -65,35 +55,35 @@ export function getEventTagStyles(
     let bg = '#e5e7eb';
     let text = '#374151';
     if (type === 'producer') {
-      bg = isValidCssColor(tagColors?.producer_bg_color) ? tagColors!.producer_bg_color! : '#f3f4f6';
-      text = isValidCssColor(tagColors?.producer_text_color) ? tagColors!.producer_text_color! : '#374151';
+      bg = tagColors?.producer_bg_color || '#f3f4f6';
+      text = tagColors?.producer_text_color || '#374151';
     } else if (type === 'designer') {
-      bg = isValidCssColor(tagColors?.designer_bg_color) ? tagColors!.designer_bg_color! : '#fef3c7';
-      text = isValidCssColor(tagColors?.designer_text_color) ? tagColors!.designer_text_color! : '#b45309';
+      bg = tagColors?.designer_bg_color || '#fef3c7';
+      text = tagColors?.designer_text_color || '#b45309';
     } else if (type === 'model') {
-      bg = isValidCssColor(tagColors?.model_bg_color) ? tagColors!.model_bg_color! : '#fce7f3';
-      text = isValidCssColor(tagColors?.model_text_color) ? tagColors!.model_text_color! : '#be185d';
+      bg = tagColors?.model_bg_color || '#fce7f3';
+      text = tagColors?.model_text_color || '#be185d';
     } else if (type === 'hair_makeup') {
-      bg = isValidCssColor(tagColors?.hair_makeup_bg_color) ? tagColors!.hair_makeup_bg_color! : '#f3e8ff';
-      text = isValidCssColor(tagColors?.hair_makeup_text_color) ? tagColors!.hair_makeup_text_color! : '#7e22ce';
+      bg = tagColors?.hair_makeup_bg_color || '#f3e8ff';
+      text = tagColors?.hair_makeup_text_color || '#7e22ce';
     } else if (type === 'city') {
-      bg = isValidCssColor(tagColors?.city_bg_color) ? tagColors!.city_bg_color! : '#dbeafe';
-      text = isValidCssColor(tagColors?.city_text_color) ? tagColors!.city_text_color! : '#1e40af';
+      bg = tagColors?.city_bg_color || '#dbeafe';
+      text = tagColors?.city_text_color || '#1e40af';
     } else if (type === 'season') {
-      bg = isValidCssColor(tagColors?.season_bg_color) ? tagColors!.season_bg_color! : '#ffedd5';
-      text = isValidCssColor(tagColors?.season_text_color) ? tagColors!.season_text_color! : '#c2410c';
+      bg = tagColors?.season_bg_color || '#ffedd5';
+      text = tagColors?.season_text_color || '#c2410c';
     } else if (type === 'header_tags') {
-      bg = isValidCssColor(tagColors?.header_tags_bg_color) ? tagColors!.header_tags_bg_color! : '#ccfbf1';
-      text = isValidCssColor(tagColors?.header_tags_text_color) ? tagColors!.header_tags_text_color! : '#0f766e';
+      bg = tagColors?.header_tags_bg_color || '#ccfbf1';
+      text = tagColors?.header_tags_text_color || '#0f766e';
     } else if (type === 'footer_tags') {
-      bg = isValidCssColor(tagColors?.footer_tags_bg_color) ? tagColors!.footer_tags_bg_color! : '#d1fae5';
-      text = isValidCssColor(tagColors?.footer_tags_text_color) ? tagColors!.footer_tags_text_color! : '#065f46';
+      bg = tagColors?.footer_tags_bg_color || '#d1fae5';
+      text = tagColors?.footer_tags_text_color || '#065f46';
     } else if (type === 'custom' && slug) {
       const cp = customPerformerTags.find((c) => c.slug === slug);
-      const fallbackBg = isValidCssColor(tagColors?.optional_tags_bg_color) ? tagColors!.optional_tags_bg_color! : '#e0e7ff';
-      const fallbackText = isValidCssColor(tagColors?.optional_tags_text_color) ? tagColors!.optional_tags_text_color! : '#3730a3';
-      bg = cp && isValidCssColor(cp.bg_color) ? cp.bg_color : fallbackBg;
-      text = cp && isValidCssColor(cp.text_color) ? cp.text_color : fallbackText;
+      const fallbackBg = tagColors?.optional_tags_bg_color ?? '#e0e7ff';
+      const fallbackText = tagColors?.optional_tags_text_color ?? '#3730a3';
+      bg = (cp?.bg_color && cp.bg_color) ? cp.bg_color : fallbackBg;
+      text = (cp?.text_color && cp.text_color) ? cp.text_color : fallbackText;
     }
     tags.push({ value, bg, text });
   };
@@ -175,35 +165,35 @@ export default function CommentWithTags({
     let bg = '#e5e7eb';
     let text = '#374151';
     if (type === 'producer') {
-      bg = isValidCssColor(tagColors?.producer_bg_color) ? tagColors!.producer_bg_color! : '#f3f4f6';
-      text = isValidCssColor(tagColors?.producer_text_color) ? tagColors!.producer_text_color! : '#374151';
+      bg = tagColors?.producer_bg_color || '#f3f4f6';
+      text = tagColors?.producer_text_color || '#374151';
     } else if (type === 'designer') {
-      bg = isValidCssColor(tagColors?.designer_bg_color) ? tagColors!.designer_bg_color! : '#fef3c7';
-      text = isValidCssColor(tagColors?.designer_text_color) ? tagColors!.designer_text_color! : '#b45309';
+      bg = tagColors?.designer_bg_color || '#fef3c7';
+      text = tagColors?.designer_text_color || '#b45309';
     } else if (type === 'model') {
-      bg = isValidCssColor(tagColors?.model_bg_color) ? tagColors!.model_bg_color! : '#fce7f3';
-      text = isValidCssColor(tagColors?.model_text_color) ? tagColors!.model_text_color! : '#be185d';
+      bg = tagColors?.model_bg_color || '#fce7f3';
+      text = tagColors?.model_text_color || '#be185d';
     } else if (type === 'hair_makeup') {
-      bg = isValidCssColor(tagColors?.hair_makeup_bg_color) ? tagColors!.hair_makeup_bg_color! : '#f3e8ff';
-      text = isValidCssColor(tagColors?.hair_makeup_text_color) ? tagColors!.hair_makeup_text_color! : '#7e22ce';
+      bg = tagColors?.hair_makeup_bg_color || '#f3e8ff';
+      text = tagColors?.hair_makeup_text_color || '#7e22ce';
     } else if (type === 'city') {
-      bg = isValidCssColor(tagColors?.city_bg_color) ? tagColors!.city_bg_color! : '#dbeafe';
-      text = isValidCssColor(tagColors?.city_text_color) ? tagColors!.city_text_color! : '#1e40af';
+      bg = tagColors?.city_bg_color || '#dbeafe';
+      text = tagColors?.city_text_color || '#1e40af';
     } else if (type === 'season') {
-      bg = isValidCssColor(tagColors?.season_bg_color) ? tagColors!.season_bg_color! : '#ffedd5';
-      text = isValidCssColor(tagColors?.season_text_color) ? tagColors!.season_text_color! : '#c2410c';
+      bg = tagColors?.season_bg_color || '#ffedd5';
+      text = tagColors?.season_text_color || '#c2410c';
     } else if (type === 'header_tags') {
-      bg = isValidCssColor(tagColors?.header_tags_bg_color) ? tagColors!.header_tags_bg_color! : '#ccfbf1';
-      text = isValidCssColor(tagColors?.header_tags_text_color) ? tagColors!.header_tags_text_color! : '#0f766e';
+      bg = tagColors?.header_tags_bg_color || '#ccfbf1';
+      text = tagColors?.header_tags_text_color || '#0f766e';
     } else if (type === 'footer_tags') {
-      bg = isValidCssColor(tagColors?.footer_tags_bg_color) ? tagColors!.footer_tags_bg_color! : '#d1fae5';
-      text = isValidCssColor(tagColors?.footer_tags_text_color) ? tagColors!.footer_tags_text_color! : '#065f46';
+      bg = tagColors?.footer_tags_bg_color || '#d1fae5';
+      text = tagColors?.footer_tags_text_color || '#065f46';
     } else if (type === 'custom' && slug) {
       const cp = customPerformerTags.find((c) => c.slug === slug);
-      const fallbackBg = isValidCssColor(tagColors?.optional_tags_bg_color) ? tagColors!.optional_tags_bg_color! : '#e0e7ff';
-      const fallbackText = isValidCssColor(tagColors?.optional_tags_text_color) ? tagColors!.optional_tags_text_color! : '#3730a3';
-      bg = cp && isValidCssColor(cp.bg_color) ? cp.bg_color : fallbackBg;
-      text = cp && isValidCssColor(cp.text_color) ? cp.text_color : fallbackText;
+      const fallbackBg = tagColors?.optional_tags_bg_color ?? '#e0e7ff';
+      const fallbackText = tagColors?.optional_tags_text_color ?? '#3730a3';
+      bg = (cp?.bg_color && cp.bg_color) ? cp.bg_color : fallbackBg;
+      text = (cp?.text_color && cp.text_color) ? cp.text_color : fallbackText;
     }
     tags.push({ value, bg, text });
   };
@@ -264,8 +254,8 @@ export default function CommentWithTags({
           <span
             key={i}
             data-tag-pill
-            className={`inline-block px-1.5 py-0.5 rounded-md not-italic font-normal mx-0.5 align-baseline ${wiggle ? 'pill-wiggle' : ''}`}
-            style={{ backgroundColor: seg.tag.bg, color: seg.tag.text, fontSize: '1em', lineHeight: 'inherit' }}
+            className={`inline-flex items-center justify-center text-xs px-2 py-1 rounded-md not-italic font-normal mx-0.5 transition-colors hover:opacity-80 ${wiggle ? 'pill-wiggle' : ''}`}
+            style={{ backgroundColor: seg.tag.bg, color: seg.tag.text }}
           >
             {seg.value}
           </span>

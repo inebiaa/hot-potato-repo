@@ -1,8 +1,11 @@
-import { Star } from 'lucide-react';
+import React from 'react';
+import { Star, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
+import { getIcon } from '../lib/eventCardIcons';
+import type { Event } from '../lib/supabase';
 
 interface TagRatingsModalProps {
   isOpen: boolean;
@@ -13,6 +16,10 @@ interface TagRatingsModalProps {
   onEventClick?: (eventId: string) => void;
   /** Increment to refetch list (e.g. after closing an event overlay so ratings stay in sync). */
   refreshTrigger?: number;
+  /** Tag colors for pill styling (matches EventCard). */
+  tagColors?: Record<string, string>;
+  /** When set, clicking a pill opens that tag's modal. */
+  onTagClick?: (type: string, value: string) => void;
 }
 
 interface EventRating {
@@ -20,6 +27,7 @@ interface EventRating {
   event_name: string;
   avg_rating: number;
   rating_count: number;
+  event?: Event;
 }
 
 export default function TagRatingsModal({
@@ -29,6 +37,8 @@ export default function TagRatingsModal({
   tagValue,
   onEventClick,
   refreshTrigger = 0,
+  tagColors,
+  onTagClick,
 }: TagRatingsModalProps) {
   const [eventRatings, setEventRatings] = useState<EventRating[]>([]);
   const [totalShows, setTotalShows] = useState(0);
@@ -45,7 +55,7 @@ export default function TagRatingsModal({
   const fetchTagRatings = async () => {
     setLoading(true);
     try {
-      let query = supabase.from('events').select('id, name, date, season');
+      let query = supabase.from('events').select('id, name, date, producers, featured_designers, models, hair_makeup, city, genre, header_tags, footer_tags, custom_tags, custom_tag_meta');
 
       switch (tagType) {
         case 'producer':
@@ -98,10 +108,10 @@ export default function TagRatingsModal({
 
       if (ratingsError) throw ratingsError;
 
-      const eventRatingsMap = new Map<string, { sum: number; count: number; name: string }>();
+      const eventRatingsMap = new Map<string, { sum: number; count: number; name: string; event?: Event }>();
 
-      events.forEach(event => {
-        eventRatingsMap.set(event.id, { sum: 0, count: 0, name: event.name });
+      events.forEach((event: any) => {
+        eventRatingsMap.set(event.id, { sum: 0, count: 0, name: event.name, event });
       });
 
       let totalSum = 0;
@@ -123,6 +133,7 @@ export default function TagRatingsModal({
           event_name: data.name,
           avg_rating: data.count > 0 ? data.sum / data.count : 0,
           rating_count: data.count,
+          event: data.event,
         }))
         .sort((a, b) => b.avg_rating - a.avg_rating);
 
@@ -148,6 +159,45 @@ export default function TagRatingsModal({
       case 'footer_tags': return 'Tag';
       default: return 'Tag';
     }
+  };
+
+  const renderEventPills = (event: Event | undefined) => {
+    if (!event) return null;
+    const CityIcon = getIcon(tagColors?.city_icon, 'city_icon');
+    const SeasonIcon = getIcon(tagColors?.season_icon, 'season_icon');
+    const ProducerIcon = getIcon(tagColors?.producer_icon, 'producer_icon');
+    const DesignerIcon = getIcon(tagColors?.designer_icon, 'designer_icon');
+    const ModelIcon = getIcon(tagColors?.model_icon, 'model_icon');
+    const HairMakeupIcon = getIcon(tagColors?.hair_makeup_icon, 'hair_makeup_icon');
+    const HeaderTagsIcon = getIcon(tagColors?.header_tags_icon, 'header_tags_icon');
+    const pill = (type: string, value: string, bg: string, text: string, Icon?: LucideIcon) => (
+      <button
+        key={`${type}:${value}`}
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onTagClick?.(type, type === 'custom_performer' ? value : value); }}
+        data-tag-pill
+        className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 inline-flex items-center gap-1"
+        style={{ backgroundColor: bg, color: text }}
+      >
+        {Icon && <Icon size={12} className="inline -mt-0.5" />}
+        {type === 'custom_performer' ? value.split('\x00')[1] ?? value : value}
+      </button>
+    );
+    const tags: React.ReactNode[] = [];
+    if (event.city) tags.push(pill('city', event.city, tagColors?.city_bg_color || '#dbeafe', tagColors?.city_text_color || '#1e40af', CityIcon));
+    if (event.date) tags.push(pill('season', getSeasonFromDate(event.date), tagColors?.season_bg_color || '#ffedd5', tagColors?.season_text_color || '#c2410c', SeasonIcon));
+    (event.producers || []).forEach((v) => tags.push(pill('producer', v, tagColors?.producer_bg_color || '#f3f4f6', tagColors?.producer_text_color || '#374151', ProducerIcon)));
+    (event.featured_designers || []).forEach((v) => tags.push(pill('designer', v, tagColors?.designer_bg_color || '#fef3c7', tagColors?.designer_text_color || '#b45309', DesignerIcon)));
+    (event.models || []).forEach((v) => tags.push(pill('model', v, tagColors?.model_bg_color || '#fce7f3', tagColors?.model_text_color || '#be185d', ModelIcon)));
+    (event.hair_makeup || []).forEach((v) => tags.push(pill('hair_makeup', v, tagColors?.hair_makeup_bg_color || '#f3e8ff', tagColors?.hair_makeup_text_color || '#7e22ce', HairMakeupIcon)));
+    ((event.genre || event.header_tags) || []).forEach((v: string) => tags.push(pill('header_tags', v, tagColors?.header_tags_bg_color || '#ccfbf1', tagColors?.header_tags_text_color || '#0f766e', HeaderTagsIcon)));
+    (event.footer_tags || []).forEach((v) => tags.push(pill('footer_tags', v, tagColors?.footer_tags_bg_color || '#d1fae5', tagColors?.footer_tags_text_color || '#065f46')));
+    if (event.custom_tags && typeof event.custom_tags === 'object') {
+      Object.entries(event.custom_tags).forEach(([slug, vals]) => {
+        (vals || []).forEach((v) => tags.push(pill('custom_performer', `${slug}\x00${v}`, tagColors?.optional_tags_bg_color || '#e0e7ff', tagColors?.optional_tags_text_color || '#3730a3')));
+      });
+    }
+    return tags.length > 0 ? <div className="flex flex-wrap gap-1 items-center mt-2">{tags}</div> : null;
   };
 
   const modal = (
@@ -253,6 +303,7 @@ export default function TagRatingsModal({
                           ({eventRating.rating_count} {eventRating.rating_count === 1 ? 'rating' : 'ratings'})
                         </span>
                       </div>
+                      {renderEventPills(eventRating.event)}
                     </div>
                   </div>
                 </div>

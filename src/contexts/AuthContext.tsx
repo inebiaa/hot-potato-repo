@@ -30,7 +30,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq('user_id', userId)
       .maybeSingle();
 
-    console.log('Admin check:', { userId, data, error, isAdmin: !!data && !error });
     setIsAdmin(!!data && !error);
   };
 

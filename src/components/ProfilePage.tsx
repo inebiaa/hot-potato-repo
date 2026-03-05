@@ -668,7 +668,7 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
 
   return (
     <div className="min-h-screen bg-stone-50/80">
-      <div className="max-w-7xl mx-auto px-4 pb-16 pt-6">
+      <div className="max-w-[2400px] mx-auto px-4 pb-16 pt-6">
         <button onClick={onClose} className="text-sm text-stone-500 hover:text-stone-900 mb-8 transition-colors">
           ← Back to shows
         </button>
@@ -916,24 +916,25 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
           {reviews.length === 0 ? (
             <div className="rounded-2xl bg-white/80 py-16 px-6 text-center"><p className="text-stone-500 text-sm">No reviews yet. Rate a show to see it here.</p></div>
           ) : reviewsLayout === 'cards' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-visible">
+            <div className="columns-[300px] gap-6">
               {reviews
                 .filter((row, idx, arr) => arr.findIndex((x) => x.event.id === row.event.id) === idx)
                 .map(({ rating, event, averageRating, ratingCount }) => (
                   event?.id ? (
-                    <EventCard
-                      key={rating.id}
-                      event={event}
-                      averageRating={averageRating}
-                      ratingCount={ratingCount}
-                      userRating={rating}
-                      onRatingSubmitted={fetchProfile}
-                      onEventUpdated={fetchProfile}
-                      onTagClick={onTagClick || (() => {})}
-                      onViewClick={onOpenEvent}
-                      tagColors={tagColors}
-                      customPerformerTags={customPerformerTags}
-                    />
+                    <div key={rating.id} className="break-inside-avoid mb-6">
+                      <EventCard
+                        event={event}
+                        averageRating={averageRating}
+                        ratingCount={ratingCount}
+                        userRating={rating}
+                        onRatingSubmitted={fetchProfile}
+                        onEventUpdated={fetchProfile}
+                        onTagClick={onTagClick || (() => {})}
+                        onViewClick={onOpenEvent}
+                        tagColors={tagColors}
+                        customPerformerTags={customPerformerTags}
+                      />
+                    </div>
                   ) : null
                 ))}
             </div>

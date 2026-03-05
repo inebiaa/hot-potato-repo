@@ -11,3 +11,9 @@
 .pill-wiggle {
   animation: pillWiggle 140ms ease-in-out infinite;
 }
+
+/* Shared tag pill sizing so comment pills match EventCard pills */
+[data-tag-pill] {
+  min-height: 1.5rem;
+  box-sizing: border-box;
+}

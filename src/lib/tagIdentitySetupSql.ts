@@ -89,4 +89,6 @@ CREATE POLICY "Event owner or admin can update pending suggestions"
     EXISTS (SELECT 1 FROM events e WHERE e.id = pending_tag_suggestions.event_id AND e.created_by = auth.uid())
     OR EXISTS (SELECT 1 FROM admin_users au WHERE au.user_id = auth.uid())
   );
+CREATE POLICY "Users can delete own suggestions"
+  ON pending_tag_suggestions FOR DELETE TO authenticated USING (auth.uid() = suggested_by);
 `;
