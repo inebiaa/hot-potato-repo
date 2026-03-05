@@ -258,16 +258,6 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             hint="Optional tags for the header section"
           />
 
-          <TagInput
-            id="footerTags"
-            label="Footer Tags"
-            value={footerTags}
-            onChange={setFooterTags}
-            tagColumn="footer_tags"
-            placeholder="e.g., Award Winning, Sustainable Fashion, NYFW Fall 2024"
-            hint="Optional tags; use a shared tag (e.g. NYFW Fall 2024) to group related shows"
-          />
-
           {inlineCustomTypes.map(({ slug, label, icon }) => (
             <div key={slug} className="flex items-start gap-3">
               <div className="shrink-0 w-28">
@@ -336,6 +326,16 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
               Add
             </button>
           </div>
+
+          <TagInput
+            id="footerTags"
+            label="Footer Tags"
+            value={footerTags}
+            onChange={setFooterTags}
+            tagColumn="footer_tags"
+            placeholder="e.g., Award Winning, Sustainable Fashion, NYFW Fall 2024"
+            hint="Optional tags; use a shared tag (e.g. NYFW Fall 2024) to group related shows"
+          />
 
           <div>
             <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700 mb-1">

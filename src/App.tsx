@@ -99,8 +99,21 @@ function App() {
     color_scheme: 'custom',
   });
   const [searchFocused, setSearchFocused] = useState(false);
+  const [searchDragOver, setSearchDragOver] = useState(false);
 
   const isHex = (value: string | undefined) => !!value && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value);
+
+  const handleSearchDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setSearchDragOver(false);
+    const raw = e.dataTransfer.getData('text/plain');
+    const match = raw?.match(/^tag-filter:([^:]+):(.+)$/);
+    if (match) {
+      const [, type, value] = match;
+      const searchTerm = type === 'custom_performer' ? value.split('\x00')[1] ?? value : value;
+      setSearchQuery(searchTerm);
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -114,6 +127,8 @@ function App() {
       data?.forEach((item) => {
         settingsObj[item.key] = item.value || '';
       });
+      const iconValue = (key: keyof AppSettings, fallback: string) =>
+        Object.prototype.hasOwnProperty.call(settingsObj, key) ? settingsObj[key] : fallback;
 
       const scheme = settingsObj.color_scheme || 'custom';
       const useAutoText = scheme === 'faded' || scheme === 'bright';
@@ -153,14 +168,14 @@ function App() {
         header_tags_text_color: resolveText(headerBg, settingsObj.header_tags_text_color, '#0f766e'),
         footer_tags_bg_color: footerBg,
         footer_tags_text_color: resolveText(footerBg, settingsObj.footer_tags_text_color, '#065f46'),
-        producer_icon: settingsObj.producer_icon || 'Sparkles',
-        designer_icon: settingsObj.designer_icon || 'Star',
-        model_icon: settingsObj.model_icon || 'Users',
-        hair_makeup_icon: settingsObj.hair_makeup_icon || 'Scissors',
-        city_icon: settingsObj.city_icon || 'MapPin',
-        season_icon: settingsObj.season_icon || 'Calendar',
-        header_tags_icon: settingsObj.header_tags_icon || 'Tag',
-        footer_tags_icon: settingsObj.footer_tags_icon || 'Tag',
+        producer_icon: iconValue('producer_icon', 'Sparkles'),
+        designer_icon: iconValue('designer_icon', 'Star'),
+        model_icon: iconValue('model_icon', 'Users'),
+        hair_makeup_icon: iconValue('hair_makeup_icon', 'Scissors'),
+        city_icon: iconValue('city_icon', 'MapPin'),
+        season_icon: iconValue('season_icon', 'Calendar'),
+        header_tags_icon: iconValue('header_tags_icon', 'Tag'),
+        footer_tags_icon: iconValue('footer_tags_icon', 'Tag'),
         optional_tags_bg_color: optionalBg,
         optional_tags_text_color: resolveText(optionalBg, settingsObj.optional_tags_text_color, '#3730a3'),
       });
@@ -303,6 +318,11 @@ function App() {
     return searchableTags.filter((t) => normalizeForSearch(t.label).includes(q)).slice(0, 8);
   }, [searchQuery, searchableTags]);
 
+  const openTagModal = (type: string, value: string) => {
+    setTagRatingsData({ type, value });
+    setIsTagRatingsModalOpen(true);
+  };
+
   const handleTagClick = (type: string, value: string) => {
     if (type === 'footer_tags' || type === 'custom_performer') {
       if (overlayEventId) closeEventOverlay();
@@ -321,8 +341,7 @@ function App() {
       return;
     }
     if (overlayEventId) closeEventOverlay();
-    setTagRatingsData({ type, value });
-    setIsTagRatingsModalOpen(true);
+    openTagModal(type, value);
   };
 
   const selectTagFilter = (type: string, value: string) => {
@@ -499,8 +518,6 @@ function App() {
     setUpcomingExpanded(false);
   }, [searchQuery, selectedCity, selectedTags, dateFilter]);
 
-  console.log('Auth state:', { user: !!user, userId: user?.id, isAdmin });
-
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
   const overlayEvent = overlayEventId ? (events.find((e) => e.id === overlayEventId) ?? filteredEvents.find((e) => e.id === overlayEventId)) : null;
 
@@ -601,6 +618,8 @@ function App() {
           tagValue={tagRatingsData?.value || ''}
           onEventClick={(eventId) => openEventOverlay(eventId, 'tagModal')}
           refreshTrigger={tagModalRefreshTrigger}
+          tagColors={appSettings}
+          onTagClick={openTagModal}
         />
       </div>
     );
@@ -675,7 +694,7 @@ function App() {
             </div>
           </div>
         </header>
-        <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 overflow-visible">
+        <main className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 overflow-visible">
           <ProfilePage
             userId={user.id}
             pathname={pathname}
@@ -694,6 +713,8 @@ function App() {
           tagValue={tagRatingsData?.value || ''}
           onEventClick={(eventId) => openEventOverlay(eventId, 'tagModal')}
           refreshTrigger={tagModalRefreshTrigger}
+          tagColors={appSettings}
+          onTagClick={openTagModal}
         />
 
         {overlayEvent && (
@@ -835,7 +856,7 @@ function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 overflow-visible">
+      <main className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 overflow-visible">
         <div className="mb-8 overflow-visible">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Fashion Shows</h2>
           <p className="text-gray-600 mb-6">
@@ -844,7 +865,12 @@ function App() {
 
           <div className="border-b border-gray-200 pb-4 mb-6">
             <div className="flex flex-wrap gap-3 items-center">
-              <div className="relative flex-1 min-w-[200px]">
+              <div
+                className={`relative flex-1 min-w-[200px] rounded-lg transition-colors ${searchDragOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setSearchDragOver(true); }}
+                onDragLeave={() => setSearchDragOver(false)}
+                onDrop={handleSearchDrop}
+              >
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
@@ -1063,103 +1089,111 @@ function App() {
           );
 
           const upcomingBlock = upcoming.length > 1 && nextUpcoming ? (
-            <div className={`flex flex-col ${!upcomingExpanded && !isMobile ? 'min-h-[520px] mb-16 md:mb-6 md:mr-6' : 'min-h-0 h-full'}`}>
-              {!isMobile && (
-              <div className="flex items-center shrink-0 mb-3">
-                <button
-                  type="button"
-                  onClick={() => setUpcomingExpanded((v) => !v)}
-                  className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0"
-                  aria-expanded={upcomingExpanded}
-                  aria-label={upcomingExpanded ? 'Collapse upcoming shows' : 'Expand upcoming shows'}
-                >
-                  {upcomingExpanded ? `−${upcoming.length}` : `+${upcoming.length}`}
-                </button>
-              </div>
-              )}
-              <div className={`relative flex-1 min-h-[480px] overflow-visible ${!upcomingExpanded && !isMobile ? 'pl-[30px] pr-[30px] pb-[30px]' : ''}`}>
+            <div className={`flex flex-col w-full min-w-0 ${!upcomingExpanded && !isMobile ? 'min-h-[520px] mb-16 md:mb-6 md:mr-6' : 'min-h-0 h-full'}`}>
+              <div className={`shrink-0 flex items-center ${CARD_TOP_SPACER}`} />
+              <div className={`relative flex-1 ${!upcomingExpanded && !isMobile ? 'min-h-[480px] pb-3' : 'overflow-visible'}`}>
                 {!upcomingExpanded && !isMobile && (() => {
                   const stacked = [...otherUpcoming.slice(0, 3), nextUpcoming];
                   const n = stacked.length;
                   const offset = (n - 1) * 10;
                   return (
-                    <div
-                      className="absolute top-0 left-0 overflow-visible"
-                      style={{ right: -offset, bottom: -offset }}
-                    >
-                      <div className="absolute inset-0" style={{ right: offset, bottom: offset }}>
-                      {stacked.map((event, i) => {
-                        const isFront = i === stacked.length - 1;
-                        const stackOpacity = 0.38 + (i / Math.max(1, n - 1)) * 0.22;
-                        return (
-                    <div
-                      key={event.id}
-                      ref={isFront ? (el) => { eventCardRefs.current[event.id] = el; } : undefined}
-                      className={`absolute top-0 left-0 w-full pointer-events-none ${isFront ? 'inset-0' : 'h-48 overflow-hidden'}`}
-                      style={{
-                        zIndex: i,
-                        transform: `translate(${i * 10}px, ${i * 10}px)`,
-                        opacity: isFront ? 1 : stackOpacity,
-                      }}
-                    >
-                      {isFront ? (
-                        <div
-                          className="h-full w-full pointer-events-auto cursor-pointer"
-                          role="button"
-                          tabIndex={0}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (n === 1) openEventOverlay(event.id);
-                            else setUpcomingExpanded((v) => !v);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              if (n === 1) openEventOverlay(event.id);
-                              else setUpcomingExpanded((v) => !v);
-                            }
-                          }}
-                          aria-label={n === 1 ? 'View event details' : 'Expand upcoming shows'}
+                    <div className="relative w-full">
+                      {!isMobile && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setUpcomingExpanded((v) => !v); }}
+                          className="absolute top-2 right-2 z-30 px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white/95 hover:bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow"
+                          aria-expanded={upcomingExpanded}
+                          aria-label={upcomingExpanded ? 'Collapse upcoming shows' : 'Expand upcoming shows'}
                         >
-                          <EventCard
-                            event={event}
-                            averageRating={event.average_rating}
-                            ratingCount={event.rating_count}
-                            userRating={event.user_rating}
-                            onRatingSubmitted={fetchEvents}
-                            onEventUpdated={fetchEvents}
-                            onTagClick={handleTagClick}
-                            onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
-                            tagColors={appSettings}
-                            customPerformerTags={[]}
-                            imageOpacity={0.6}
-                          />
+                          {upcomingExpanded ? `−${upcoming.length}` : `+${upcoming.length}`}
+                        </button>
+                      )}
+                      {stacked.slice(0, -1).map((event, i) => {
+                        const step = (n - 1 - i) * 10;
+                        return (
+                        <div
+                          key={event.id}
+                          className="absolute overflow-hidden pointer-events-none rounded-lg bg-white shadow-md flex flex-col"
+                          style={{
+                            left: i * 10,
+                            right: offset - i * 10,
+                            top: step,
+                            bottom: -step,
+                            zIndex: i,
+                            opacity: 0.6 + (i / Math.max(1, n - 1)) * 0.25,
+                          }}
+                        >
+                          {event.image_url ? (
+                            <img src={event.image_url} alt="" className="w-full h-48 object-cover rounded-t-lg" />
+                          ) : (
+                            <div className="w-full h-48 bg-gray-200 rounded-t-lg" />
+                          )}
+                          <div className="flex-1 min-h-[140px] bg-white rounded-b-lg" />
                         </div>
-                      ) : (
+                        );
+                      })}
+                      <div
+                        ref={(el) => { if (nextUpcoming) eventCardRefs.current[nextUpcoming.id] = el; }}
+                        className="relative z-10"
+                        style={{ marginLeft: offset }}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          const target = e.target as HTMLElement;
+                          const isInteractive =
+                            target.closest('button') ||
+                            target.closest('a') ||
+                            target.closest('input') ||
+                            target.closest('[role="button"]') ||
+                            target.closest('[data-event-actions]') ||
+                            target.closest('[data-tag-pill]');
+                          if (isInteractive) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (n === 1) openEventOverlay(nextUpcoming!.id);
+                          else setUpcomingExpanded((v) => !v);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            if (n === 1) openEventOverlay(nextUpcoming!.id);
+                            else setUpcomingExpanded((v) => !v);
+                          }
+                        }}
+                        aria-label={n === 1 ? 'View event details' : 'Expand upcoming shows'}
+                      >
                         <EventCard
-                          event={event}
-                          averageRating={event.average_rating}
-                          ratingCount={event.rating_count}
-                          userRating={event.user_rating}
+                          event={nextUpcoming!}
+                          averageRating={nextUpcoming!.average_rating}
+                          ratingCount={nextUpcoming!.rating_count}
+                          userRating={nextUpcoming!.user_rating}
                           onRatingSubmitted={fetchEvents}
                           onEventUpdated={fetchEvents}
                           onTagClick={handleTagClick}
                           onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
                           tagColors={appSettings}
                           customPerformerTags={[]}
-                          stackPhotoOnly
+                          imageOpacity={0.6}
                         />
-                      )}
-                    </div>
-                  );})}
                       </div>
                     </div>
                   );
                 })()}
                 {(upcomingExpanded || isMobile) && (
-                  <div className="flex h-full">
-                    <div className="flex-1 min-h-0">
+                  <div className="relative flex h-full w-full">
+                    {!isMobile && (
+                      <button
+                        type="button"
+                        onClick={() => setUpcomingExpanded((v) => !v)}
+                        className="absolute top-2 right-2 z-30 px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white/95 hover:bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow"
+                        aria-expanded={upcomingExpanded}
+                        aria-label="Collapse upcoming shows"
+                      >
+                        −{upcoming.length}
+                      </button>
+                    )}
+                    <div className="flex-1 min-h-0 w-full">
                       {renderCard(nextUpcoming, true)}
                     </div>
                   </div>
@@ -1176,27 +1210,27 @@ function App() {
           );
 
           return (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-visible">
+              <div className="columns-[300px] gap-6">
                 {upcomingBlock && (
-                  <div className="overflow-visible self-start">{upcomingBlock}</div>
+                  <div className="break-inside-avoid mb-6 w-full min-w-0">{upcomingBlock}</div>
                 )}
                 {(upcomingExpanded || isMobile) && otherUpcoming.map((event) => (
-                  <div key={event.id} className="min-h-0 flex flex-col">
+                  <div key={event.id} className="break-inside-avoid mb-6">
                     {cardCell(renderCard(event, true))}
                   </div>
                 ))}
                 {upcoming.length === 1 && nextUpcoming && (
-                  <div key={nextUpcoming.id} className="min-h-0 flex flex-col">
+                  <div key={nextUpcoming.id} className="break-inside-avoid mb-6">
                     {cardCell(renderCard(nextUpcoming, false))}
                   </div>
                 )}
                 {latestPast && (
-                  <div key={latestPast.id} className="min-h-0 flex flex-col">
+                  <div key={latestPast.id} className="break-inside-avoid mb-6">
                     {cardCell(renderCard(latestPast), true)}
                   </div>
                 )}
                 {restPast.map((event) => (
-                  <div key={event.id} className="min-h-0 flex flex-col">
+                  <div key={event.id} className="break-inside-avoid mb-6">
                     {cardCell(renderCard(event), true)}
                   </div>
                 ))}
@@ -1233,6 +1267,8 @@ function App() {
         tagValue={tagRatingsData?.value || ''}
         onEventClick={(eventId) => openEventOverlay(eventId, 'tagModal')}
         refreshTrigger={tagModalRefreshTrigger}
+        tagColors={appSettings}
+        onTagClick={openTagModal}
       />
 
       {overlayEvent && (

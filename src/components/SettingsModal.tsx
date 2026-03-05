@@ -12,6 +12,20 @@ const PALETTE_STORAGE_KEY = 'tag_settings_palette_v1';
 const COLLECTIONS_STORAGE_KEY = 'tag_color_collections_v1';
 const DEFAULT_TAG_SETTINGS_KEY = 'tag_default_settings_v1';
 
+/** Faded (muted) preset: soft pastels, auto text color */
+const FADED_TAG_DEFAULTS: Record<string, string> = {
+  producer_bg_color: '#f3f4f6', designer_bg_color: '#fef3c7', model_bg_color: '#fce7f3',
+  hair_makeup_bg_color: '#f3e8ff', city_bg_color: '#dbeafe', season_bg_color: '#ffedd5',
+  header_tags_bg_color: '#ccfbf1', footer_tags_bg_color: '#d1fae5', optional_tags_bg_color: '#e0e7ff',
+};
+
+/** Vibrant (bright) preset: saturated colors, auto text color */
+const BRIGHT_TAG_DEFAULTS: Record<string, string> = {
+  producer_bg_color: '#fef08a', designer_bg_color: '#f9a8d4', model_bg_color: '#86efac',
+  hair_makeup_bg_color: '#67e8f9', city_bg_color: '#bef264', season_bg_color: '#fdba74',
+  header_tags_bg_color: '#c4b5fd', footer_tags_bg_color: '#5eead4', optional_tags_bg_color: '#fda4af',
+};
+
 const BUILT_IN_TAG_DEFAULTS: Pick<AppSettings, 'producer_bg_color' | 'producer_text_color' | 'designer_bg_color' | 'designer_text_color' | 'model_bg_color' | 'model_text_color' | 'hair_makeup_bg_color' | 'hair_makeup_text_color' | 'city_bg_color' | 'city_text_color' | 'season_bg_color' | 'season_text_color' | 'header_tags_bg_color' | 'header_tags_text_color' | 'footer_tags_bg_color' | 'footer_tags_text_color' | 'optional_tags_bg_color' | 'optional_tags_text_color' | 'producer_icon' | 'designer_icon' | 'model_icon' | 'hair_makeup_icon' | 'city_icon' | 'season_icon' | 'header_tags_icon' | 'footer_tags_icon'> = {
   producer_bg_color: '#fef08a',
   producer_text_color: '#713f12',
@@ -152,17 +166,18 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   const skipNextPreviewRef = useRef(false);
   const { user } = useAuth();
 
-  const tagKeysForDefault: { key: SwatchColorKey; label: string }[] = [
+  const tagOptions: { key: SwatchColorKey; label: string }[] = [
     { key: 'producer', label: 'Producer' },
     { key: 'designer', label: 'Designer' },
     { key: 'model', label: 'Model' },
-    { key: 'hair_makeup', label: 'H&M' },
+    { key: 'hair_makeup', label: 'Hair & Makeup' },
     { key: 'city', label: 'City' },
     { key: 'season', label: 'Season' },
     { key: 'header_tags', label: 'Genre' },
-    { key: 'footer_tags', label: 'Footer' },
-    { key: 'optional_tags', label: 'Optional' },
+    { key: 'footer_tags', label: 'Footer tag' },
+    { key: 'optional_tags', label: 'Custom' },
   ];
+  const coreTagOptions = tagOptions.filter((t) => t.key !== 'optional_tags');
 
   useEffect(() => {
     try {
@@ -349,7 +364,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   const revertToDefault = () => {
     const defs = getTagDefaults();
     const next: AppSettings = { ...settings };
-    for (const { key } of tagKeysForDefault) {
+    for (const { key } of tagOptions) {
       const bgKey = key === 'optional_tags' ? 'optional_tags_bg_color' : `${key}_bg_color`;
       const textKey = key === 'optional_tags' ? 'optional_tags_text_color' : `${key}_text_color`;
       const iconKey = key === 'optional_tags' ? null : `${key}_icon`;
@@ -364,7 +379,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     setTimeout(() => setSuccess(''), 3000);
   };
 
-  const assignColorToTag = (tagKey: SwatchColorKey, hex: string) => {
+  const assignColorToTag = (tagKey: SwatchColorKey, hex: string, close = true) => {
     const bgKey = tagKey === 'optional_tags' ? 'optional_tags_bg_color' : `${tagKey}_bg_color`;
     const textKey = tagKey === 'optional_tags' ? 'optional_tags_text_color' : `${tagKey}_text_color`;
     setSettings((s) => ({
@@ -373,7 +388,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       [bgKey]: hex,
       [textKey]: readableTextForBg(hex),
     }));
-    setAssigningTag(null);
+    if (close) setAssigningTag(null);
   };
 
   useEffect(() => {
@@ -403,6 +418,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       data?.forEach((item) => {
         settingsObj[item.key] = item.value || '';
       });
+      const iconValue = (key: keyof AppSettings, fallback: string) =>
+        Object.prototype.hasOwnProperty.call(settingsObj, key) ? settingsObj[key] : fallback;
       const rawScheme = settingsObj.color_scheme;
       const color_scheme = ['faded', 'bright', 'custom'].includes(rawScheme) ? rawScheme : 'custom';
 
@@ -429,14 +446,14 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
         header_tags_text_color: settingsObj.header_tags_text_color || '#4c1d95',
         footer_tags_bg_color: settingsObj.footer_tags_bg_color || '#5eead4',
         footer_tags_text_color: settingsObj.footer_tags_text_color || '#134e4a',
-        producer_icon: settingsObj.producer_icon || 'Tag',
-        designer_icon: settingsObj.designer_icon || 'Tag',
-        model_icon: settingsObj.model_icon || 'Tag',
-        hair_makeup_icon: settingsObj.hair_makeup_icon || 'Tag',
-        city_icon: settingsObj.city_icon || 'Tag',
-        season_icon: settingsObj.season_icon || 'Tag',
-        header_tags_icon: settingsObj.header_tags_icon || 'Tag',
-        footer_tags_icon: settingsObj.footer_tags_icon || 'Tag',
+        producer_icon: iconValue('producer_icon', 'Tag'),
+        designer_icon: iconValue('designer_icon', 'Tag'),
+        model_icon: iconValue('model_icon', 'Tag'),
+        hair_makeup_icon: iconValue('hair_makeup_icon', 'Tag'),
+        city_icon: iconValue('city_icon', 'Tag'),
+        season_icon: iconValue('season_icon', 'Tag'),
+        header_tags_icon: iconValue('header_tags_icon', 'Tag'),
+        footer_tags_icon: iconValue('footer_tags_icon', 'Tag'),
         optional_tags_bg_color: settingsObj.optional_tags_bg_color || '#fda4af',
         optional_tags_text_color: settingsObj.optional_tags_text_color || '#881337',
       });
@@ -585,16 +602,6 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     { id: 'admins', label: 'Admins', icon: <Users size={18} /> },
     { id: 'tags', label: 'Tags', icon: <Tags size={18} /> },
   ];
-  const coreTagOptions: { k: CoreTagKey; label: string }[] = [
-    { k: 'producer', label: 'Producer' },
-    { k: 'designer', label: 'Designer' },
-    { k: 'model', label: 'Model' },
-    { k: 'hair_makeup', label: 'Hair & Makeup' },
-    { k: 'city', label: 'City' },
-    { k: 'season', label: 'Season' },
-    { k: 'header_tags', label: 'Genre' },
-    { k: 'footer_tags', label: 'Footer Tags' },
-  ];
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
@@ -708,10 +715,47 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
 
             {activeTab === 'tags' && (
               <>
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Color palette</h3>
-                    <p className="text-xs text-gray-500 mb-2">Edit, delete, or add colors. Assign to tag types below.</p>
+                <div className="space-y-5">
+                  <section>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Color scheme</h3>
+                    <p className="text-xs text-gray-500 mb-2">Apply a preset palette. Faded = muted pastels, Vibrant = saturated.</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(['faded', 'bright', 'custom'] as const).map((scheme) => {
+                        const label = scheme === 'faded' ? 'Faded' : scheme === 'bright' ? 'Vibrant' : 'Custom';
+                        const isActive = settings.color_scheme === scheme;
+                        return (
+                          <button
+                            key={scheme}
+                            type="button"
+                            onClick={() => {
+                              if (scheme === 'custom') {
+                                setSettings((s) => ({ ...s, color_scheme: 'custom' }));
+                                return;
+                              }
+                              const preset = scheme === 'faded' ? FADED_TAG_DEFAULTS : BRIGHT_TAG_DEFAULTS;
+                              const updates: Record<string, string> = { color_scheme: scheme };
+                              Object.entries(preset).forEach(([k, bg]) => {
+                                updates[k] = bg;
+                                const textKey = k.replace('_bg_color', '_text_color');
+                                updates[textKey] = readableTextForBg(bg);
+                              });
+                              setSettings((s) => ({ ...s, ...updates }));
+                              onSettingsPreview?.({ ...settings, ...updates });
+                            }}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${
+                              isActive ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  <section>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Palette</h3>
+                    <p className="text-xs text-gray-500 mb-3">Click a swatch to edit, drag to a collection. Pick colors for tag types below.</p>
                     <div className="flex flex-wrap gap-2 items-center">
                       {paletteColors.map((hex) => (
                         <div key={hex} className="relative group">
@@ -787,20 +831,20 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                       <button
                         type="button"
                         onClick={resetPaletteToDefaults}
-                        className="text-xs text-gray-500 hover:text-gray-700 underline"
+                        className="text-xs text-gray-500 hover:text-gray-800 font-medium"
                       >
-                        Reset to defaults
+                        Reset palette
                       </button>
                     </div>
-                  </div>
+                  </section>
 
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Collections</h3>
-                    <p className="text-xs text-gray-500 mb-2">Create named groups. Drag colors from the palette above into a collection.</p>
+                  <section>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Collections</h3>
+                    <p className="text-xs text-gray-500 mb-3">Group colors for quick access. Drag swatches from the palette above.</p>
                     <button
                       type="button"
                       onClick={createCollection}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg mb-2"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-gray-100 hover:bg-gray-200 rounded-lg mb-3"
                     >
                       <FolderPlus size={14} />
                       New collection
@@ -862,25 +906,13 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </section>
 
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Assign color to tag type</h3>
-                    <p className="text-xs text-gray-500 mb-2">Click a tag type’s swatch to pick a color from the palette.</p>
+                  <section>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Tag colors</h3>
+                    <p className="text-xs text-gray-500 mb-3">Click a tag type to assign a color from the palette.</p>
                     <div className="flex flex-wrap gap-2">
-                      {(
-                        [
-                          { key: 'producer' as const, label: 'Producer' },
-                          { key: 'designer' as const, label: 'Designer' },
-                          { key: 'model' as const, label: 'Model' },
-                          { key: 'hair_makeup' as const, label: 'Hair & Makeup' },
-                          { key: 'city' as const, label: 'City' },
-                          { key: 'season' as const, label: 'Season' },
-                          { key: 'header_tags' as const, label: 'Genre' },
-                          { key: 'footer_tags' as const, label: 'Footer' },
-                          { key: 'optional_tags' as const, label: 'Optional' },
-                        ] as { key: SwatchColorKey; label: string }[]
-                      ).map(({ key, label }) => {
+                      {tagOptions.map(({ key, label }) => {
                         const bgKey = key === 'optional_tags' ? 'optional_tags_bg_color' : `${key}_bg_color`;
                         const textKey = key === 'optional_tags' ? 'optional_tags_text_color' : `${key}_text_color`;
                         const bg = (settings as Record<string, string>)[bgKey] || '#e5e7eb';
@@ -900,9 +932,9 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                             {assigningTag === key && (
                               <>
                                 <div className="fixed inset-0 z-10" onClick={() => setAssigningTag(null)} aria-hidden="true" />
-                                <div className="absolute left-0 top-full z-20 mt-1 p-2 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[180px]">
-                                  <div className="text-xs font-medium text-gray-700 mb-2">Pick color for {label}</div>
-                                  <div className="flex flex-wrap gap-1.5">
+                                <div className="absolute left-0 top-full z-20 mt-1 p-3 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[220px]">
+                                  <div className="text-xs font-medium text-gray-700 mb-2">{label}</div>
+                                  <div className="grid grid-cols-6 gap-2 mb-3">
                                     {(() => {
                                       const inPalette = new Set(paletteColors.map((h) => h.toLowerCase()));
                                       const options = inPalette.has(bg.toLowerCase()) ? paletteColors : [bg, ...paletteColors];
@@ -912,12 +944,25 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                                         key={hex}
                                         type="button"
                                         onClick={() => assignColorToTag(key, hex)}
-                                        className="w-7 h-7 rounded border-2 border-gray-200 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className={`w-8 h-8 rounded-lg border-2 shrink-0 ${hex.toLowerCase() === bg.toLowerCase() ? 'border-gray-800 ring-1 ring-gray-800' : 'border-gray-200 hover:border-gray-400'}`}
                                         style={{ backgroundColor: hex }}
                                         title={hex}
                                       />
                                     ))}
                                   </div>
+                                  <label className="inline-flex items-center gap-2 px-2 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 cursor-pointer text-xs font-medium text-gray-700">
+                                    <input
+                                      type="color"
+                                      value={bg}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        assignColorToTag(key, v, false);
+                                        addToPalette(v);
+                                      }}
+                                      className="w-6 h-6 rounded border border-gray-200 cursor-pointer"
+                                    />
+                                    <span>Custom</span>
+                                  </label>
                                 </div>
                               </>
                             )}
@@ -925,13 +970,13 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                         );
                       })}
                     </div>
-                  </div>
+                  </section>
 
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Icons</h3>
-                    <p className="text-xs text-gray-500 mb-2">Click an icon to change it.</p>
+                  <section>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Icons</h3>
+                    <p className="text-xs text-gray-500 mb-3">Choose an icon for each tag type.</p>
                     <div className="flex flex-wrap gap-2">
-                      {coreTagOptions.map(({ k, label }) => (
+                      {coreTagOptions.map(({ key: k, label }) => (
                         <div key={k} className="flex flex-col items-center gap-1">
                           <span className="text-[10px] text-gray-500">{label}</span>
                           <IconPicker
@@ -942,55 +987,50 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </section>
 
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Preview</h3>
-                    <p className="text-xs text-gray-500 mb-2">How tags will look with your colors and icons.</p>
+                  <section>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Preview</h3>
+                    <p className="text-xs text-gray-500 mb-3">Tag pills as they appear on event cards.</p>
                     <div className="flex flex-wrap gap-2">
-                      {coreTagOptions.map(({ k, label }) => {
-                        const bg = (settings as Record<string, string>)[`${k}_bg_color`] || '#e5e7eb';
-                        const text = (settings as Record<string, string>)[`${k}_text_color`] || '#374151';
-                        const IconC = getIcon((settings as Record<string, string>)[`${k}_icon`], `${k}_icon` as keyof typeof DEFAULT_ICONS);
+                      {tagOptions.map(({ key: k, label }) => {
+                        const bgKey = k === 'optional_tags' ? 'optional_tags_bg_color' : `${k}_bg_color`;
+                        const textKey = k === 'optional_tags' ? 'optional_tags_text_color' : `${k}_text_color`;
+                        const bg = (settings as Record<string, string>)[bgKey] || '#e5e7eb';
+                        const text = (settings as Record<string, string>)[textKey] || '#374151';
+                        const iconName = k === 'optional_tags' ? '' : (settings as Record<string, string>)[`${k}_icon`];
+                        const IconC = !iconName ? null : getIcon(iconName, `${k}_icon` as keyof typeof DEFAULT_ICONS);
                         return (
                           <span
                             key={k}
                             className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-gray-200"
                             style={{ backgroundColor: bg, color: text }}
                           >
-                            <IconC size={12} className="shrink-0" />
+                            {IconC && <IconC size={12} className="shrink-0" />}
                             {label}
                           </span>
                         );
                       })}
-                      <span
-                        className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-gray-200"
-                        style={{
-                          backgroundColor: settings.optional_tags_bg_color || '#e0e7ff',
-                          color: settings.optional_tags_text_color || '#3730a3',
-                        }}
-                      >
-                        Optional
-                      </span>
                     </div>
-                  </div>
+                  </section>
 
-                  <div className="border-t pt-3 flex flex-wrap gap-2 justify-end">
+                  <section className="border-t pt-4 flex flex-wrap items-center gap-3">
+                    <span className="text-xs font-medium text-gray-600">Defaults</span>
                     <button
                       type="button"
                       onClick={setAsDefault}
-                      className="px-2.5 py-1 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded"
+                      className="px-3 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
                     >
-                      Set as default
+                      Save as default
                     </button>
                     <button
                       type="button"
                       onClick={revertToDefault}
-                      className="px-2.5 py-1 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded"
+                      className="px-3 py-2 text-xs font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
                     >
-                      Revert to default
+                      Reset to default
                     </button>
-                  </div>
+                  </section>
                 </div>
               </>
             )}
@@ -1019,3 +1059,4 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     </div>
   );
 }
+
