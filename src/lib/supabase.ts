@@ -7,7 +7,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    flowType: 'pkce',
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storageKey: 'runway-rate-auth',
+  },
+});
 
 export interface EventCollection {
   id: string;
@@ -38,6 +46,7 @@ export interface Event {
   custom_tag_meta?: Record<string, { icon?: string }> | null;
   created_by: string | null;
   created_at: string;
+  collection_id?: string | null;
 }
 
 export interface EditSuggestion {

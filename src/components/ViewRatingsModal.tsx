@@ -9,7 +9,7 @@ interface Rating {
   user_id: string;
   event_id: string;
   rating: number;
-  comment?: string;
+  comment: string | null;
   created_at: string;
   username?: string;
 }
@@ -19,6 +19,30 @@ interface ViewRatingsModalProps {
   onClose: () => void;
   eventId: string;
   eventName: string;
+  event?: Event;
+  currentUserId?: string;
+  onRatingSubmitted?: () => void;
+  tagColors?: {
+    producer_bg_color?: string;
+    producer_text_color?: string;
+    designer_bg_color?: string;
+    designer_text_color?: string;
+    model_bg_color?: string;
+    model_text_color?: string;
+    hair_makeup_bg_color?: string;
+    hair_makeup_text_color?: string;
+    city_bg_color?: string;
+    city_text_color?: string;
+    season_bg_color?: string;
+    season_text_color?: string;
+    header_tags_bg_color?: string;
+    header_tags_text_color?: string;
+    footer_tags_bg_color?: string;
+    footer_tags_text_color?: string;
+    optional_tags_bg_color?: string;
+    optional_tags_text_color?: string;
+  };
+  customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
   singleUserId?: string;
   /** When set, shows a "View full event" button that opens the event card */
   onViewEvent?: (eventId: string) => void;

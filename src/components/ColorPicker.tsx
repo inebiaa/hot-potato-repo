@@ -9,6 +9,10 @@ interface ColorPickerProps {
   onBgChange: (value: string) => void;
   onTextChange: (value: string) => void;
   compact?: boolean;
+  activeScheme?: 'faded' | 'bright' | 'custom';
+  onApplyScheme?: (scheme: 'faded' | 'bright') => void;
+  onSaveSchemeDefault?: (scheme: 'faded' | 'bright') => void;
+  colorsByScheme?: Record<'faded' | 'bright', { name: string; bgHex: string }[]>;
 }
 
 export const CUSTOM_COLORS_STORAGE_KEY = 'tag_custom_colors_v1';

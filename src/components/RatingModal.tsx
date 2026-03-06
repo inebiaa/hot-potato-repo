@@ -22,6 +22,8 @@ interface RatingModalTagColors {
   header_tags_text_color?: string;
   footer_tags_bg_color?: string;
   footer_tags_text_color?: string;
+  optional_tags_bg_color?: string;
+  optional_tags_text_color?: string;
 }
 
 interface RatingModalProps {

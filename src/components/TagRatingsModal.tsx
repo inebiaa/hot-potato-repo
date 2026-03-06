@@ -1,4 +1,4 @@
-import React from 'react';
+import type { ReactNode } from 'react';
 import { Star, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -17,7 +17,34 @@ interface TagRatingsModalProps {
   /** Increment to refetch list (e.g. after closing an event overlay so ratings stay in sync). */
   refreshTrigger?: number;
   /** Tag colors for pill styling (matches EventCard). */
-  tagColors?: Record<string, string>;
+  tagColors?: {
+    producer_bg_color?: string;
+    producer_text_color?: string;
+    designer_bg_color?: string;
+    designer_text_color?: string;
+    model_bg_color?: string;
+    model_text_color?: string;
+    hair_makeup_bg_color?: string;
+    hair_makeup_text_color?: string;
+    city_bg_color?: string;
+    city_text_color?: string;
+    season_bg_color?: string;
+    season_text_color?: string;
+    header_tags_bg_color?: string;
+    header_tags_text_color?: string;
+    footer_tags_bg_color?: string;
+    footer_tags_text_color?: string;
+    producer_icon?: string;
+    designer_icon?: string;
+    model_icon?: string;
+    hair_makeup_icon?: string;
+    city_icon?: string;
+    season_icon?: string;
+    header_tags_icon?: string;
+    footer_tags_icon?: string;
+    optional_tags_bg_color?: string;
+    optional_tags_text_color?: string;
+  };
   /** When set, clicking a pill opens that tag's modal. */
   onTagClick?: (type: string, value: string) => void;
 }
@@ -183,7 +210,7 @@ export default function TagRatingsModal({
         {type === 'custom_performer' ? value.split('\x00')[1] ?? value : value}
       </button>
     );
-    const tags: React.ReactNode[] = [];
+    const tags: ReactNode[] = [];
     if (event.city) tags.push(pill('city', event.city, tagColors?.city_bg_color || '#dbeafe', tagColors?.city_text_color || '#1e40af', CityIcon));
     if (event.date) tags.push(pill('season', getSeasonFromDate(event.date), tagColors?.season_bg_color || '#ffedd5', tagColors?.season_text_color || '#c2410c', SeasonIcon));
     (event.producers || []).forEach((v) => tags.push(pill('producer', v, tagColors?.producer_bg_color || '#f3f4f6', tagColors?.producer_text_color || '#374151', ProducerIcon)));

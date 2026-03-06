@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Event } from '../lib/supabase';
 import { parseCommentToSegments } from './CommentWithTags';
 
@@ -12,7 +12,26 @@ interface CommentEditorProps {
   value: string;
   onChange: (value: string) => void;
   event: Event;
-  tagColors?: Record<string, string>;
+  tagColors?: {
+    producer_bg_color?: string;
+    producer_text_color?: string;
+    designer_bg_color?: string;
+    designer_text_color?: string;
+    model_bg_color?: string;
+    model_text_color?: string;
+    hair_makeup_bg_color?: string;
+    hair_makeup_text_color?: string;
+    city_bg_color?: string;
+    city_text_color?: string;
+    season_bg_color?: string;
+    season_text_color?: string;
+    header_tags_bg_color?: string;
+    header_tags_text_color?: string;
+    footer_tags_bg_color?: string;
+    footer_tags_text_color?: string;
+    optional_tags_bg_color?: string;
+    optional_tags_text_color?: string;
+  };
   customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
   placeholder?: string;
   className?: string;
@@ -41,7 +60,7 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
     (newValue: string, cursorPos?: number) => {
       const el = editorRef.current;
       if (!el || !event?.id) return;
-      const segments = parseCommentToSegments(newValue, event, tagColors as any, customPerformerTags);
+      const segments = parseCommentToSegments(newValue, event, tagColors, customPerformerTags);
       const html = segments
         .map((seg) =>
           seg.type === 'tag' && seg.tag

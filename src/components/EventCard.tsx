@@ -1,4 +1,4 @@
-import { Calendar, MapPin, Star, Edit, Trash2, Share2, MoreVertical, Plus, Check, X } from 'lucide-react';
+import { Calendar, Clock, MapPin, Star, Edit, Trash2, Share2, MoreVertical, Plus, Check, X } from 'lucide-react';
 import { Event, Rating, supabase } from '../lib/supabase';
 import { getIcon } from '../lib/eventCardIcons';
 import { getSeasonFromDate } from '../lib/season';
@@ -37,6 +37,8 @@ interface EventCardProps {
     season_text_color?: string;
     header_tags_bg_color?: string;
     header_tags_text_color?: string;
+    countdown_bg_color?: string;
+    countdown_text_color?: string;
     footer_tags_bg_color?: string;
     footer_tags_text_color?: string;
     producer_icon?: string;
@@ -106,6 +108,7 @@ export default function EventCard({
   const [shareCopied, setShareCopied] = useState<'link' | 'embed' | 'embedcode' | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [expandedTagSections, setExpandedTagSections] = useState<Record<string, boolean>>({});
+  const [countdown, setCountdown] = useState<string>('');
   const [orderedTags, setOrderedTags] = useState({
     producers: event.producers || [],
     featured_designers: event.featured_designers || [],
@@ -260,6 +263,37 @@ export default function EventCard({
       setPendingSuggestions([]);
     }
   }, [event.id, user, isApprover]);
+
+  useEffect(() => {
+    if (!event.date) {
+      setCountdown('');
+      return;
+    }
+    const eventDate = new Date(event.date.includes('T') ? event.date : `${event.date}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (eventDate < today) {
+      setCountdown('');
+      return;
+    }
+    const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
+    const update = () => {
+      const now = new Date();
+      const diff = eventDate.getTime() - now.getTime();
+      if (diff <= 0) {
+        setCountdown('');
+        return;
+      }
+      const totalSecs = Math.floor(diff / 1000);
+      const hours = Math.floor(totalSecs / 3600);
+      const mins = Math.floor((totalSecs % 3600) / 60);
+      const secs = totalSecs % 60;
+      setCountdown(`${pad(hours)}:${pad(mins)}:${pad(secs)}`);
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [event.date]);
 
   const suggestionMatchesSection = (
     suggestion: PendingTagSuggestion,
@@ -731,6 +765,7 @@ export default function EventCard({
 
     if (isAnyReorderMode) {
       if (Date.now() - reorderModeEnteredAtRef.current < 400) return;
+      if (wiggleOnlyClearsOnClickAway) return;
       e.stopPropagation();
       clearReorderMode();
       return;
@@ -756,7 +791,7 @@ export default function EventCard({
   }
 
   const suggestPlaceholder = (section: keyof typeof orderedTags | 'custom' | 'footer_tags', label?: string) =>
-    label ? `Suggest ${label}` : { header_tags: 'Suggest tag', producers: 'Suggest producer', featured_designers: 'Suggest designer', models: 'Suggest model', hair_makeup: 'Suggest artist', footer_tags: 'Suggest tag' }[section] || 'Suggest tag';
+    label ? `Suggest ${label}` : { header_tags: 'Suggest tag', producers: 'Suggest producer', featured_designers: 'Suggest designer', models: 'Suggest model', hair_makeup: 'Suggest artist', footer_tags: 'Suggest tag', custom: 'Suggest tag' }[section] || 'Suggest tag';
 
   const suggestPill = (section: keyof typeof orderedTags | 'custom' | 'footer_tags', customSlug?: string, label?: string) => {
     const isActive = addingFor?.section === section && (section !== 'custom' || addingFor?.customSlug === customSlug);
@@ -993,7 +1028,7 @@ export default function EventCard({
 
           {(() => {
             const tags = orderedTags.header_tags || [];
-            const hasHeader = tags.length > 0 || pendingForSection('header_tags').length > 0 || isAnyReorderMode;
+            const hasHeader = tags.length > 0 || pendingForSection('header_tags').length > 0 || isAnyReorderMode || !!countdown;
             if (!hasHeader) return null;
             const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['header_tags'];
             const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
@@ -1035,6 +1070,24 @@ export default function EventCard({
                       {renderSuggestionActions(suggestion, isOwn, canRemove)}
                     </span>
                   );})}
+                  {countdown && (
+                    <span
+                      data-tag-pill
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs ${showWiggle ? 'pill-wiggle' : ''}`}
+                      style={{
+                        backgroundColor: tagColors?.countdown_bg_color || '#fef3c7',
+                        color: tagColors?.countdown_text_color || '#92400e'
+                      }}
+                      onMouseDown={() => startLongPress('header_tags')}
+                      onMouseUp={(e: React.MouseEvent) => clearLongPress(e)}
+                      onMouseLeave={(e: React.MouseEvent) => clearLongPress(e)}
+                      onTouchStart={() => startLongPress('header_tags')}
+                      onTouchEnd={(e: React.TouchEvent) => clearLongPress(e)}
+                    >
+                      <Clock size={12} className="flex-shrink-0" />
+                      {countdown}
+                    </span>
+                  )}
                   {suggestPill('header_tags')}
                   {isAnyReorderMode && addingFor?.section !== 'header_tags' && (
                     <button
