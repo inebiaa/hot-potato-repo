@@ -20,6 +20,7 @@ interface EventWithStats extends Event {
 }
 
 interface AppSettings {
+  [key: string]: string | undefined;
   app_name: string;
   app_icon_url: string;
   app_logo_url: string;
@@ -40,6 +41,8 @@ interface AppSettings {
   season_text_color?: string;
   header_tags_bg_color?: string;
   header_tags_text_color?: string;
+  countdown_bg_color?: string;
+  countdown_text_color?: string;
   footer_tags_bg_color?: string;
   footer_tags_text_color?: string;
   producer_icon?: string;
@@ -75,20 +78,13 @@ function App() {
   const [allCities, setAllCities] = useState<string[]>([]);
   const [overlayEventId, setOverlayEventId] = useState<string | null>(null);
   const [overlaySource, setOverlaySource] = useState<'tagModal' | 'viewRatings' | null>(null);
-  const [overlayOpenWithWiggle, setOverlayOpenWithWiggle] = useState(false);
+  const [, setOverlayOpenWithWiggle] = useState(false);
   const [overlaySuggestSection, setOverlaySuggestSection] = useState<keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | undefined>(undefined);
   const [overlaySuggestCustomSlug, setOverlaySuggestCustomSlug] = useState<string | undefined>(undefined);
   const [tagModalRefreshTrigger, setTagModalRefreshTrigger] = useState(0);
   const [upcomingExpanded, setUpcomingExpanded] = useState(false);
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
+  const [footerTagExpanded, setFooterTagExpanded] = useState<Record<string, boolean>>({});
   const [showProfileView, setShowProfileView] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    const onChange = () => setIsMobile(mq.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
   const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasClearedFiltersForSharedLink = useRef(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -100,8 +96,6 @@ function App() {
   });
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchDragOver, setSearchDragOver] = useState(false);
-
-  const isHex = (value: string | undefined) => !!value && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value);
 
   const handleSearchDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -142,6 +136,7 @@ function App() {
       const cityBg = settingsObj.city_bg_color || '#dbeafe';
       const seasonBg = settingsObj.season_bg_color || '#ffedd5';
       const headerBg = settingsObj.header_tags_bg_color || '#ccfbf1';
+      const countdownBg = settingsObj.countdown_bg_color || '#fef3c7';
       const footerBg = settingsObj.footer_tags_bg_color || '#d1fae5';
       const optionalBg = settingsObj.optional_tags_bg_color || '#e0e7ff';
 
@@ -166,6 +161,8 @@ function App() {
         season_text_color: resolveText(seasonBg, settingsObj.season_text_color, '#c2410c'),
         header_tags_bg_color: headerBg,
         header_tags_text_color: resolveText(headerBg, settingsObj.header_tags_text_color, '#0f766e'),
+        countdown_bg_color: countdownBg,
+        countdown_text_color: resolveText(countdownBg, settingsObj.countdown_text_color, '#92400e'),
         footer_tags_bg_color: footerBg,
         footer_tags_text_color: resolveText(footerBg, settingsObj.footer_tags_text_color, '#065f46'),
         producer_icon: iconValue('producer_icon', 'Sparkles'),
@@ -324,31 +321,28 @@ function App() {
   };
 
   const handleTagClick = (type: string, value: string) => {
-    if (type === 'footer_tags' || type === 'custom_performer') {
-      if (overlayEventId) closeEventOverlay();
-      setShowProfileView(false);
-      setIsTagRatingsModalOpen(false);
-      setIsStatisticsPageOpen(false);
-      setIsSettingsModalOpen(false);
-      setIsAddEventModalOpen(false);
-      setIsAuthModalOpen(false);
-      if (typeof window !== 'undefined') window.history.replaceState(null, '', pathname);
-      setSelectedTags((prev) => {
-        const key = `${type}:${value}`;
-        if (prev.some((t) => `${t.type}:${t.value}` === key)) return prev;
-        return [...prev, { type, value }];
-      });
-      return;
-    }
     if (overlayEventId) closeEventOverlay();
-    openTagModal(type, value);
+    setShowProfileView(false);
+    setIsTagRatingsModalOpen(false);
+    setIsStatisticsPageOpen(false);
+    setIsSettingsModalOpen(false);
+    setIsAddEventModalOpen(false);
+    if (typeof window !== 'undefined') window.history.replaceState(null, '', pathname);
+    setSelectedTags((prev) => {
+      const key = `${type}:${value}`;
+      const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
+      if (alreadySelected) return [];
+      return [{ type, value }];
+    });
+    setSearchQuery('');
   };
 
   const selectTagFilter = (type: string, value: string) => {
     setSelectedTags((prev) => {
       const key = `${type}:${value}`;
-      if (prev.some((t) => `${t.type}:${t.value}` === key)) return prev;
-      return [...prev, { type, value }];
+      const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
+      if (alreadySelected) return [];
+      return [{ type, value }];
     });
     setSearchQuery('');
   };
@@ -368,14 +362,33 @@ function App() {
   const embedMode = urlParams?.get('embed') === '1';
   const eventIdFromUrl = urlParams?.get('event') || null;
   const showProfile = showProfileView || urlParams?.get('profile') === '1';
+  const showStats = urlParams?.get('stats') === '1';
 
-  // Sync profile view with URL (initial load + browser back/forward)
+  // Sync profile/stats view with URL (initial load + browser back/forward)
+  const [, setUrlSync] = useState(0);
   useEffect(() => {
-    const sync = () => setShowProfileView(new URLSearchParams(window.location.search).get('profile') === '1');
+    const sync = () => {
+      setShowProfileView(new URLSearchParams(window.location.search).get('profile') === '1');
+      setUrlSync((n) => n + 1);
+    };
     sync();
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
   }, []);
+
+  const openStats = () => {
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', `${pathname}?stats=1`);
+    }
+    setIsStatisticsPageOpen(true);
+  };
+
+  const goBackFromStats = () => {
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', pathname);
+    }
+    setIsStatisticsPageOpen(false);
+  };
 
   // When opening shared link (?event=xxx), clear filters once so the event is visible (don't clear again when user searches)
   useEffect(() => {
@@ -516,6 +529,7 @@ function App() {
 
   useEffect(() => {
     setUpcomingExpanded(false);
+    setFooterTagExpanded({});
   }, [searchQuery, selectedCity, selectedTags, dateFilter]);
 
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
@@ -525,13 +539,13 @@ function App() {
     eventId: string,
     source?: 'tagModal' | 'viewRatings',
     openWithWiggle?: boolean,
-    suggestSection?: keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] },
+    suggestSection?: keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | 'custom',
     suggestCustomSlug?: string
   ) => {
     setOverlayEventId(eventId);
     setOverlaySource(source ?? null);
     setOverlayOpenWithWiggle(!!openWithWiggle);
-    setOverlaySuggestSection(openWithWiggle && !suggestCustomSlug ? (suggestSection ?? 'header_tags') : undefined);
+    setOverlaySuggestSection(openWithWiggle && !suggestCustomSlug && suggestSection !== 'custom' ? (suggestSection ?? 'header_tags') : undefined);
     setOverlaySuggestCustomSlug(openWithWiggle ? suggestCustomSlug : undefined);
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
@@ -625,6 +639,44 @@ function App() {
     );
   }
 
+  if (showStats) {
+    return (
+      <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+        <header className="shrink-0 bg-white shadow-sm border-b z-40">
+          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {appSettings.app_logo_url ? (
+                <img src={appSettings.app_logo_url} alt={appSettings.app_name} className="h-10 object-contain" />
+              ) : (
+                <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2">
+                  <Sparkles className="text-white" size={24} />
+                </div>
+              )}
+              <a href={pathname} className="text-lg font-semibold text-gray-900 hover:text-blue-600">
+                {appSettings.app_name}
+              </a>
+            </div>
+            <button onClick={goBackFromStats} className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50">
+              ← Back to shows
+            </button>
+          </div>
+        </header>
+        <main className="flex-1 min-h-0 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+            <StatisticsPage
+              isOpen={true}
+              onClose={goBackFromStats}
+              tagColors={appSettings}
+              onOpenEvent={(id) => openEventOverlay(id)}
+              tagModalRefreshTrigger={tagModalRefreshTrigger}
+              asPage
+            />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (showProfile) {
     if (authLoading) {
       return (
@@ -661,7 +713,7 @@ function App() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setIsStatisticsPageOpen(true)}
+                onClick={openStats}
                 className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
                 title="View Statistics"
               >
@@ -756,14 +808,6 @@ function App() {
           onSettingsUpdated={fetchSettings}
           onSettingsPreview={setAppSettings}
         />
-
-        <StatisticsPage
-          isOpen={isStatisticsPageOpen}
-          onClose={() => setIsStatisticsPageOpen(false)}
-          tagColors={appSettings}
-          onOpenEvent={openEventOverlay}
-          tagModalRefreshTrigger={tagModalRefreshTrigger}
-        />
       </div>
     );
   }
@@ -797,7 +841,7 @@ function App() {
 
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setIsStatisticsPageOpen(true)}
+                onClick={openStats}
                 className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 title="View Statistics"
               >
@@ -866,21 +910,102 @@ function App() {
           <div className="border-b border-gray-200 pb-4 mb-6">
             <div className="flex flex-wrap gap-3 items-center">
               <div
-                className={`relative flex-1 min-w-[200px] rounded-lg transition-colors ${searchDragOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
+                className={`relative flex-1 min-w-[200px] flex items-center gap-2 pl-3 pr-4 py-2 border border-gray-200 rounded-lg bg-white transition-colors text-sm focus-within:ring-1 focus-within:ring-gray-300 focus-within:border-gray-300 ${searchDragOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
                 onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setSearchDragOver(true); }}
                 onDragLeave={() => setSearchDragOver(false)}
                 onDrop={handleSearchDrop}
               >
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search shows, designers, models..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 text-sm"
-                />
+                <Search className="shrink-0 text-gray-400" size={18} />
+                <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
+                  {selectedTags.map((selectedTag) => {
+                    const isHex = (s: string | undefined) => s && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s);
+                    const type = selectedTag.type;
+                    const bg = (type === 'producer' && isHex(appSettings.producer_bg_color)) ? appSettings.producer_bg_color!
+                      : (type === 'designer' && isHex(appSettings.designer_bg_color)) ? appSettings.designer_bg_color!
+                      : (type === 'model' && isHex(appSettings.model_bg_color)) ? appSettings.model_bg_color!
+                      : (type === 'hair_makeup' && isHex(appSettings.hair_makeup_bg_color)) ? appSettings.hair_makeup_bg_color!
+                      : (type === 'city' && isHex(appSettings.city_bg_color)) ? appSettings.city_bg_color!
+                      : (type === 'season' && isHex(appSettings.season_bg_color)) ? appSettings.season_bg_color!
+                      : (type === 'header_tags' && isHex(appSettings.header_tags_bg_color)) ? appSettings.header_tags_bg_color!
+                      : (type === 'footer_tags' && isHex(appSettings.footer_tags_bg_color)) ? appSettings.footer_tags_bg_color!
+                      : '#dbeafe';
+                    const text = (type === 'producer' && isHex(appSettings.producer_text_color)) ? appSettings.producer_text_color!
+                      : (type === 'designer' && isHex(appSettings.designer_text_color)) ? appSettings.designer_text_color!
+                      : (type === 'model' && isHex(appSettings.model_text_color)) ? appSettings.model_text_color!
+                      : (type === 'hair_makeup' && isHex(appSettings.hair_makeup_text_color)) ? appSettings.hair_makeup_text_color!
+                      : (type === 'city' && isHex(appSettings.city_text_color)) ? appSettings.city_text_color!
+                      : (type === 'season' && isHex(appSettings.season_text_color)) ? appSettings.season_text_color!
+                      : (type === 'header_tags' && isHex(appSettings.header_tags_text_color)) ? appSettings.header_tags_text_color!
+                      : (type === 'footer_tags' && isHex(appSettings.footer_tags_text_color)) ? appSettings.footer_tags_text_color!
+                      : '#1e40af';
+                    const label = type === 'designer' ? 'Designer: ' : type === 'model' ? 'Model: ' : type === 'producer' ? 'Producer: ' : type === 'city' ? 'City: ' : type === 'season' ? 'Season: ' : type === 'hair_makeup' ? 'Hair & Makeup: ' : type === 'header_tags' ? 'Genre: ' : type === 'footer_tags' ? 'Collection: ' : type === 'custom_performer' ? 'Custom: ' : '';
+                    const val = type === 'custom_performer' ? selectedTag.value.split('\x00')[1] : selectedTag.value;
+                    return (
+                      <span
+                        key={`${type}:${selectedTag.value}`}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs shrink-0"
+                        style={{ backgroundColor: bg, color: text }}
+                      >
+                        {label}{val}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeTagFilter(type, selectedTag.value); }}
+                          className="opacity-80 hover:opacity-100 -mr-0.5"
+                          aria-label={`Remove ${val} filter`}
+                        >
+                          <span className="sr-only">Remove</span>
+                          <span aria-hidden>×</span>
+                        </button>
+                      </span>
+                    );
+                  })}
+                  {selectedCity && (() => {
+                    const isHexCity = (s: string | undefined) => s && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s);
+                    return (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs shrink-0"
+                      style={{
+                        backgroundColor: isHexCity(appSettings.city_bg_color) ? appSettings.city_bg_color! : '#dbeafe',
+                        color: isHexCity(appSettings.city_text_color) ? appSettings.city_text_color! : '#1e40af',
+                      }}
+                    >
+                      City: {selectedCity}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedCity(''); }}
+                        className="opacity-80 hover:opacity-100 -mr-0.5"
+                        aria-label={`Remove city filter`}
+                      >
+                        <span className="sr-only">Remove</span>
+                        <span aria-hidden>×</span>
+                      </button>
+                    </span>
+                    );
+                  })()}
+                  {dateFilter !== 'all' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs shrink-0 bg-stone-200 text-stone-800">
+                      {dateFilter === 'future' ? 'Upcoming' : 'Past'}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDateFilter('all'); }}
+                        className="opacity-80 hover:opacity-100 -mr-0.5"
+                        aria-label="Remove date filter"
+                      >
+                        <span className="sr-only">Remove</span>
+                        <span aria-hidden>×</span>
+                      </button>
+                    </span>
+                  )}
+                  <input
+                    type="text"
+                    placeholder={(selectedTags.length || selectedCity || dateFilter !== 'all') ? '' : 'Search shows, designers, models...'}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => setSearchFocused(true)}
+                    onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+                    className="flex-1 min-w-[120px] py-0.5 border-0 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"
+                  />
+                </div>
                 {searchFocused && tagSuggestions.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
                     <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-100">Filter by tag</div>
@@ -934,47 +1059,6 @@ function App() {
                 <span className="text-sm text-gray-600">
                   Showing {filteredEvents.length} of {events.length} shows
                 </span>
-                {selectedTags.map((selectedTag) => {
-                  const isHex = (s: string | undefined) => s && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s);
-                  const type = selectedTag.type;
-                  const bg = (type === 'producer' && isHex(appSettings.producer_bg_color)) ? appSettings.producer_bg_color!
-                    : (type === 'designer' && isHex(appSettings.designer_bg_color)) ? appSettings.designer_bg_color!
-                    : (type === 'model' && isHex(appSettings.model_bg_color)) ? appSettings.model_bg_color!
-                    : (type === 'hair_makeup' && isHex(appSettings.hair_makeup_bg_color)) ? appSettings.hair_makeup_bg_color!
-                    : (type === 'city' && isHex(appSettings.city_bg_color)) ? appSettings.city_bg_color!
-                    : (type === 'season' && isHex(appSettings.season_bg_color)) ? appSettings.season_bg_color!
-                    : (type === 'header_tags' && isHex(appSettings.header_tags_bg_color)) ? appSettings.header_tags_bg_color!
-                    : (type === 'footer_tags' && isHex(appSettings.footer_tags_bg_color)) ? appSettings.footer_tags_bg_color!
-                    : '#dbeafe';
-                  const text = (type === 'producer' && isHex(appSettings.producer_text_color)) ? appSettings.producer_text_color!
-                    : (type === 'designer' && isHex(appSettings.designer_text_color)) ? appSettings.designer_text_color!
-                    : (type === 'model' && isHex(appSettings.model_text_color)) ? appSettings.model_text_color!
-                    : (type === 'hair_makeup' && isHex(appSettings.hair_makeup_text_color)) ? appSettings.hair_makeup_text_color!
-                    : (type === 'city' && isHex(appSettings.city_text_color)) ? appSettings.city_text_color!
-                    : (type === 'season' && isHex(appSettings.season_text_color)) ? appSettings.season_text_color!
-                    : (type === 'header_tags' && isHex(appSettings.header_tags_text_color)) ? appSettings.header_tags_text_color!
-                    : (type === 'footer_tags' && isHex(appSettings.footer_tags_text_color)) ? appSettings.footer_tags_text_color!
-                    : '#1e40af';
-                  const label = type === 'designer' ? 'Designer: ' : type === 'model' ? 'Model: ' : type === 'producer' ? 'Producer: ' : type === 'city' ? 'City: ' : type === 'season' ? 'Season: ' : type === 'hair_makeup' ? 'Hair & Makeup: ' : type === 'header_tags' ? 'Genre: ' : type === 'footer_tags' ? 'Collection: ' : type === 'custom_performer' ? 'Custom: ' : '';
-                  const val = type === 'custom_performer' ? selectedTag.value.split('\x00')[1] : selectedTag.value;
-                  return (
-                    <span
-                      key={`${type}:${selectedTag.value}`}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs"
-                      style={{ backgroundColor: bg, color: text }}
-                    >
-                      {label}{val}
-                      <button
-                        type="button"
-                        onClick={() => removeTagFilter(type, selectedTag.value)}
-                        className="ml-0.5 opacity-80 hover:opacity-100"
-                        aria-label={`Remove ${val} filter`}
-                      >
-                        Clear
-                      </button>
-                    </span>
-                  );
-                })}
                 <button
                   onClick={clearFilters}
                   className="text-sm text-blue-600 hover:text-blue-700"
@@ -1057,10 +1141,24 @@ function App() {
           const sortedByDate = [...filteredEvents].sort(byDateDesc);
           const pastEvents = sortedByDate.filter((e) => new Date(e.date) < today);
           const upcoming = sortedByDate.filter((e) => new Date(e.date) >= today).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-          const latestPast = pastEvents[0] ?? null;
           const nextUpcoming = upcoming[0] ?? null;
           const otherUpcoming = upcoming.slice(1);
-          const restPast = pastEvents.slice(1);
+
+          const isFilteringByFooterTag = selectedTags.some((t) => t.type === 'footer_tags');
+          const byDateAsc = (a: EventWithStats, b: EventWithStats) => new Date(a.date).getTime() - new Date(b.date).getTime();
+
+          const footerTagToEvents = new Map<string, EventWithStats[]>();
+          let ungroupedPast: EventWithStats[];
+
+          if (isFilteringByFooterTag && pastEvents.length >= 2) {
+            const footerTagValue = selectedTags.find((t) => t.type === 'footer_tags')?.value ?? '';
+            footerTagToEvents.set(footerTagValue, [...pastEvents].sort(byDateAsc));
+            ungroupedPast = [];
+          } else {
+            ungroupedPast = [...pastEvents].sort(byDateDesc);
+          }
+
+          const sortedFooterTags = [...footerTagToEvents.keys()].sort((a, b) => a.localeCompare(b));
 
           const CARD_TOP_SPACER = 'h-6 shrink-0';
 
@@ -1088,27 +1186,150 @@ function App() {
             </div>
           );
 
+          const renderFooterTagBlock = (tag: string) => {
+            const colEvents = footerTagToEvents.get(tag)!;
+            const isExpanded = footerTagExpanded[tag];
+            const nextEvent = colEvents[0];
+            const otherEvents = colEvents.slice(1);
+            const stacked = [...otherEvents.slice(0, 3), nextEvent];
+            const n = stacked.length;
+            const offset = (n - 1) * 10;
+            const toggleExpanded = () => setFooterTagExpanded((prev) => ({ ...prev, [tag]: !prev[tag] }));
+            return (
+              <div key={tag} className={`flex flex-col w-full min-w-0 ${!isExpanded ? 'min-h-[520px] mb-16 md:mb-6 md:mr-6' : 'min-h-0 h-full'}`}>
+                <div className={`shrink-0 flex items-center ${CARD_TOP_SPACER}`} />
+                <div className={`relative flex-1 ${!isExpanded ? 'min-h-[480px] pb-3' : 'overflow-visible'}`}>
+                  {!isExpanded && (
+                    <div className="relative w-full">
+                      <button
+                        type="button"
+                        data-tag-pill
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleExpanded(); }}
+                        className="absolute top-2 right-2 z-50 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                        style={{
+                          backgroundColor: appSettings.footer_tags_bg_color || '#d1fae5',
+                          color: appSettings.footer_tags_text_color || '#065f46',
+                        }}
+                        aria-expanded={isExpanded}
+                        aria-label={isExpanded ? `Collapse ${tag}` : `Expand ${tag}`}
+                      >
+                        {isExpanded ? `−${colEvents.length}` : `+${colEvents.length}`}
+                      </button>
+                      {stacked.slice(0, -1).map((event, i) => {
+                        const step = (n - 1 - i) * 10;
+                        return (
+                          <div
+                            key={event.id}
+                            className="absolute overflow-hidden pointer-events-none rounded-lg bg-white shadow-md flex flex-col"
+                            style={{
+                              left: i * 10,
+                              right: offset - i * 10,
+                              top: step,
+                              bottom: -step,
+                              zIndex: i,
+                              opacity: 1,
+                            }}
+                          >
+                            {event.image_url ? (
+                              <img src={event.image_url} alt="" className="w-full h-48 object-cover rounded-t-lg" />
+                            ) : (
+                              <div className="w-full h-48 bg-white rounded-t-lg" />
+                            )}
+                            <div className="flex-1 min-h-[140px] bg-white rounded-b-lg" />
+                          </div>
+                        );
+                      })}
+                      <div
+                        ref={(el) => { if (nextEvent) eventCardRefs.current[nextEvent.id] = el; }}
+                        className="relative z-10"
+                        style={{ marginLeft: offset }}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          const target = e.target as HTMLElement;
+                          const isInteractive =
+                            target.closest('button') || target.closest('a') || target.closest('input') ||
+                            target.closest('[role="button"]') || target.closest('[data-event-actions]') || target.closest('[data-tag-pill]');
+                          if (isInteractive) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleExpanded();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleExpanded();
+                          }
+                        }}
+                        aria-label={`Expand ${tag}`}
+                      >
+                        <EventCard
+                          event={nextEvent!}
+                          averageRating={nextEvent!.average_rating}
+                          ratingCount={nextEvent!.rating_count}
+                          userRating={nextEvent!.user_rating}
+                          onRatingSubmitted={fetchEvents}
+                          onEventUpdated={fetchEvents}
+                          onTagClick={handleTagClick}
+                          onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
+                          tagColors={appSettings}
+                          customPerformerTags={[]}
+                          viewHref={`${pathname}?event=${nextEvent!.id}`}
+                          onViewClick={() => toggleExpanded()}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {isExpanded && (
+                    <div className="relative flex h-full w-full min-h-[200px]">
+                      <button
+                        type="button"
+                        data-tag-pill
+                        onClick={() => toggleExpanded()}
+                        className="absolute top-2 right-2 z-50 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                        style={{
+                          backgroundColor: appSettings.footer_tags_bg_color || '#d1fae5',
+                          color: appSettings.footer_tags_text_color || '#065f46',
+                        }}
+                        aria-expanded={isExpanded}
+                        aria-label={`Collapse ${tag}`}
+                      >
+                        −{colEvents.length}
+                      </button>
+                      <div className="flex-1 min-h-0 w-full">
+                        {renderCard(nextEvent, false)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          };
+
           const upcomingBlock = upcoming.length > 1 && nextUpcoming ? (
-            <div className={`flex flex-col w-full min-w-0 ${!upcomingExpanded && !isMobile ? 'min-h-[520px] mb-16 md:mb-6 md:mr-6' : 'min-h-0 h-full'}`}>
+            <div className={`flex flex-col w-full min-w-0 ${!upcomingExpanded ? 'min-h-[520px] mb-16 md:mb-6 md:mr-6' : 'min-h-0 h-full'}`}>
               <div className={`shrink-0 flex items-center ${CARD_TOP_SPACER}`} />
-              <div className={`relative flex-1 ${!upcomingExpanded && !isMobile ? 'min-h-[480px] pb-3' : 'overflow-visible'}`}>
-                {!upcomingExpanded && !isMobile && (() => {
+              <div className={`relative flex-1 ${!upcomingExpanded ? 'min-h-[480px] pb-3' : 'overflow-visible'}`}>
+                {!upcomingExpanded && (() => {
                   const stacked = [...otherUpcoming.slice(0, 3), nextUpcoming];
                   const n = stacked.length;
                   const offset = (n - 1) * 10;
                   return (
                     <div className="relative w-full">
-                      {!isMobile && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setUpcomingExpanded((v) => !v); }}
-                          className="absolute top-2 right-2 z-30 px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white/95 hover:bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow"
-                          aria-expanded={upcomingExpanded}
-                          aria-label={upcomingExpanded ? 'Collapse upcoming shows' : 'Expand upcoming shows'}
-                        >
-                          {upcomingExpanded ? `−${upcoming.length}` : `+${upcoming.length}`}
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        data-tag-pill
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setUpcomingExpanded((v) => !v); }}
+                        className="absolute top-2 right-2 z-50 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                        style={{
+                          backgroundColor: appSettings.footer_tags_bg_color || '#d1fae5',
+                          color: appSettings.footer_tags_text_color || '#065f46',
+                        }}
+                        aria-expanded={upcomingExpanded}
+                        aria-label={upcomingExpanded ? 'Collapse upcoming shows' : 'Expand upcoming shows'}
+                      >
+                        {upcomingExpanded ? `−${upcoming.length}` : `+${upcoming.length}`}
+                      </button>
                       {stacked.slice(0, -1).map((event, i) => {
                         const step = (n - 1 - i) * 10;
                         return (
@@ -1151,17 +1372,15 @@ function App() {
                           if (isInteractive) return;
                           e.preventDefault();
                           e.stopPropagation();
-                          if (n === 1) openEventOverlay(nextUpcoming!.id);
-                          else setUpcomingExpanded((v) => !v);
+                          setUpcomingExpanded((v) => !v);
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
-                            if (n === 1) openEventOverlay(nextUpcoming!.id);
-                            else setUpcomingExpanded((v) => !v);
+                            setUpcomingExpanded((v) => !v);
                           }
                         }}
-                        aria-label={n === 1 ? 'View event details' : 'Expand upcoming shows'}
+                        aria-label="Expand upcoming shows"
                       >
                         <EventCard
                           event={nextUpcoming!}
@@ -1175,24 +1394,28 @@ function App() {
                           tagColors={appSettings}
                           customPerformerTags={[]}
                           imageOpacity={0.6}
+                          onViewClick={() => setUpcomingExpanded((v) => !v)}
                         />
                       </div>
                     </div>
                   );
                 })()}
-                {(upcomingExpanded || isMobile) && (
-                  <div className="relative flex h-full w-full">
-                    {!isMobile && (
-                      <button
-                        type="button"
-                        onClick={() => setUpcomingExpanded((v) => !v)}
-                        className="absolute top-2 right-2 z-30 px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white/95 hover:bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow"
-                        aria-expanded={upcomingExpanded}
-                        aria-label="Collapse upcoming shows"
-                      >
-                        −{upcoming.length}
-                      </button>
-                    )}
+                {upcomingExpanded && (
+                  <div className="relative flex h-full w-full min-h-[200px]">
+                    <button
+                      type="button"
+                      data-tag-pill
+                      onClick={() => setUpcomingExpanded((v) => !v)}
+                      className="absolute top-2 right-2 z-50 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                      style={{
+                        backgroundColor: appSettings.footer_tags_bg_color || '#d1fae5',
+                        color: appSettings.footer_tags_text_color || '#065f46',
+                      }}
+                      aria-expanded={upcomingExpanded}
+                      aria-label="Collapse upcoming shows"
+                    >
+                      −{upcoming.length}
+                    </button>
                     <div className="flex-1 min-h-0 w-full">
                       {renderCard(nextUpcoming, true)}
                     </div>
@@ -1214,7 +1437,7 @@ function App() {
                 {upcomingBlock && (
                   <div className="break-inside-avoid mb-6 w-full min-w-0">{upcomingBlock}</div>
                 )}
-                {(upcomingExpanded || isMobile) && otherUpcoming.map((event) => (
+                {upcomingExpanded && otherUpcoming.map((event) => (
                   <div key={event.id} className="break-inside-avoid mb-6">
                     {cardCell(renderCard(event, true))}
                   </div>
@@ -1224,14 +1447,24 @@ function App() {
                     {cardCell(renderCard(nextUpcoming, false))}
                   </div>
                 )}
-                {latestPast && (
-                  <div key={latestPast.id} className="break-inside-avoid mb-6">
-                    {cardCell(renderCard(latestPast), true)}
-                  </div>
-                )}
-                {restPast.map((event) => (
+                {sortedFooterTags.flatMap((footerTag) => {
+                  const block = (
+                    <div key={footerTag} className="break-inside-avoid mb-6 w-full min-w-0">
+                      {renderFooterTagBlock(footerTag)}
+                    </div>
+                  );
+                  const others = footerTagExpanded[footerTag]
+                    ? (footerTagToEvents.get(footerTag)?.slice(1) ?? []).map((event) => (
+                        <div key={event.id} className="break-inside-avoid mb-6">
+                          {cardCell(renderCard(event, false))}
+                        </div>
+                      ))
+                    : [];
+                  return [block, ...others];
+                })}
+                {ungroupedPast.map((event) => (
                   <div key={event.id} className="break-inside-avoid mb-6">
-                    {cardCell(renderCard(event), true)}
+                    {cardCell(renderCard(event, false), true)}
                   </div>
                 ))}
               </div>
@@ -1250,7 +1483,6 @@ function App() {
         isOpen={isAddEventModalOpen}
         onClose={() => setIsAddEventModalOpen(false)}
         onEventAdded={fetchEvents}
-        customPerformerTags={[]}
       />
 
       <SettingsModal
@@ -1298,13 +1530,6 @@ function App() {
         </div>
       )}
 
-      <StatisticsPage
-        isOpen={isStatisticsPageOpen}
-        onClose={() => setIsStatisticsPageOpen(false)}
-        tagColors={appSettings}
-        onOpenEvent={openEventOverlay}
-        tagModalRefreshTrigger={tagModalRefreshTrigger}
-      />
     </div>
   );
 }

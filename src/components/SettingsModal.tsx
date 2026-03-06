@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, UserPlus, Trash2, Image, Users, Tags, FolderPlus } from 'lucide-react';
+import { Save, Trash2, Image, Users, Tags, FolderPlus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getIcon, DEFAULT_ICONS } from '../lib/eventCardIcons';
 import { useAuth } from '../contexts/AuthContext';
 import { readableTextForBg } from '../lib/colorUtils';
 import IconPicker from './IconPicker';
-import ColorPicker from './ColorPicker';
 import { CUSTOM_COLORS_STORAGE_KEY, PRELOADED_HEX } from './ColorPicker';
 
 const PALETTE_STORAGE_KEY = 'tag_settings_palette_v1';
@@ -16,17 +15,17 @@ const DEFAULT_TAG_SETTINGS_KEY = 'tag_default_settings_v1';
 const FADED_TAG_DEFAULTS: Record<string, string> = {
   producer_bg_color: '#f3f4f6', designer_bg_color: '#fef3c7', model_bg_color: '#fce7f3',
   hair_makeup_bg_color: '#f3e8ff', city_bg_color: '#dbeafe', season_bg_color: '#ffedd5',
-  header_tags_bg_color: '#ccfbf1', footer_tags_bg_color: '#d1fae5', optional_tags_bg_color: '#e0e7ff',
+  header_tags_bg_color: '#ccfbf1', countdown_bg_color: '#fef3c7', footer_tags_bg_color: '#d1fae5', optional_tags_bg_color: '#e0e7ff',
 };
 
 /** Vibrant (bright) preset: saturated colors, auto text color */
 const BRIGHT_TAG_DEFAULTS: Record<string, string> = {
   producer_bg_color: '#fef08a', designer_bg_color: '#f9a8d4', model_bg_color: '#86efac',
   hair_makeup_bg_color: '#67e8f9', city_bg_color: '#bef264', season_bg_color: '#fdba74',
-  header_tags_bg_color: '#c4b5fd', footer_tags_bg_color: '#5eead4', optional_tags_bg_color: '#fda4af',
+  header_tags_bg_color: '#c4b5fd', countdown_bg_color: '#fef3c7', footer_tags_bg_color: '#5eead4', optional_tags_bg_color: '#fda4af',
 };
 
-const BUILT_IN_TAG_DEFAULTS: Pick<AppSettings, 'producer_bg_color' | 'producer_text_color' | 'designer_bg_color' | 'designer_text_color' | 'model_bg_color' | 'model_text_color' | 'hair_makeup_bg_color' | 'hair_makeup_text_color' | 'city_bg_color' | 'city_text_color' | 'season_bg_color' | 'season_text_color' | 'header_tags_bg_color' | 'header_tags_text_color' | 'footer_tags_bg_color' | 'footer_tags_text_color' | 'optional_tags_bg_color' | 'optional_tags_text_color' | 'producer_icon' | 'designer_icon' | 'model_icon' | 'hair_makeup_icon' | 'city_icon' | 'season_icon' | 'header_tags_icon' | 'footer_tags_icon'> = {
+const BUILT_IN_TAG_DEFAULTS: Pick<AppSettings, 'producer_bg_color' | 'producer_text_color' | 'designer_bg_color' | 'designer_text_color' | 'model_bg_color' | 'model_text_color' | 'hair_makeup_bg_color' | 'hair_makeup_text_color' | 'city_bg_color' | 'city_text_color' | 'season_bg_color' | 'season_text_color' | 'header_tags_bg_color' | 'header_tags_text_color' | 'countdown_bg_color' | 'countdown_text_color' | 'footer_tags_bg_color' | 'footer_tags_text_color' | 'optional_tags_bg_color' | 'optional_tags_text_color' | 'producer_icon' | 'designer_icon' | 'model_icon' | 'hair_makeup_icon' | 'city_icon' | 'season_icon' | 'header_tags_icon' | 'footer_tags_icon'> = {
   producer_bg_color: '#fef08a',
   producer_text_color: '#713f12',
   designer_bg_color: '#f9a8d4',
@@ -41,6 +40,8 @@ const BUILT_IN_TAG_DEFAULTS: Pick<AppSettings, 'producer_bg_color' | 'producer_t
   season_text_color: '#7c2d12',
   header_tags_bg_color: '#c4b5fd',
   header_tags_text_color: '#4c1d95',
+  countdown_bg_color: '#fef3c7',
+  countdown_text_color: '#92400e',
   footer_tags_bg_color: '#5eead4',
   footer_tags_text_color: '#134e4a',
   optional_tags_bg_color: '#fda4af',
@@ -69,6 +70,7 @@ interface SettingsModalProps {
 }
 
 interface AppSettings {
+  [key: string]: string;
   app_name: string;
   app_icon_url: string;
   app_logo_url: string;
@@ -89,6 +91,8 @@ interface AppSettings {
   season_text_color: string;
   header_tags_bg_color: string;
   header_tags_text_color: string;
+  countdown_bg_color: string;
+  countdown_text_color: string;
   footer_tags_bg_color: string;
   footer_tags_text_color: string;
   producer_icon: string;
@@ -107,12 +111,13 @@ interface AdminUser {
   id: string;
   user_id: string;
   created_at: string;
-  email?: string;
+  username?: string;
+  user_id_public?: string;
 }
 
 type TabId = 'branding' | 'admins' | 'tags';
 type CoreTagKey = 'producer' | 'designer' | 'model' | 'hair_makeup' | 'city' | 'season' | 'header_tags' | 'footer_tags';
-type SwatchColorKey = CoreTagKey | 'optional_tags';
+type SwatchColorKey = CoreTagKey | 'optional_tags' | 'countdown';
 
 export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSettingsPreview }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<TabId>('branding');
@@ -137,6 +142,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     season_text_color: '#7c2d12',
     header_tags_bg_color: '#c4b5fd',
     header_tags_text_color: '#4c1d95',
+    countdown_bg_color: '#fef3c7',
+    countdown_text_color: '#92400e',
     footer_tags_bg_color: '#5eead4',
     footer_tags_text_color: '#134e4a',
     producer_icon: 'Tag',
@@ -153,7 +160,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
+  const [adminUserIdPublic, setAdminUserIdPublic] = useState('');
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [assigningTag, setAssigningTag] = useState<SwatchColorKey | null>(null);
@@ -175,9 +182,11 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     { key: 'season', label: 'Season' },
     { key: 'header_tags', label: 'Genre' },
     { key: 'footer_tags', label: 'Footer tag' },
+    { key: 'countdown', label: 'Countdown' },
     { key: 'optional_tags', label: 'Custom' },
   ];
   const coreTagOptions = tagOptions.filter((t) => t.key !== 'optional_tags');
+  const tagKeysForDefault = tagOptions;
 
   useEffect(() => {
     try {
@@ -201,7 +210,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
         const valid = parsed.filter((v): v is string => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v));
         const seen = new Set(PRELOADED_HEX.map((h) => h.toLowerCase()));
         const extra = valid.filter((h) => !seen.has(h.toLowerCase()) && (seen.add(h.toLowerCase()), true));
-        setPaletteColors((prev) => [...PRELOADED_HEX, ...extra]);
+        setPaletteColors(() => [...PRELOADED_HEX, ...extra]);
       }
     } catch {
       // ignore
@@ -344,9 +353,9 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   const setAsDefault = () => {
     const toSave: Record<string, string> = {};
     for (const k of tagKeysForDefault) {
-      const bgKey = k.key === 'optional_tags' ? 'optional_tags_bg_color' : `${k.key}_bg_color`;
-      const textKey = k.key === 'optional_tags' ? 'optional_tags_text_color' : `${k.key}_text_color`;
-      const iconKey = k.key === 'optional_tags' ? null : `${k.key}_icon`;
+      const bgKey = k.key === 'optional_tags' ? 'optional_tags_bg_color' : k.key === 'countdown' ? 'countdown_bg_color' : `${k.key}_bg_color`;
+      const textKey = k.key === 'optional_tags' ? 'optional_tags_text_color' : k.key === 'countdown' ? 'countdown_text_color' : `${k.key}_text_color`;
+      const iconKey = k.key === 'optional_tags' || k.key === 'countdown' ? null : `${k.key}_icon`;
       toSave[bgKey] = (settings as Record<string, string>)[bgKey] || BUILT_IN_TAG_DEFAULTS[bgKey as keyof typeof BUILT_IN_TAG_DEFAULTS];
       toSave[textKey] = (settings as Record<string, string>)[textKey] || BUILT_IN_TAG_DEFAULTS[textKey as keyof typeof BUILT_IN_TAG_DEFAULTS];
       if (iconKey) toSave[iconKey] = (settings as Record<string, string>)[iconKey] || BUILT_IN_TAG_DEFAULTS[iconKey as keyof typeof BUILT_IN_TAG_DEFAULTS];
@@ -365,9 +374,9 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     const defs = getTagDefaults();
     const next: AppSettings = { ...settings };
     for (const { key } of tagOptions) {
-      const bgKey = key === 'optional_tags' ? 'optional_tags_bg_color' : `${key}_bg_color`;
-      const textKey = key === 'optional_tags' ? 'optional_tags_text_color' : `${key}_text_color`;
-      const iconKey = key === 'optional_tags' ? null : `${key}_icon`;
+      const bgKey = key === 'optional_tags' ? 'optional_tags_bg_color' : key === 'countdown' ? 'countdown_bg_color' : `${key}_bg_color`;
+      const textKey = key === 'optional_tags' ? 'optional_tags_text_color' : key === 'countdown' ? 'countdown_text_color' : `${key}_text_color`;
+      const iconKey = key === 'optional_tags' || key === 'countdown' ? null : `${key}_icon`;
       next[bgKey] = defs[bgKey as keyof typeof defs];
       next[textKey] = defs[textKey as keyof typeof defs];
       if (iconKey) (next as Record<string, string>)[iconKey] = defs[iconKey as keyof typeof defs];
@@ -380,8 +389,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   };
 
   const assignColorToTag = (tagKey: SwatchColorKey, hex: string, close = true) => {
-    const bgKey = tagKey === 'optional_tags' ? 'optional_tags_bg_color' : `${tagKey}_bg_color`;
-    const textKey = tagKey === 'optional_tags' ? 'optional_tags_text_color' : `${tagKey}_text_color`;
+    const bgKey = tagKey === 'optional_tags' ? 'optional_tags_bg_color' : tagKey === 'countdown' ? 'countdown_bg_color' : `${tagKey}_bg_color`;
+    const textKey = tagKey === 'optional_tags' ? 'optional_tags_text_color' : tagKey === 'countdown' ? 'countdown_text_color' : `${tagKey}_text_color`;
     setSettings((s) => ({
       ...s,
       color_scheme: 'custom',
@@ -444,6 +453,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
         season_text_color: settingsObj.season_text_color || '#7c2d12',
         header_tags_bg_color: settingsObj.header_tags_bg_color || '#c4b5fd',
         header_tags_text_color: settingsObj.header_tags_text_color || '#4c1d95',
+        countdown_bg_color: settingsObj.countdown_bg_color || '#fef3c7',
+        countdown_text_color: settingsObj.countdown_text_color || '#92400e',
         footer_tags_bg_color: settingsObj.footer_tags_bg_color || '#5eead4',
         footer_tags_text_color: settingsObj.footer_tags_text_color || '#134e4a',
         producer_icon: iconValue('producer_icon', 'Tag'),
@@ -469,13 +480,33 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     try {
       const { data, error } = await supabase.from('admin_users').select('id, user_id, created_at');
       if (error) throw error;
-      const usersWithEmails = await Promise.all(
-        (data || []).map(async (admin) => {
-          const { data: userData } = await supabase.auth.admin.getUserById(admin.user_id);
-          return { ...admin, email: userData.user?.email || 'Unknown' };
+      const adminRows = data || [];
+      const userIds = adminRows.map((admin) => admin.user_id);
+      if (userIds.length === 0) {
+        setAdminUsers([]);
+        return;
+      }
+
+      const { data: profiles, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('user_id, username, user_id_public')
+        .in('user_id', userIds);
+      if (profileError) throw profileError;
+
+      const profileByUserId = new Map(
+        (profiles || []).map((profile) => [profile.user_id, profile])
+      );
+
+      setAdminUsers(
+        adminRows.map((admin) => {
+          const profile = profileByUserId.get(admin.user_id);
+          return {
+            ...admin,
+            username: profile?.username ?? 'Unknown',
+            user_id_public: profile?.user_id_public ?? undefined,
+          };
         })
       );
-      setAdminUsers(usersWithEmails);
     } catch (err) {
       console.error('Error fetching admin users:', err);
     }
@@ -483,30 +514,34 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
 
   const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminEmail.trim()) {
-      setError('Please enter an email address');
+    const newAdminId = adminUserIdPublic.trim();
+    if (!newAdminId) {
+      setError('Please enter a user ID');
       return;
     }
     setError('');
     setSuccess('');
     setAdminLoading(true);
     try {
-      const { data: { users } = { users: [] }, error: searchError } = await supabase.auth.admin.listUsers();
-      if (searchError) throw searchError;
-      const foundUser = users?.find((u) => u.email?.toLowerCase() === adminEmail.trim().toLowerCase());
-      if (!foundUser) {
-        setError('No user found with that email');
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('user_id')
+        .eq('user_id_public', newAdminId)
+        .maybeSingle();
+      if (profileError) throw profileError;
+      if (!profile?.user_id) {
+        setError('No user found with that ID');
         setAdminLoading(false);
         return;
       }
-      const { error: insertError } = await supabase.from('admin_users').insert({ user_id: foundUser.id });
+      const { error: insertError } = await supabase.from('admin_users').insert({ user_id: profile.user_id });
       if (insertError) {
         setError(insertError.code === '23505' ? 'User is already an admin' : insertError.message);
         setAdminLoading(false);
         return;
       }
       setSuccess('Admin added');
-      setAdminEmail('');
+      setAdminUserIdPublic('');
       fetchAdminUsers();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -565,6 +600,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
         { key: 'season_text_color', value: settings.season_text_color },
         { key: 'header_tags_bg_color', value: settings.header_tags_bg_color },
         { key: 'header_tags_text_color', value: settings.header_tags_text_color },
+        { key: 'countdown_bg_color', value: settings.countdown_bg_color },
+        { key: 'countdown_text_color', value: settings.countdown_text_color },
         { key: 'footer_tags_bg_color', value: settings.footer_tags_bg_color },
         { key: 'footer_tags_text_color', value: settings.footer_tags_text_color },
         { key: 'producer_icon', value: settings.producer_icon },
@@ -685,20 +722,24 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
               <>
                 <form onSubmit={handleAddAdmin} className="flex gap-2">
                   <input
-                    type="email"
-                    value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="User email"
+                    type="text"
+                    value={adminUserIdPublic}
+                    onChange={(e) => setAdminUserIdPublic(e.target.value)}
+                    placeholder="User ID"
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                   <button type="submit" disabled={adminLoading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50">
                     {adminLoading ? 'Adding...' : 'Add Admin'}
                   </button>
                 </form>
+                <p className="text-xs text-gray-500 -mt-1">Use the member's public User ID from their profile.</p>
                 <div className="space-y-2">
                   {adminUsers.map((admin) => (
                     <div key={admin.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <span className="text-sm font-medium">{admin.email}</span>
+                      <span className="text-sm font-medium">
+                        {admin.user_id_public ? `@${admin.user_id_public}` : admin.user_id}
+                        {admin.username ? ` (${admin.username})` : ''}
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleRemoveAdmin(admin.id)}
@@ -994,11 +1035,11 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                     <p className="text-xs text-gray-500 mb-3">Tag pills as they appear on event cards.</p>
                     <div className="flex flex-wrap gap-2">
                       {tagOptions.map(({ key: k, label }) => {
-                        const bgKey = k === 'optional_tags' ? 'optional_tags_bg_color' : `${k}_bg_color`;
-                        const textKey = k === 'optional_tags' ? 'optional_tags_text_color' : `${k}_text_color`;
+                        const bgKey = k === 'optional_tags' ? 'optional_tags_bg_color' : k === 'countdown' ? 'countdown_bg_color' : `${k}_bg_color`;
+                        const textKey = k === 'optional_tags' ? 'optional_tags_text_color' : k === 'countdown' ? 'countdown_text_color' : `${k}_text_color`;
                         const bg = (settings as Record<string, string>)[bgKey] || '#e5e7eb';
                         const text = (settings as Record<string, string>)[textKey] || '#374151';
-                        const iconName = k === 'optional_tags' ? '' : (settings as Record<string, string>)[`${k}_icon`];
+                        const iconName = k === 'optional_tags' || k === 'countdown' ? '' : (settings as Record<string, string>)[`${k}_icon`];
                         const IconC = !iconName ? null : getIcon(iconName, `${k}_icon` as keyof typeof DEFAULT_ICONS);
                         return (
                           <span

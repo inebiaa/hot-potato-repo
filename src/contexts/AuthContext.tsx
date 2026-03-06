@@ -7,7 +7,7 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   signUp: (email: string, password: string, username: string, userId?: string) => Promise<{ error: AuthError | null }>;
-  signIn: (emailOrUserId: string, password: string) => Promise<{ error: AuthError | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -70,35 +70,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const signIn = async (emailOrUserId: string, password: string) => {
-    const isEmail = emailOrUserId.includes('@');
-
-    if (isEmail) {
-      const { error } = await supabase.auth.signInWithPassword({ email: emailOrUserId, password });
-      return { error };
-    } else {
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('user_id')
-        .eq('user_id_public', emailOrUserId)
-        .maybeSingle();
-
-      if (profileError || !profile) {
-        return { error: { message: 'User ID not found', name: 'UserIdNotFound', status: 404 } as AuthError };
-      }
-
-      const { data: userData, error: userError } = await supabase.auth.admin.getUserById(profile.user_id);
-
-      if (userError || !userData.user?.email) {
-        return { error: { message: 'Unable to sign in with User ID', name: 'SignInError', status: 400 } as AuthError };
-      }
-
-      const { error } = await supabase.auth.signInWithPassword({
-        email: userData.user.email,
-        password
-      });
-      return { error };
+  const signIn = async (email: string, password: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      return { error: { message: 'Email is required', name: 'ValidationError', status: 400 } as AuthError };
     }
+
+    const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+    return { error };
   };
 
   const signOut = async () => {

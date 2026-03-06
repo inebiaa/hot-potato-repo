@@ -11,7 +11,7 @@ interface ProfilePageProps {
   pathname: string;
   onClose: () => void;
   onTagClick?: (type: string, value: string) => void;
-  onOpenEvent?: (eventId: string, openWithWiggle?: boolean, suggestSection?: keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] }, suggestCustomSlug?: string) => void;
+  onOpenEvent?: (eventId: string, openWithWiggle?: boolean, suggestSection?: keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | 'custom', suggestCustomSlug?: string) => void;
   tagColors?: {
     producer_bg_color?: string;
     producer_text_color?: string;
@@ -29,6 +29,8 @@ interface ProfilePageProps {
     header_tags_text_color?: string;
     footer_tags_bg_color?: string;
     footer_tags_text_color?: string;
+    optional_tags_bg_color?: string;
+    optional_tags_text_color?: string;
   };
   customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
 }
@@ -772,7 +774,7 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
                 className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
                 placeholder="e.g., janedoe2024"
               />
-              <p className="text-xs text-stone-400 mt-0.5">Your unique ID for signing in (letters, numbers, _, -)</p>
+              <p className="text-xs text-stone-400 mt-0.5">Your public profile ID (letters, numbers, _, -)</p>
             </div>
             {profileSaveError && (
               <p className="text-sm text-red-600">{profileSaveError}</p>
