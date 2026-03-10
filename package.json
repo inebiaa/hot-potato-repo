@@ -12,9 +12,11 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
+    "html-to-image": "^1.11.13",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-masonry-component": "^6.3.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
