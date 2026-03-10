@@ -12,8 +12,16 @@
   animation: pillWiggle 140ms ease-in-out infinite;
 }
 
-/* Shared tag pill sizing so comment pills match EventCard pills */
+/* Shared tag pill sizing, typography, layout – all pills (countdown, stack +N, genre, etc.) match */
 [data-tag-pill] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   min-height: 1.5rem;
   box-sizing: border-box;
+  font-size: 0.75rem;
+  line-height: 1;
+  font-family: inherit;
+  font-weight: inherit;
 }
+

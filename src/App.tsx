@@ -643,22 +643,92 @@ function App() {
     return (
       <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
         <header className="shrink-0 bg-white shadow-sm border-b z-40">
-          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {appSettings.app_logo_url ? (
-                <img src={appSettings.app_logo_url} alt={appSettings.app_name} className="h-10 object-contain" />
-              ) : (
-                <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2">
-                  <Sparkles className="text-white" size={24} />
-                </div>
-              )}
-              <a href={pathname} className="text-lg font-semibold text-gray-900 hover:text-blue-600">
-                {appSettings.app_name}
-              </a>
+          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {appSettings.app_logo_url ? (
+                  <a href={pathname}>
+                    <img src={appSettings.app_logo_url} alt={appSettings.app_name} className="h-10 object-contain" />
+                  </a>
+                ) : (
+                  <>
+                    {appSettings.app_icon_url ? (
+                      <img src={appSettings.app_icon_url} alt="App Icon" className="w-10 h-10" />
+                    ) : (
+                      <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2">
+                        <Sparkles className="text-white" size={24} />
+                      </div>
+                    )}
+                    <div>
+                      <h1 className="text-2xl font-bold text-gray-900">{appSettings.app_name}</h1>
+                      {appSettings.tagline && (
+                        <p className="text-xs text-gray-500">{appSettings.tagline}</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {}}
+                  className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-blue-50 text-blue-700 transition-colors"
+                  title="View Statistics"
+                  aria-current="page"
+                >
+                  <BarChart3 size={20} />
+                  <span className="hidden sm:inline text-sm">Stats</span>
+                </button>
+                {user ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={openProfile}
+                      className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      title="My Profile"
+                    >
+                      <User size={20} />
+                      <span className="hidden sm:inline text-sm">My Profile</span>
+                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => setIsSettingsModalOpen(true)}
+                        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        title="App Settings"
+                      >
+                        <Settings size={20} />
+                        <span className="hidden sm:inline text-sm">Settings</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setIsAddEventModalOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                    >
+                      <Plus size={20} />
+                      <span className="hidden sm:inline">Add Show</span>
+                    </button>
+                    <button
+                      onClick={() => signOut()}
+                      className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <LogOut size={20} />
+                      <span className="hidden sm:inline">Sign Out</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => openAuthModal('signin')}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  >
+                    <LogIn size={20} />
+                    Sign In
+                  </button>
+                )}
+                <button onClick={goBackFromStats} className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50">
+                  ← Back to shows
+                </button>
+              </div>
             </div>
-            <button onClick={goBackFromStats} className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50">
-              ← Back to shows
-            </button>
           </div>
         </header>
         <main className="flex-1 min-h-0 overflow-y-auto">
@@ -1435,7 +1505,7 @@ function App() {
           return (
               <div className="columns-[300px] gap-6">
                 {upcomingBlock && (
-                  <div className="break-inside-avoid mb-6 w-full min-w-0">{upcomingBlock}</div>
+                  <div key="upcoming" className="break-inside-avoid mb-6 w-full min-w-0">{upcomingBlock}</div>
                 )}
                 {upcomingExpanded && otherUpcoming.map((event) => (
                   <div key={event.id} className="break-inside-avoid mb-6">

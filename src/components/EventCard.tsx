@@ -991,7 +991,7 @@ export default function EventCard({
                   color: tagColors?.city_text_color || '#1e40af'
                 }}
               >
-                <CityIcon size={12} className="inline mr-1 -mt-0.5" />
+                <CityIcon size={12} className="shrink-0" />
                 {event.city}
               </button>
             )}
@@ -1019,7 +1019,7 @@ export default function EventCard({
                     color: tagColors?.season_text_color || '#c2410c'
                   }}
                 >
-                  <SeasonIcon size={12} className="inline mr-1 -mt-0.5" />
+                  <SeasonIcon size={12} className="shrink-0" />
                   {season}
                 </button>
               );
@@ -1049,7 +1049,7 @@ export default function EventCard({
                         color: tagColors?.header_tags_text_color || '#0f766e'
                       }}
                     >
-                      <HeaderTagsIcon size={12} className="inline mr-1 -mt-0.5" />
+                      <HeaderTagsIcon size={12} className="shrink-0" />
                       {tag}
                     </button>
                   ))}
@@ -1071,9 +1071,10 @@ export default function EventCard({
                     </span>
                   );})}
                   {countdown && (
-                    <span
+                    <button
+                      type="button"
                       data-tag-pill
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs ${showWiggle ? 'pill-wiggle' : ''}`}
+                      className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 tabular-nums ${showWiggle ? 'pill-wiggle' : ''}`}
                       style={{
                         backgroundColor: tagColors?.countdown_bg_color || '#fef3c7',
                         color: tagColors?.countdown_text_color || '#92400e'
@@ -1084,9 +1085,9 @@ export default function EventCard({
                       onTouchStart={() => startLongPress('header_tags')}
                       onTouchEnd={(e: React.TouchEvent) => clearLongPress(e)}
                     >
-                      <Clock size={12} className="flex-shrink-0" />
+                      <Clock size={12} className="shrink-0" />
                       {countdown}
-                    </span>
+                    </button>
                   )}
                   {suggestPill('header_tags')}
                   {isAnyReorderMode && addingFor?.section !== 'header_tags' && (
