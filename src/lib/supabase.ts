@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = SUPABASE_URL;
+const supabaseAnonKey = SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
@@ -16,14 +17,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storageKey: 'secret-blogger-auth',
   },
 });
-
-export interface EventCollection {
-  id: string;
-  name: string;
-  description: string | null;
-  sort_order: number;
-  created_at: string;
-}
 
 export interface Event {
   id: string;
@@ -46,7 +39,6 @@ export interface Event {
   custom_tag_meta?: Record<string, { icon?: string }> | null;
   created_by: string | null;
   created_at: string;
-  collection_id?: string | null;
 }
 
 export interface EditSuggestion {
