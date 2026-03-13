@@ -64,6 +64,8 @@ interface EventCardProps {
   initialCustomReorderSlug?: string;
   /** When true (overlay card), clicking on the card does not clear wiggle – only click-away does */
   wiggleOnlyClearsOnClickAway?: boolean;
+  /** Called when reorder mode is entered (so overlay can avoid closing on release-after-long-press) */
+  onReorderModeEntered?: () => void;
 }
 
 interface PendingTagSuggestion {
@@ -99,7 +101,8 @@ export default function EventCard({
   onRequireAuth,
   initialReorderSection,
   initialCustomReorderSlug,
-  wiggleOnlyClearsOnClickAway = false
+  wiggleOnlyClearsOnClickAway = false,
+  onReorderModeEntered
 }: EventCardProps) {
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [isViewRatingsModalOpen, setIsViewRatingsModalOpen] = useState(false);
@@ -135,6 +138,7 @@ export default function EventCard({
   const reorderModeEnteredAtRef = useRef<number>(0);
   const longPressActivatedRef = useRef(false);
   const skipNextClickRef = useRef(false);
+  const longPressTargetRef = useRef<EventTarget | null>(null);
   const TAG_ORDER_STORAGE_KEY = 'event_tag_order_v1';
   const isAnyReorderMode = reorderSection !== null || customReorderSlug !== null;
   const showWiggle = isAnyReorderMode;
@@ -186,6 +190,19 @@ export default function EventCard({
     }
   };
 
+  /** Merge event's current tags (source of truth) with saved display order. Saved order only affects ordering; added/removed tags come from current. */
+  const mergeWithSavedOrder = (current: string[], saved?: string[] | null): string[] => {
+    if (!current.length) return [];
+    if (!saved?.length) return current;
+    // Use current's strings (event data) for display; saved only determines order
+    const savedOrdered = saved
+      .map((t) => current.find((c) => normalizeTagName(c) === normalizeTagName(t)))
+      .filter((t): t is string => t != null);
+    const inSaved = new Set(savedOrdered.map((t) => normalizeTagName(t)));
+    const newTags = current.filter((t) => !inSaved.has(normalizeTagName(t)));
+    return [...savedOrdered, ...newTags];
+  };
+
   const saveOrder = (next: {
     orderedTags: typeof orderedTags;
     orderedCustomTags: Record<string, string[]>;
@@ -223,17 +240,21 @@ export default function EventCard({
     const saved = readSavedOrder();
 
     setOrderedTags({
-      producers: saved?.producers || fallbackOrdered.producers,
-      featured_designers: saved?.featured_designers || fallbackOrdered.featured_designers,
-      models: saved?.models || fallbackOrdered.models,
-      hair_makeup: saved?.hair_makeup || fallbackOrdered.hair_makeup,
-      header_tags: saved?.header_tags || fallbackOrdered.header_tags,
-      footer_tags: saved?.footer_tags || fallbackOrdered.footer_tags
+      producers: mergeWithSavedOrder(fallbackOrdered.producers, saved?.producers),
+      featured_designers: mergeWithSavedOrder(fallbackOrdered.featured_designers, saved?.featured_designers),
+      models: mergeWithSavedOrder(fallbackOrdered.models, saved?.models),
+      hair_makeup: mergeWithSavedOrder(fallbackOrdered.hair_makeup, saved?.hair_makeup),
+      header_tags: mergeWithSavedOrder(fallbackOrdered.header_tags, saved?.header_tags),
+      footer_tags: mergeWithSavedOrder(fallbackOrdered.footer_tags, saved?.footer_tags)
     });
     setReorderSection(null);
     setDragIndex(null);
     setDropIndex(null);
-    setOrderedCustomTags(saved?.custom_tags || fallbackCustom);
+    const mergedCustom: Record<string, string[]> = {};
+    for (const slug of Object.keys(fallbackCustom)) {
+      mergedCustom[slug] = mergeWithSavedOrder(fallbackCustom[slug] || [], saved?.custom_tags?.[slug]);
+    }
+    setOrderedCustomTags(mergedCustom);
     setCustomReorderSlug(null);
     setCustomDragIndex(null);
     setCustomDropIndex(null);
@@ -543,10 +564,11 @@ export default function EventCard({
       reorderModeEnteredAtRef.current = Date.now();
       setReorderSection(section);
       setDragIndex(null);
-    }, 450);
+      onReorderModeEntered?.();
+    }, 220);
   };
 
-  const clearLongPress = (e?: React.MouseEvent | React.TouchEvent) => {
+  const clearLongPress = (e?: React.MouseEvent | React.TouchEvent | React.PointerEvent) => {
     const didActivate = longPressActivatedRef.current;
     if (longPressTimerRef.current !== null) {
       window.clearTimeout(longPressTimerRef.current);
@@ -561,17 +583,29 @@ export default function EventCard({
         e.nativeEvent?.preventDefault?.();
       }
       if (!isInteractiveTarget) {
+        longPressTargetRef.current = target ?? null;
         skipNextClickRef.current = true;
-        window.setTimeout(() => { skipNextClickRef.current = false; }, 400);
+        window.setTimeout(() => {
+          skipNextClickRef.current = false;
+          longPressTargetRef.current = null;
+        }, 400);
       }
     }
   };
 
   const handlePillClick = (e: React.MouseEvent, fn: () => void) => {
-    if (skipNextClickRef.current) {
+    const target = longPressTargetRef.current;
+    const isSameTarget = target && (
+      e.target === target ||
+      (target as Node).contains?.(e.target as Node) ||
+      (e.target as Node)?.contains?.(target as Node)
+    );
+    const shouldSkip = skipNextClickRef.current && isSameTarget;
+    if (shouldSkip) {
       e.preventDefault();
       e.stopPropagation();
       skipNextClickRef.current = false;
+      longPressTargetRef.current = null;
       return;
     }
     fn();
@@ -604,10 +638,21 @@ export default function EventCard({
   };
 
   const tagInteractionProps = (section: keyof typeof orderedTags, idx: number, dragType?: string, dragValue?: string) => ({
-    onMouseDown: () => startLongPress(section),
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.button !== 0 && e.button !== undefined) return; /* only primary button */
+      startLongPress(section);
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      clearLongPress(e);
+      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    },
+    onPointerCancel: (e: React.PointerEvent) => {
+      clearLongPress(e);
+      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    },
+    /* Mouse/touch still needed for click-to-filter and as pointer-event fallback */
     onMouseUp: (e: React.MouseEvent) => clearLongPress(e),
-    onMouseLeave: (e: React.MouseEvent) => clearLongPress(e),
-    onTouchStart: () => startLongPress(section),
     onTouchEnd: (e: React.TouchEvent) => clearLongPress(e),
     draggable: true,
     onDragStart: (e: React.DragEvent) => {
@@ -649,7 +694,8 @@ export default function EventCard({
       setCustomReorderSlug(slug);
       setCustomDragIndex(null);
       setCustomDropIndex(null);
-    }, 450);
+      onReorderModeEntered?.();
+    }, 250);
   };
 
   const persistCustomTagOrder = async (slug: string, next: string[]) => {
@@ -668,9 +714,22 @@ export default function EventCard({
   };
 
   const customTagInteractionProps = (slug: string, idx: number, val?: string) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      startCustomLongPress(slug);
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      clearLongPress(e as unknown as React.MouseEvent);
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    },
+    onPointerCancel: (e: React.PointerEvent) => {
+      clearLongPress();
+      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    },
     onMouseDown: () => startCustomLongPress(slug),
     onMouseUp: (e: React.MouseEvent) => clearLongPress(e),
-    onMouseLeave: (e: React.MouseEvent) => clearLongPress(e),
     onTouchStart: () => startCustomLongPress(slug),
     onTouchEnd: (e: React.TouchEvent) => clearLongPress(e),
     draggable: true,
@@ -764,8 +823,20 @@ export default function EventCard({
     const isInteractive = target.closest('button') || target.closest('a') || target.closest('[data-event-actions]') || target.closest('[data-tag-pill]');
 
     if (isAnyReorderMode) {
-      if (Date.now() - reorderModeEnteredAtRef.current < 400) return;
-      if (wiggleOnlyClearsOnClickAway) return;
+      if (wiggleOnlyClearsOnClickAway) {
+        e.stopPropagation();
+        return;
+      }
+      /* Clicks on tag pills = still reordering; only clear when clicking card background/title/etc */
+      if (target.closest('[data-tag-pill]')) {
+        e.stopPropagation();
+        return;
+      }
+      /* Layout shifts when wiggle starts – mouse may release elsewhere. Ignore clicks within 800ms of entering. */
+      if (Date.now() - reorderModeEnteredAtRef.current < 800) {
+        e.stopPropagation();
+        return;
+      }
       e.stopPropagation();
       clearReorderMode();
       return;
@@ -843,7 +914,8 @@ export default function EventCard({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              isOwn ? withdrawOwnSuggestion(suggestion) : rejectSuggestion(suggestion);
+              if (isOwn) withdrawOwnSuggestion(suggestion);
+              else rejectSuggestion(suggestion);
             }}
             className="text-gray-500 hover:text-gray-700 p-0.5 -m-0.5 touch-manipulation shrink-0"
             disabled={processingSuggestionId === suggestion.id}
@@ -985,7 +1057,7 @@ export default function EventCard({
                     e.dataTransfer.effectAllowed = 'copy';
                   }
                 }}
-                className={`px-2 py-1 rounded-md text-xs transition-all hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''}`}
+                className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-1 rounded-md text-xs transition-all hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''}`}
                 style={{
                   backgroundColor: tagColors?.city_bg_color || '#dbeafe',
                   color: tagColors?.city_text_color || '#1e40af'
@@ -1013,7 +1085,7 @@ export default function EventCard({
                       e.dataTransfer.effectAllowed = 'copy';
                     }
                   }}
-                  className={`px-2 py-1 rounded-md text-xs transition-all hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''}`}
+                  className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-1 rounded-md text-xs transition-all hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''}`}
                   style={{
                     backgroundColor: tagColors?.season_bg_color || '#ffedd5',
                     color: tagColors?.season_text_color || '#c2410c'
@@ -1034,7 +1106,7 @@ export default function EventCard({
             const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
             return (
               <div className="mb-3">
-                <div className="flex flex-wrap gap-1 items-center">
+                <div className="flex flex-wrap gap-2 items-center">
                   {visible.map((tag, idx) => (
                     <button
                       key={idx}
@@ -1042,11 +1114,12 @@ export default function EventCard({
                         if (!isAnyReorderMode) onTagClick('header_tags', tag);
                       })}
                       data-tag-pill
-                      className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 whitespace-nowrap ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                       {...tagInteractionProps('header_tags', idx, 'header_tags', tag)}
                       style={{
                         backgroundColor: tagColors?.header_tags_bg_color || '#ccfbf1',
-                        color: tagColors?.header_tags_text_color || '#0f766e'
+                        color: tagColors?.header_tags_text_color || '#0f766e',
+                        ...(isAnyReorderMode && dropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
                       }}
                     >
                       <HeaderTagsIcon size={12} className="shrink-0" />
@@ -1074,7 +1147,7 @@ export default function EventCard({
                     <button
                       type="button"
                       data-tag-pill
-                      className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 tabular-nums ${showWiggle ? 'pill-wiggle' : ''}`}
+                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 tabular-nums whitespace-nowrap ${showWiggle ? 'pill-wiggle' : ''}`}
                       style={{
                         backgroundColor: tagColors?.countdown_bg_color || '#fef3c7',
                         color: tagColors?.countdown_text_color || '#92400e'
@@ -1163,10 +1236,11 @@ export default function EventCard({
                           if (!isAnyReorderMode) onTagClick('producer', producer);
                         })}
                         data-tag-pill
-                        className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                         {...tagInteractionProps('producers', idx, 'producer', producer)}
                         style={{
                           backgroundColor: tagColors?.producer_bg_color || '#f3f4f6',
+                          ...(isAnyReorderMode && dropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
                           color: tagColors?.producer_text_color || '#374151'
                         }}
                       >
@@ -1231,10 +1305,11 @@ export default function EventCard({
                           if (!isAnyReorderMode) onTagClick('designer', designer);
                         })}
                         data-tag-pill
-                        className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                         {...tagInteractionProps('featured_designers', idx, 'designer', designer)}
                         style={{
                           backgroundColor: tagColors?.designer_bg_color || '#fef3c7',
+                          ...(isAnyReorderMode && dropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
                           color: tagColors?.designer_text_color || '#b45309'
                         }}
                       >
@@ -1286,10 +1361,11 @@ export default function EventCard({
                           if (!isAnyReorderMode) onTagClick('model', model);
                         })}
                         data-tag-pill
-                        className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                         {...tagInteractionProps('models', idx, 'model', model)}
                         style={{
                           backgroundColor: tagColors?.model_bg_color || '#fce7f3',
+                          ...(isAnyReorderMode && dropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
                           color: tagColors?.model_text_color || '#be185d'
                         }}
                       >
@@ -1341,10 +1417,11 @@ export default function EventCard({
                           if (!isAnyReorderMode) onTagClick('hair_makeup', artist);
                         })}
                         data-tag-pill
-                        className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                         {...tagInteractionProps('hair_makeup', idx, 'hair_makeup', artist)}
                         style={{
                           backgroundColor: tagColors?.hair_makeup_bg_color || '#f3e8ff',
+                          ...(isAnyReorderMode && dropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
                           color: tagColors?.hair_makeup_text_color || '#7e22ce'
                         }}
                       >
@@ -1422,10 +1499,11 @@ export default function EventCard({
                               if (!isAnyReorderMode) onTagClick(`custom_performer`, `${tagDef.slug}\x00${val}`);
                             })}
                             data-tag-pill
-                            className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && customDropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                            className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && customDropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                             {...customTagInteractionProps(tagDef.slug, idx, val)}
                             style={{
                               backgroundColor: tagDef.bg_color || '#e0e7ff',
+                              ...(isAnyReorderMode && customDropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
                               color: tagDef.text_color || '#3730a3',
                             }}
                           >
@@ -1543,10 +1621,11 @@ export default function EventCard({
                         if (!isAnyReorderMode) onTagClick('footer_tags', tag);
                       })}
                       data-tag-pill
-                      className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1 scale-105' : ''}`}
+                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                       {...tagInteractionProps('footer_tags', idx, 'footer_tags', tag)}
                       style={{
                         backgroundColor: tagColors?.footer_tags_bg_color || '#d1fae5',
+                        ...(isAnyReorderMode && dropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
                         color: tagColors?.footer_tags_text_color || '#065f46'
                       }}
                     >

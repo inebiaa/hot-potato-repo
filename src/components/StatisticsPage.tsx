@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase, Event } from '../lib/supabase';
 import { getSeasonFromDate, sortSeasonsByDate } from '../lib/season';
 import TagRatingsModal from './TagRatingsModal';
@@ -20,6 +20,11 @@ interface StatisticsPageProps {
   tagModalRefreshTrigger?: number;
   /** When true, render as full page instead of modal (e.g. at ?stats=1) */
   asPage?: boolean;
+  /** When true, backdrop click on tag modal closes event overlay instead of closing modal. */
+  eventOverlayOpen?: boolean;
+  onCloseEventOverlay?: () => void;
+  /** Optional: preloaded events from shared cache; when provided, skips fetch */
+  events?: Event[];
 }
 
 export default function StatisticsPage({
@@ -29,21 +34,35 @@ export default function StatisticsPage({
   onOpenEvent,
   tagModalRefreshTrigger = 0,
   asPage = false,
+  eventOverlayOpen = false,
+  onCloseEventOverlay,
+  events: eventsProp,
 }: StatisticsPageProps) {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedCity, setSelectedCity] = useState<string>('');
   const [selectedSeason, setSelectedSeason] = useState<string>('');
   const [sortBy, setSortBy] = useState<'count' | 'name'>('count');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [isTagRatingsModalOpen, setIsTagRatingsModalOpen] = useState(false);
   const [selectedTag, setSelectedTag] = useState<{ type: string; value: string } | null>(null);
 
   useEffect(() => {
-    if (isOpen) {
-      fetchEvents();
+    if (!isOpen && !asPage) return;
+    if (eventsProp && eventsProp.length > 0) {
+      setEvents(eventsProp);
+      setLoading(false);
+      return;
     }
-  }, [isOpen]);
+    fetchEvents();
+  }, [isOpen, asPage, eventsProp]);
+
+  useEffect(() => {
+    if (eventsProp && eventsProp.length > 0) {
+      setEvents(eventsProp);
+    }
+  }, [eventsProp]);
 
   const fetchEvents = async () => {
     setLoading(true);
@@ -101,12 +120,6 @@ export default function StatisticsPage({
       }
       if (selectedType === 'all' || selectedType === 'season') {
         addTag(getSeasonFromDate(event.date), 'season');
-      }
-      if (selectedType === 'all' || selectedType === 'header_tags') {
-        (event.header_tags || event.genre)?.forEach(t => addTag(t, 'header_tags'));
-      }
-      if (selectedType === 'all' || selectedType === 'footer_tags') {
-        (event.footer_tags || [])?.forEach(t => addTag(t, 'footer_tags'));
       }
     });
 
@@ -176,8 +189,33 @@ export default function StatisticsPage({
 
   const allCities = Array.from(new Set(events.map(e => e.city).filter(Boolean))).sort();
   const allSeasons = sortSeasonsByDate(Array.from(new Set(events.map(e => getSeasonFromDate(e.date)))));
+  const rawTagStats = calculateTagStats();
+  const searchNorm = searchQuery.trim().toLowerCase();
+  const tagStats = searchNorm
+    ? rawTagStats.filter((t) => t.name.toLowerCase().includes(searchNorm))
+    : rawTagStats;
 
-  const tagStats = calculateTagStats();
+  const matchEventForTag = (e: Event, type: string, value: string) => {
+    switch (type) {
+      case 'producer': return (e.producers || []).includes(value);
+      case 'designer': return (e.featured_designers || []).includes(value);
+      case 'model': return (e.models || []).includes(value);
+      case 'hair_makeup': return (e.hair_makeup || []).includes(value);
+      case 'city': return e.city === value;
+      case 'season': return (e.season || getSeasonFromDate(e.date)) === value;
+      case 'header_tags': return (e.header_tags || e.genre || []).includes(value);
+      case 'footer_tags': return (e.footer_tags || []).includes(value);
+      default: return false;
+    }
+  };
+
+  const eventsForTag = useMemo(() => {
+    if (!selectedTag?.type || !selectedTag?.value) return [];
+    let filtered = [...events];
+    if (selectedCity) filtered = filtered.filter(e => e.city === selectedCity);
+    if (selectedSeason) filtered = filtered.filter(e => (e.season || getSeasonFromDate(e.date)) === selectedSeason);
+    return filtered.filter(e => matchEventForTag(e, selectedTag.type, selectedTag.value));
+  }, [events, selectedTag, selectedCity, selectedSeason]);
 
   if (!isOpen && !asPage) return null;
 
@@ -192,6 +230,8 @@ export default function StatisticsPage({
     allCities,
     allSeasons,
     sortBy,
+    searchQuery,
+    setSearchQuery,
     getTagColors,
     setSelectedType,
     setSelectedCity,
@@ -211,7 +251,10 @@ export default function StatisticsPage({
           tagValue={selectedTag?.value || ''}
           onEventClick={onOpenEvent}
           refreshTrigger={tagModalRefreshTrigger}
-        />
+          eventsForTag={eventsForTag}
+        eventOverlayOpen={eventOverlayOpen}
+        onCloseEventOverlay={onCloseEventOverlay}
+      />
       </>
     );
   }
@@ -232,6 +275,9 @@ export default function StatisticsPage({
         tagValue={selectedTag?.value || ''}
         onEventClick={onOpenEvent}
         refreshTrigger={tagModalRefreshTrigger}
+        eventsForTag={eventsForTag}
+        eventOverlayOpen={eventOverlayOpen}
+        onCloseEventOverlay={onCloseEventOverlay}
       />
     </>
   );
