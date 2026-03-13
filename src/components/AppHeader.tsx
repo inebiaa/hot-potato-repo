@@ -1,7 +1,7 @@
 import { Plus, LogOut, LogIn, Sparkles, BarChart3, User, Settings, Home } from 'lucide-react';
 
 interface AppSettings {
-  app_name: string;
+  app_name?: string;
   app_icon_url?: string;
   app_logo_url?: string;
   tagline?: string;
