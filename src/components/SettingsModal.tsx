@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, Trash2, Image, Users, Tags, FolderPlus } from 'lucide-react';
+import { Save, Trash2, Image, Users, Tags, FolderPlus, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getIcon, DEFAULT_ICONS } from '../lib/eventCardIcons';
 import { useAuth } from '../contexts/AuthContext';
 import { readableTextForBg } from '../lib/colorUtils';
 import IconPicker from './IconPicker';
 import { CUSTOM_COLORS_STORAGE_KEY, PRELOADED_HEX } from './ColorPicker';
+import { ensureIdentity, findIdentityByName, normalizeTagName, searchTagIdentities, searchEventTags, type TagType } from '../lib/tagIdentity';
 
 const PALETTE_STORAGE_KEY = 'tag_settings_palette_v1';
 const COLLECTIONS_STORAGE_KEY = 'tag_color_collections_v1';
@@ -67,6 +68,16 @@ interface SettingsModalProps {
   onClose: () => void;
   onSettingsUpdated: () => void;
   onSettingsPreview?: (settings: AppSettings) => void;
+  onAccountUpdated?: () => void;
+}
+
+interface CreditRow {
+  id: string;
+  identity_id: string;
+  preferred_alias_id: string | null;
+  tag_type: string;
+  canonical_name: string;
+  aliases: { id: string; alias: string }[];
 }
 
 interface AppSettings {
@@ -74,6 +85,7 @@ interface AppSettings {
   app_name: string;
   app_icon_url: string;
   app_logo_url: string;
+  app_favicon_url: string;
   tagline: string;
   color_scheme: string;
   collapsible_cards_enabled: string;
@@ -115,16 +127,18 @@ interface AdminUser {
   user_id_public?: string;
 }
 
-type TabId = 'branding' | 'admins' | 'tags';
+type TabId = 'branding' | 'admins' | 'tags' | 'account';
 type CoreTagKey = 'producer' | 'designer' | 'model' | 'hair_makeup' | 'city' | 'season' | 'header_tags' | 'footer_tags';
 type SwatchColorKey = CoreTagKey | 'optional_tags' | 'countdown';
 
-export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSettingsPreview }: SettingsModalProps) {
+export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSettingsPreview, onAccountUpdated }: SettingsModalProps) {
+  const { user, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>('branding');
   const [settings, setSettings] = useState<AppSettings>(() => ({
-    app_name: 'Runway Rate',
+    app_name: 'Secret Blogger',
     app_icon_url: '',
     app_logo_url: '',
+    app_favicon_url: '',
     tagline: 'Fashion Show Reviews',
     color_scheme: 'custom',
     collapsible_cards_enabled: 'true',
@@ -171,7 +185,18 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [dragOverCollectionId, setDragOverCollectionId] = useState<string | null>(null);
   const skipNextPreviewRef = useRef(false);
-  const { user } = useAuth();
+
+  const [editName, setEditName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
+  const [profileSaveError, setProfileSaveError] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [credits, setCredits] = useState<CreditRow[]>([]);
+  const [creditsError, setCreditsError] = useState<string | null>(null);
+  const [connectName, setConnectName] = useState('');
+  const [connectType, setConnectType] = useState<TagType>('producer');
+  const [creditSearchResults, setCreditSearchResults] = useState<{ id: string; tag_type: string; canonical_name: string; fromEvent?: boolean }[]>([]);
+  const [creditSearching, setCreditSearching] = useState(false);
+  const [newAliasByIdentity, setNewAliasByIdentity] = useState<Record<string, string>>({});
 
   const tagOptions: { key: SwatchColorKey; label: string }[] = [
     { key: 'producer', label: 'Producer' },
@@ -400,15 +425,224 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     if (close) setAssigningTag(null);
   };
 
+  const userId = user?.id ?? '';
+
+  const fetchAccountProfile = async () => {
+    if (!userId) return;
+    const { data } = await supabase.from('user_profiles').select('username, user_id_public').eq('user_id', userId).maybeSingle();
+    setEditName(data?.username || '');
+    setEditUsername(data?.user_id_public || '');
+  };
+
+  const fetchCredits = async () => {
+    if (!userId) return;
+    const { data: creditRows, error: creditsErr } = await supabase.from('user_tag_credits').select('id, identity_id, preferred_alias_id').eq('user_id', userId);
+    if (creditsErr) {
+      setCreditsError(creditsErr.message || 'Could not load credits');
+      setCredits([]);
+      return;
+    }
+    const identityIds = (creditRows || []).map((r: { identity_id: string }) => r.identity_id);
+    if (identityIds.length === 0) {
+      setCreditsError(null);
+      setCredits([]);
+      return;
+    }
+    const { data: identities, error: identitiesErr } = await supabase.from('tag_identities').select('id, tag_type, canonical_name').in('id', identityIds);
+    if (identitiesErr) {
+      setCreditsError(identitiesErr.message || 'Could not load credit identities');
+      setCredits([]);
+      return;
+    }
+    const { data: aliasRows } = await supabase.from('tag_aliases').select('id, identity_id, alias').in('identity_id', identityIds).order('alias', { ascending: true });
+    const identityMap = new Map((identities || []).map((i: { id: string; tag_type: string; canonical_name: string }) => [i.id, i]));
+    const aliasMap = new Map<string, { id: string; alias: string }[]>();
+    (aliasRows || []).forEach((a: { identity_id: string; id: string; alias: string }) => {
+      const existing = aliasMap.get(a.identity_id) || [];
+      existing.push({ id: a.id, alias: a.alias });
+      aliasMap.set(a.identity_id, existing);
+    });
+    const merged: CreditRow[] = (creditRows || []).map((c: { id: string; identity_id: string; preferred_alias_id: string | null }) => {
+      const identity = identityMap.get(c.identity_id);
+      return {
+        id: c.id,
+        identity_id: c.identity_id,
+        preferred_alias_id: c.preferred_alias_id || null,
+        tag_type: identity?.tag_type || 'unknown',
+        canonical_name: identity?.canonical_name || 'Unknown',
+        aliases: aliasMap.get(c.identity_id) || [],
+      };
+    });
+    setCreditsError(null);
+    setCredits(merged);
+  };
+
+  const saveAccountProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileSaveError('');
+    setProfileSaving(true);
+    try {
+      const newName = editName.trim();
+      const newUsername = editUsername.trim();
+      if (!newName || newName.length < 1) {
+        setProfileSaveError('Your name is required.');
+        setProfileSaving(false);
+        return;
+      }
+      if (!newUsername || newUsername.length < 4) {
+        setProfileSaveError('Username must be at least 4 characters.');
+        setProfileSaving(false);
+        return;
+      }
+      if (!/^[a-zA-Z0-9_-]+$/.test(newUsername)) {
+        setProfileSaveError('Username may only contain letters, numbers, underscores, and hyphens.');
+        setProfileSaving(false);
+        return;
+      }
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ username: newName, user_id_public: newUsername, updated_at: new Date().toISOString() })
+        .eq('user_id', userId);
+      if (error) {
+        setProfileSaveError(error.message || 'Could not save profile.');
+        setProfileSaving(false);
+        return;
+      }
+      setSuccess('Profile saved');
+      onSettingsUpdated();
+      onAccountUpdated?.();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch {
+      setProfileSaveError('Could not save profile.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const connectCreditByIdentity = async (identity: { id: string; tag_type: string; canonical_name: string }) => {
+    const { data: existing } = await supabase.from('user_tag_credits').select('id').eq('user_id', userId).eq('identity_id', identity.id).maybeSingle();
+    if (!existing) {
+      const { error } = await supabase.from('user_tag_credits').insert({ user_id: userId, identity_id: identity.id });
+      if (error) {
+        setCreditsError(error.message || 'Could not connect credit');
+        return;
+      }
+    }
+    setConnectName('');
+    setCreditSearchResults([]);
+    setCreditsError(null);
+    fetchCredits();
+  };
+
+  const selectCreditSearchResult = async (item: { id: string; tag_type: string; canonical_name: string; fromEvent?: boolean }) => {
+    let identity: { id: string; tag_type: string; canonical_name: string };
+    if (item.fromEvent) {
+      const resolved = await ensureIdentity(item.tag_type as TagType, item.canonical_name, userId);
+      if (!resolved) {
+        setCreditsError('Could not add tag');
+        return;
+      }
+      identity = resolved;
+    } else {
+      identity = item;
+    }
+    await connectCreditByIdentity(identity);
+  };
+
+  const connectOrCreateCredit = async (createIfMissing: boolean) => {
+    const name = connectName.trim();
+    if (!name) return;
+    let identity = await findIdentityByName(connectType, name);
+    if (!identity && createIfMissing) identity = await ensureIdentity(connectType, name, userId);
+    if (!identity) {
+      setCreditsError('No matching tag found. Use "Create + connect" to add a new one.');
+      return;
+    }
+    await connectCreditByIdentity(identity);
+  };
+
+  const addAliasForCredit = async (credit: CreditRow) => {
+    const alias = (newAliasByIdentity[credit.identity_id] || '').trim();
+    if (!alias) return;
+    const normalized = alias.toLowerCase().replace(/\s+/g, ' ');
+    const { data: existing } = await supabase.from('tag_aliases').select('id').eq('identity_id', credit.identity_id).eq('normalized_alias', normalized).maybeSingle();
+    if (!existing) {
+      const { error } = await supabase.from('tag_aliases').insert({ identity_id: credit.identity_id, alias, normalized_alias: normalized, created_by: userId });
+      if (error) {
+        setCreditsError(error.message || 'Could not add alias');
+        return;
+      }
+    }
+    setNewAliasByIdentity((prev) => ({ ...prev, [credit.identity_id]: '' }));
+    fetchCredits();
+  };
+
+  const setPreferredAlias = async (creditId: string, aliasId: string | null) => {
+    const { error } = await supabase.from('user_tag_credits').update({ preferred_alias_id: aliasId }).eq('id', creditId);
+    if (error) {
+      setCreditsError(error.message || 'Could not set preferred display name');
+      return;
+    }
+    fetchCredits();
+  };
+
+  const removeCredit = async (creditId: string) => {
+    const { error } = await supabase.from('user_tag_credits').delete().eq('id', creditId);
+    if (error) {
+      setCreditsError(error.message || 'Could not remove credit');
+      return;
+    }
+    fetchCredits();
+  };
+
+  useEffect(() => {
+    const q = connectName.trim();
+    if (q.length < 2 || !userId) {
+      setCreditSearchResults([]);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      setCreditSearching(true);
+      Promise.all([searchTagIdentities(q), searchEventTags(q)])
+        .then(([identities, eventTags]) => {
+          const seen = new Set<string>();
+          const combined: { id: string; tag_type: string; canonical_name: string; fromEvent?: boolean }[] = [];
+          for (const r of identities) {
+            const key = `${r.tag_type}:${normalizeTagName(r.canonical_name)}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              combined.push({ ...r, fromEvent: false });
+            }
+          }
+          for (const r of eventTags) {
+            const key = `${r.tag_type}:${normalizeTagName(r.canonical_name)}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              combined.push({ id: `event:${r.tag_type}:${encodeURIComponent(r.canonical_name)}`, tag_type: r.tag_type, canonical_name: r.canonical_name, fromEvent: true });
+            }
+          }
+          setCreditSearchResults(combined.slice(0, 20));
+          setCreditSearching(false);
+        })
+        .catch(() => setCreditSearching(false));
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [connectName, userId]);
+
   useEffect(() => {
     if (isOpen) {
       setSettingsLoaded(false);
       fetchSettings();
       fetchAdminUsers();
+      if (user) {
+        fetchAccountProfile();
+        fetchCredits();
+      }
+      if (!isAdmin) setActiveTab('account');
     } else {
       setSettingsLoaded(false);
     }
-  }, [isOpen]);
+  }, [isOpen, user?.id]);
 
   useEffect(() => {
     if (!isOpen || !settingsLoaded || !onSettingsPreview) return;
@@ -433,9 +667,10 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       const color_scheme = ['faded', 'bright', 'custom'].includes(rawScheme) ? rawScheme : 'custom';
 
       setSettings({
-        app_name: settingsObj.app_name || 'Runway Rate',
+        app_name: settingsObj.app_name || 'Secret Blogger',
         app_icon_url: settingsObj.app_icon_url || '',
         app_logo_url: settingsObj.app_logo_url || '',
+        app_favicon_url: settingsObj.app_favicon_url || '',
         tagline: settingsObj.tagline || 'Fashion Show Reviews',
         color_scheme,
         collapsible_cards_enabled: settingsObj.collapsible_cards_enabled || 'true',
@@ -583,6 +818,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
         { key: 'app_name', value: settings.app_name },
         { key: 'app_icon_url', value: settings.app_icon_url },
         { key: 'app_logo_url', value: settings.app_logo_url },
+        { key: 'app_favicon_url', value: settings.app_favicon_url },
         { key: 'tagline', value: settings.tagline },
         { key: 'color_scheme', value: settings.color_scheme },
         { key: 'collapsible_cards_enabled', value: settings.collapsible_cards_enabled },
@@ -635,9 +871,12 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   if (!isOpen) return null;
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: 'branding', label: 'Branding', icon: <Image size={18} /> },
-    { id: 'admins', label: 'Admins', icon: <Users size={18} /> },
-    { id: 'tags', label: 'Tags', icon: <Tags size={18} /> },
+    ...(isAdmin ? [
+      { id: 'branding' as const, label: 'Branding', icon: <Image size={18} /> },
+      { id: 'admins' as const, label: 'Admins', icon: <Users size={18} /> },
+      { id: 'tags' as const, label: 'Tags', icon: <Tags size={18} /> },
+    ] : []),
+    { id: 'account', label: 'Account', icon: <User size={18} /> },
   ];
   return (
     <div
@@ -714,6 +953,17 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                     placeholder="https://..."
                   />
                   {settings.app_logo_url && <img src={settings.app_logo_url} alt="" className="mt-2 h-10 object-contain" />}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">App Favicon URL</label>
+                  <input
+                    type="url"
+                    value={settings.app_favicon_url}
+                    onChange={(e) => setSettings((s) => ({ ...s, app_favicon_url: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="https://..."
+                  />
+                  {settings.app_favicon_url && <img src={settings.app_favicon_url} alt="" className="mt-2 w-8 h-8 rounded-lg border object-cover" />}
                 </div>
               </>
             )}
@@ -1074,6 +1324,171 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                   </section>
                 </div>
               </>
+            )}
+
+            {activeTab === 'account' && user && (
+              <div className="space-y-6">
+                <section>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Profile</h3>
+                  <p className="text-xs text-gray-500 mb-3">Edit your display name and sign-in username.</p>
+                  <form onSubmit={saveAccountProfile} className="space-y-4">
+                    <div>
+                      <label htmlFor="editName" className="block text-xs font-medium text-stone-600 mb-1">Your Name</label>
+                      <input
+                        id="editName"
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        maxLength={80}
+                        className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
+                        placeholder="e.g., Jane Doe"
+                      />
+                      <p className="text-xs text-stone-400 mt-0.5">Display name; can act as a credit when connected</p>
+                    </div>
+                    <div>
+                      <label htmlFor="editUsername" className="block text-xs font-medium text-stone-600 mb-1">Username</label>
+                      <input
+                        id="editUsername"
+                        type="text"
+                        value={editUsername}
+                        onChange={(e) => setEditUsername(e.target.value)}
+                        minLength={4}
+                        maxLength={30}
+                        pattern="[a-zA-Z0-9_-]+"
+                        className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
+                        placeholder="e.g., janedoe2024"
+                      />
+                      <p className="text-xs text-stone-400 mt-0.5">Your public profile ID (letters, numbers, _, -)</p>
+                    </div>
+                    {profileSaveError && <p className="text-sm text-red-600">{profileSaveError}</p>}
+                    <button
+                      type="submit"
+                      disabled={profileSaving}
+                      className="px-4 py-2 text-sm font-medium rounded-lg bg-stone-800 text-white hover:bg-stone-700 disabled:bg-stone-300 disabled:cursor-not-allowed"
+                    >
+                      {profileSaving ? 'Saving…' : 'Save Profile'}
+                    </button>
+                  </form>
+                </section>
+
+                <section>
+                  <h3 className="text-sm font-semibold text-stone-800 mb-2">Connect to existing tags</h3>
+                  <p className="text-xs text-stone-500 mb-3">Search for yourself or a tag, add aliases, and choose display name.</p>
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <input
+                        value={connectName}
+                        onChange={(e) => setConnectName(e.target.value)}
+                        placeholder="Search for yourself or a tag (e.g. name, producer, designer…)"
+                        className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
+                      />
+                      {creditSearching && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">Searching…</span>
+                      )}
+                    </div>
+                    {creditSearchResults.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {creditSearchResults.map((identity) => (
+                          <button
+                            key={identity.id}
+                            type="button"
+                            onClick={() => selectCreditSearchResult(identity)}
+                            className="text-xs px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:border-stone-300"
+                          >
+                            <span className="font-medium">{identity.canonical_name}</span>
+                            <span className="ml-1.5 text-stone-400">{identity.tag_type.replace('custom:', '')}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-stone-100">
+                      <span className="text-xs text-stone-500">Not in the list?</span>
+                      <select
+                        value={connectType}
+                        onChange={(e) => setConnectType(e.target.value as TagType)}
+                        className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white"
+                      >
+                        <option value="producer">Producer</option>
+                        <option value="designer">Designer</option>
+                        <option value="model">Model</option>
+                        <option value="hair_makeup">Hair & Makeup</option>
+                        <option value="header_tags">Header Tag</option>
+                        <option value="footer_tags">Footer Tag</option>
+                      </select>
+                      <input
+                        value={connectName}
+                        onChange={(e) => setConnectName(e.target.value)}
+                        placeholder="Name"
+                        className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white min-w-[140px]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => connectOrCreateCredit(true)}
+                        className="text-xs px-2.5 py-1.5 rounded-md bg-stone-900 text-white hover:bg-stone-800"
+                      >
+                        Create + connect
+                      </button>
+                    </div>
+                  </div>
+                  {creditsError && <p className="text-xs text-amber-700 mt-2">{creditsError}</p>}
+                  {credits.length > 0 && (
+                    <div className="space-y-2 mt-4">
+                      {credits.map((credit) => {
+                        const currentAlias = credit.aliases.find((a) => a.id === credit.preferred_alias_id)?.alias || credit.canonical_name;
+                        const knownAs = credit.aliases.filter((a) => a.alias !== currentAlias);
+                        return (
+                          <div key={credit.id} className="rounded-xl border border-stone-100 p-3 bg-stone-50/70">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs px-2 py-1 rounded-md bg-white border border-stone-200 text-stone-700">
+                                {credit.tag_type.replace('custom:', 'custom: ')}
+                              </span>
+                              <span className="text-sm font-medium text-stone-900">{currentAlias}</span>
+                              <button
+                                type="button"
+                                onClick={() => { if (window.confirm('Remove this credit?')) removeCredit(credit.id); }}
+                                className="ml-auto text-[11px] text-stone-400 hover:text-red-600"
+                                title="Remove credit"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <select
+                                value={credit.preferred_alias_id || ''}
+                                onChange={(e) => setPreferredAlias(credit.id, e.target.value || null)}
+                                className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white"
+                              >
+                                <option value="">Canonical</option>
+                                {credit.aliases.map((a) => (
+                                  <option key={a.id} value={a.id}>{a.alias}</option>
+                                ))}
+                              </select>
+                              <input
+                                value={newAliasByIdentity[credit.identity_id] || ''}
+                                onChange={(e) => setNewAliasByIdentity((prev) => ({ ...prev, [credit.identity_id]: e.target.value }))}
+                                placeholder="Add alias"
+                                className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white min-w-[160px]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => addAliasForCredit(credit)}
+                                className="text-xs px-2.5 py-1.5 rounded-md border border-stone-200 text-stone-600 hover:bg-stone-50"
+                              >
+                                Add alias
+                              </button>
+                            </div>
+                            {knownAs.length > 0 && (
+                              <p className="mt-2 text-[11px] text-stone-500">
+                                Previously known as: {knownAs.map((a) => a.alias).join(', ')}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+              </div>
             )}
           </div>
 

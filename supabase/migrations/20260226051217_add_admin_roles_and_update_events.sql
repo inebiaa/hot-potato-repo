@@ -162,7 +162,7 @@ CREATE POLICY "Only admins can insert app text"
 
 -- Insert default app text values
 INSERT INTO app_text (key, value, description) VALUES
-  ('header_title', 'Runway Rate', 'Main header title'),
+  ('header_title', 'Secret Blogger', 'Main header title'),
   ('header_subtitle', 'Fashion Show Reviews', 'Header subtitle/tagline'),
   ('add_show_button', 'Add Show', 'Button text for adding new show'),
   ('sign_in_button', 'Sign In', 'Sign in button text'),

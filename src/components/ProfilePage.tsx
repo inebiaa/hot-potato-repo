@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, X, ChevronRight, Copy, RefreshCw, Star, Rows3, LayoutGrid, Settings } from 'lucide-react';
+import { Plus, Trash2, X, ChevronRight, Rows3, LayoutGrid, Copy, RefreshCw, Star } from 'lucide-react';
 import { supabase, UserList, UserListEvent, Rating, Event } from '../lib/supabase';
 import EventCard from './EventCard';
 import { useAuth } from '../contexts/AuthContext';
 import { USER_LISTS_SETUP_SQL, getSupabaseSqlEditorUrl } from '../lib/userListsSetupSql';
-import { ensureIdentity, findIdentityByName, normalizeTagName, searchTagIdentities, searchEventTags, type TagType } from '../lib/tagIdentity';
 
 interface ProfilePageProps {
   userId: string;
@@ -33,6 +32,9 @@ interface ProfilePageProps {
     optional_tags_text_color?: string;
   };
   customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
+  refreshTrigger?: number;
+  /** Optional cached events from App - avoids re-fetching when navigating */
+  cachedEvents?: Event[];
 }
 
 interface ReviewRow {
@@ -48,24 +50,11 @@ interface ListWithCount extends UserList {
   event_count: number;
 }
 
-interface CreditRow {
-  id: string;
-  identity_id: string;
-  preferred_alias_id: string | null;
-  tag_type: string;
-  canonical_name: string;
-  aliases: { id: string; alias: string }[];
-}
-
-export default function ProfilePage({ userId, pathname, onClose, onTagClick, onOpenEvent, tagColors, customPerformerTags = [] }: ProfilePageProps) {
+export default function ProfilePage({ userId, pathname, onClose, onTagClick, onOpenEvent, tagColors, customPerformerTags = [], refreshTrigger = 0, cachedEvents }: ProfilePageProps) {
   const { user: currentUser } = useAuth();
   const isOwnProfile = !!currentUser && currentUser.id === userId;
   const [username, setUsername] = useState<string>('');
   const [userIdPublic, setUserIdPublic] = useState<string>('');
-  const [editName, setEditName] = useState('');
-  const [editUsername, setEditUsername] = useState('');
-  const [profileSaveError, setProfileSaveError] = useState('');
-  const [profileSaving, setProfileSaving] = useState(false);
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [lists, setLists] = useState<ListWithCount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,13 +70,6 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [addEventSearch, setAddEventSearch] = useState('');
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const [credits, setCredits] = useState<CreditRow[]>([]);
-  const [creditsError, setCreditsError] = useState<string | null>(null);
-  const [connectName, setConnectName] = useState('');
-  const [connectType, setConnectType] = useState<TagType>('producer');
-  const [creditSearchResults, setCreditSearchResults] = useState<{ id: string; tag_type: string; canonical_name: string; fromEvent?: boolean }[]>([]);
-  const [creditSearching, setCreditSearching] = useState(false);
-  const [newAliasByIdentity, setNewAliasByIdentity] = useState<Record<string, string>>({});
   const [reviewsLayout, setReviewsLayout] = useState<'list' | 'cards'>(() => {
     try {
       const saved = window.localStorage.getItem('profile_reviews_layout');
@@ -96,8 +78,6 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
       return 'cards';
     }
   });
-  const [profileSettingsExpanded, setProfileSettingsExpanded] = useState(false);
-
   useEffect(() => {
     try {
       window.localStorage.setItem('profile_reviews_layout', reviewsLayout);
@@ -109,45 +89,53 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('username, user_id_public')
-        .eq('user_id', userId)
-        .maybeSingle();
+      // Run profile, ratings, and lists in parallel
+      const [profileRes, ratingsRes, listsRes] = await Promise.all([
+        supabase.from('user_profiles').select('username, user_id_public').eq('user_id', userId).maybeSingle(),
+        supabase.from('ratings').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+        supabase.from('user_lists').select('*').eq('user_id', userId).order('sort_order').order('created_at', { ascending: false })
+      ]);
+
+      const profile = profileRes.data;
+      const ratingsData = ratingsRes.data || [];
+      const listsData = listsRes.data || [];
+
       setUsername(profile?.username || 'My profile');
       setUserIdPublic(profile?.user_id_public || '');
-      setEditName(profile?.username || '');
-      setEditUsername(profile?.user_id_public || '');
 
-      const { data: ratingsData } = await supabase
-        .from('ratings')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-      const eventIds = [...new Set((ratingsData || []).map((r) => r.event_id))];
-      const { data: eventsData } = await supabase.from('events').select('*').in('id', eventIds);
-      const eventsMap = new Map((eventsData || []).map((e) => [e.id, e]));
-      let ratingStatsMap = new Map<string, { averageRating: number; ratingCount: number }>();
-      if (eventIds.length > 0) {
-        const { data: allRatingsForEvents } = await supabase
-          .from('ratings')
-          .select('event_id, rating')
-          .in('event_id', eventIds);
-        const statsAccumulator = new Map<string, { sum: number; count: number }>();
-        (allRatingsForEvents || []).forEach((r) => {
-          const existing = statsAccumulator.get(r.event_id) || { sum: 0, count: 0 };
-          existing.sum += Number(r.rating) || 0;
-          existing.count += 1;
-          statsAccumulator.set(r.event_id, existing);
-        });
-        ratingStatsMap = new Map(
-          Array.from(statsAccumulator.entries()).map(([eventId, s]) => [
-            eventId,
-            { averageRating: s.count ? s.sum / s.count : 0, ratingCount: s.count }
-          ])
-        );
-      }
-      const reviewsUnsorted = (ratingsData || []).map((r) => {
+      const eventIds = [...new Set(ratingsData.map((r) => r.event_id))];
+
+      // Use cached events when available to avoid re-fetch
+      const cacheMap = cachedEvents?.length ? new Map(cachedEvents.map((e) => [e.id, e])) : null;
+      const useCache = cacheMap && eventIds.length > 0 && eventIds.every((id) => cacheMap.has(id));
+
+      // Run events fetch (or use cache), allRatingsForEvents, and list counts in parallel
+      const [eventsRes, allRatingsRes, listCountsRes] = await Promise.all([
+        useCache ? Promise.resolve({ data: eventIds.map((id) => cacheMap!.get(id)!).filter(Boolean) }) : (eventIds.length > 0 ? supabase.from('events').select('*').in('id', eventIds) : Promise.resolve({ data: [] })),
+        eventIds.length > 0 ? supabase.from('ratings').select('event_id, rating').in('event_id', eventIds) : Promise.resolve({ data: [] }),
+        listsData.length > 0
+          ? supabase.from('user_list_events').select('list_id').in('list_id', listsData.map((l) => l.id))
+          : Promise.resolve({ data: [] })
+      ]);
+
+      const eventsData = eventsRes.data || [];
+      const eventsMap = new Map(eventsData.map((e) => [e.id, e]));
+
+      const statsAccumulator = new Map<string, { sum: number; count: number }>();
+      (allRatingsRes.data || []).forEach((r) => {
+        const existing = statsAccumulator.get(r.event_id) || { sum: 0, count: 0 };
+        existing.sum += Number(r.rating) || 0;
+        existing.count += 1;
+        statsAccumulator.set(r.event_id, existing);
+      });
+      const ratingStatsMap = new Map(
+        Array.from(statsAccumulator.entries()).map(([eventId, s]) => [
+          eventId,
+          { averageRating: s.count ? s.sum / s.count : 0, ratingCount: s.count }
+        ])
+      );
+
+      const reviewsUnsorted = ratingsData.map((r) => {
         const event = eventsMap.get(r.event_id);
         const stats = ratingStatsMap.get(r.event_id);
         return {
@@ -162,33 +150,17 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
       reviewsUnsorted.sort((a, b) => (b.eventDate || '').localeCompare(a.eventDate || ''));
       setReviews(reviewsUnsorted);
 
-      const { data: listsData, error: listsErr } = await supabase
-        .from('user_lists')
-        .select('*')
-        .eq('user_id', userId)
-        .order('sort_order')
-        .order('created_at', { ascending: false });
-      if (listsErr) {
-        setListsError(listsErr.message || 'Could not load lists');
+      if (listsRes.error) {
+        setListsError(listsRes.error.message || 'Could not load lists');
         setLists([]);
       } else {
         setListsError(null);
-        const listIds = (listsData || []).map((l) => l.id);
-        let countByList: Record<string, number> = {};
-        if (listIds.length > 0) {
-          const { data: countsData, error: countsErr } = await supabase
-            .from('user_list_events')
-            .select('list_id')
-            .in('list_id', listIds);
-          if (!countsErr && countsData) {
-            countByList = countsData.reduce<Record<string, number>>((acc, row) => {
-              acc[row.list_id] = (acc[row.list_id] || 0) + 1;
-              return acc;
-            }, {});
-          }
-        }
+        const countByList: Record<string, number> = {};
+        (listCountsRes.data || []).forEach((row) => {
+          countByList[row.list_id] = (countByList[row.list_id] || 0) + 1;
+        });
         setLists(
-          (listsData || []).map((l) => ({
+          listsData.map((l) => ({
             ...l,
             event_count: countByList[l.id] || 0
           }))
@@ -201,249 +173,9 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
     }
   };
 
-  const saveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setProfileSaveError('');
-    setProfileSaving(true);
-    try {
-      const newName = editName.trim();
-      const newUsername = editUsername.trim();
-      if (!newName || newName.length < 1) {
-        setProfileSaveError('Your name is required.');
-        setProfileSaving(false);
-        return;
-      }
-      if (!newUsername || newUsername.length < 4) {
-        setProfileSaveError('Username must be at least 4 characters.');
-        setProfileSaving(false);
-        return;
-      }
-      if (!/^[a-zA-Z0-9_-]+$/.test(newUsername)) {
-        setProfileSaveError('Username may only contain letters, numbers, underscores, and hyphens.');
-        setProfileSaving(false);
-        return;
-      }
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ username: newName, user_id_public: newUsername, updated_at: new Date().toISOString() })
-        .eq('user_id', userId);
-      if (error) {
-        setProfileSaveError(error.message || 'Could not save profile.');
-        setProfileSaving(false);
-        return;
-      }
-      setUsername(newName);
-      setUserIdPublic(newUsername);
-    } catch (e) {
-      setProfileSaveError('Could not save profile.');
-    } finally {
-      setProfileSaving(false);
-    }
-  };
-
-  const fetchCredits = async () => {
-    const { data: creditRows, error: creditsErr } = await supabase
-      .from('user_tag_credits')
-      .select('id, identity_id, preferred_alias_id')
-      .eq('user_id', userId);
-    if (creditsErr) {
-      setCreditsError(creditsErr.message || 'Could not load credits');
-      setCredits([]);
-      return;
-    }
-
-    const identityIds = (creditRows || []).map((r: { identity_id: string }) => r.identity_id);
-    if (identityIds.length === 0) {
-      setCreditsError(null);
-      setCredits([]);
-      return;
-    }
-
-    const { data: identities, error: identitiesErr } = await supabase
-      .from('tag_identities')
-      .select('id, tag_type, canonical_name')
-      .in('id', identityIds);
-    if (identitiesErr) {
-      setCreditsError(identitiesErr.message || 'Could not load credit identities');
-      setCredits([]);
-      return;
-    }
-
-    const { data: aliasRows } = await supabase
-      .from('tag_aliases')
-      .select('id, identity_id, alias')
-      .in('identity_id', identityIds)
-      .order('alias', { ascending: true });
-
-    const identityMap = new Map((identities || []).map((i: any) => [i.id, i]));
-    const aliasMap = new Map<string, { id: string; alias: string }[]>();
-    (aliasRows || []).forEach((a: any) => {
-      const existing = aliasMap.get(a.identity_id) || [];
-      existing.push({ id: a.id, alias: a.alias });
-      aliasMap.set(a.identity_id, existing);
-    });
-
-    const merged: CreditRow[] = (creditRows || []).map((c: any) => {
-      const identity = identityMap.get(c.identity_id);
-      return {
-        id: c.id,
-        identity_id: c.identity_id,
-        preferred_alias_id: c.preferred_alias_id || null,
-        tag_type: identity?.tag_type || 'unknown',
-        canonical_name: identity?.canonical_name || 'Unknown',
-        aliases: aliasMap.get(c.identity_id) || [],
-      };
-    });
-    setCreditsError(null);
-    setCredits(merged);
-  };
-
-  useEffect(() => {
-    const q = connectName.trim();
-    if (q.length < 2) {
-      setCreditSearchResults([]);
-      return;
-    }
-    const t = window.setTimeout(() => {
-      setCreditSearching(true);
-      Promise.all([searchTagIdentities(q), searchEventTags(q)]).then(([identities, eventTags]) => {
-        const seen = new Set<string>();
-        const combined: { id: string; tag_type: string; canonical_name: string; fromEvent: boolean }[] = [];
-        for (const r of identities) {
-          const key = `${r.tag_type}:${normalizeTagName(r.canonical_name)}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            combined.push({ ...r, fromEvent: false });
-          }
-        }
-        for (const r of eventTags) {
-          const key = `${r.tag_type}:${normalizeTagName(r.canonical_name)}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            combined.push({
-              id: `event:${r.tag_type}:${encodeURIComponent(r.canonical_name)}`,
-              tag_type: r.tag_type,
-              canonical_name: r.canonical_name,
-              fromEvent: true,
-            });
-          }
-        }
-        setCreditSearchResults(combined.slice(0, 20));
-        setCreditSearching(false);
-      }).catch(() => setCreditSearching(false));
-    }, 200);
-    return () => window.clearTimeout(t);
-  }, [connectName]);
-
-  const selectCreditSearchResult = async (item: { id: string; tag_type: string; canonical_name: string; fromEvent?: boolean }) => {
-    let identity: { id: string; tag_type: string; canonical_name: string };
-    if (item.fromEvent) {
-      const resolved = await ensureIdentity(item.tag_type as TagType, item.canonical_name, userId);
-      if (!resolved) {
-        setCreditsError('Could not add tag');
-        return;
-      }
-      identity = resolved;
-    } else {
-      identity = item;
-    }
-    await connectCreditByIdentity(identity);
-  };
-
-  const connectCreditByIdentity = async (identity: { id: string; tag_type: string; canonical_name: string }) => {
-    const { data: existing } = await supabase
-      .from('user_tag_credits')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('identity_id', identity.id)
-      .maybeSingle();
-    if (!existing) {
-      const { error } = await supabase.from('user_tag_credits').insert({
-        user_id: userId,
-        identity_id: identity.id,
-      });
-      if (error) {
-        setCreditsError(error.message || 'Could not connect credit');
-        return;
-      }
-    }
-    setConnectName('');
-    setCreditSearchResults([]);
-    setCreditsError(null);
-    fetchCredits();
-  };
-
-  const connectOrCreateCredit = async (createIfMissing: boolean) => {
-    const name = connectName.trim();
-    if (!name) return;
-    let identity = await findIdentityByName(connectType, name);
-    if (!identity && createIfMissing) identity = await ensureIdentity(connectType, name, userId);
-    if (!identity) {
-      setCreditsError('No matching tag found. Use "Create + connect" to add a new one.');
-      return;
-    }
-    await connectCreditByIdentity(identity);
-  };
-
-  const addAliasForCredit = async (credit: CreditRow) => {
-    const alias = (newAliasByIdentity[credit.identity_id] || '').trim();
-    if (!alias) return;
-    const normalized = alias.toLowerCase().replace(/\s+/g, ' ');
-    const { data: existing } = await supabase
-      .from('tag_aliases')
-      .select('id')
-      .eq('identity_id', credit.identity_id)
-      .eq('normalized_alias', normalized)
-      .maybeSingle();
-    if (!existing) {
-      const { error } = await supabase.from('tag_aliases').insert({
-        identity_id: credit.identity_id,
-        alias,
-        normalized_alias: normalized,
-        created_by: userId,
-      });
-      if (error) {
-        setCreditsError(error.message || 'Could not add alias');
-        return;
-      }
-    }
-    setNewAliasByIdentity((prev) => ({ ...prev, [credit.identity_id]: '' }));
-    fetchCredits();
-  };
-
-  const setPreferredAlias = async (creditId: string, aliasId: string | null) => {
-    const { error } = await supabase
-      .from('user_tag_credits')
-      .update({ preferred_alias_id: aliasId })
-      .eq('id', creditId);
-    if (error) {
-      setCreditsError(error.message || 'Could not set preferred display name');
-      return;
-    }
-    fetchCredits();
-  };
-
-  const removeCredit = async (creditId: string) => {
-    const { error } = await supabase
-      .from('user_tag_credits')
-      .delete()
-      .eq('id', creditId);
-    if (error) {
-      setCreditsError(error.message || 'Could not remove credit');
-      return;
-    }
-    fetchCredits();
-  };
-
   useEffect(() => {
     fetchProfile();
-    if (isOwnProfile) {
-      fetchCredits();
-    } else {
-      setCredits([]);
-      setCreditsError(null);
-    }
-  }, [userId, isOwnProfile]);
+  }, [userId, refreshTrigger]);
 
   const openManageList = async (listId: string) => {
     setManageListId(listId);
@@ -453,8 +185,10 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
       .eq('list_id', listId)
       .order('position');
     const ids = (listEventsData || []).map((e) => e.event_id);
-    const { data: eventsData } = await supabase.from('events').select('*').in('id', ids);
-    const eventsMap = new Map((eventsData || []).map((e) => [e.id, e]));
+    const cacheMap = cachedEvents?.length ? new Map(cachedEvents.map((e) => [e.id, e])) : null;
+    const useCache = cacheMap && ids.length > 0 && ids.every((id) => cacheMap.has(id));
+    const eventsData = useCache ? ids.map((id) => cacheMap!.get(id)!).filter(Boolean) : (await supabase.from('events').select('*').in('id', ids)).data || [];
+    const eventsMap = new Map(eventsData.map((e) => [e.id, e]));
     const eventsList = (listEventsData || [])
       .map((le) => ({
         listEvent: le,
@@ -671,9 +405,6 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
   return (
     <div className="min-h-screen bg-stone-50/80">
       <div className="max-w-[2400px] mx-auto px-4 pb-16 pt-6">
-        <button onClick={onClose} className="text-sm text-stone-500 hover:text-stone-900 mb-8 transition-colors">
-          ← Back to shows
-        </button>
 
         <header className="mb-10">
           <div className="flex items-start justify-between gap-3">
@@ -701,20 +432,6 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
               </div>
             </div>
             <div className="flex items-center gap-1">
-              {isOwnProfile && (
-                <button
-                  type="button"
-                  onClick={() => setProfileSettingsExpanded((v) => !v)}
-                  className={`p-2 rounded-lg transition-colors ${
-                    profileSettingsExpanded ? 'bg-stone-200 text-stone-800' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-700'
-                  }`}
-                  title="Profile settings"
-                  aria-label="Profile settings"
-                  aria-expanded={profileSettingsExpanded}
-                >
-                  <Settings size={18} />
-                </button>
-              )}
               <div className="inline-flex rounded-lg border border-stone-200 bg-white/80 p-1">
                 <button
                   type="button"
@@ -742,176 +459,6 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
             </div>
           </div>
         </header>
-
-        {isOwnProfile && profileSettingsExpanded && (
-        <section className="mb-10 rounded-2xl bg-white/90 border border-stone-100 overflow-hidden">
-          <div className="px-4 pb-4 pt-4 space-y-4">
-            <p className="text-xs text-stone-500">Edit your display name and sign-in username.</p>
-          <form onSubmit={saveProfile} className="space-y-4">
-            <div>
-              <label htmlFor="editName" className="block text-xs font-medium text-stone-600 mb-1">Your Name</label>
-              <input
-                id="editName"
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                maxLength={80}
-                className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
-                placeholder="e.g., Jane Doe"
-              />
-              <p className="text-xs text-stone-400 mt-0.5">Display name; can act as a credit when connected</p>
-            </div>
-            <div>
-              <label htmlFor="editUsername" className="block text-xs font-medium text-stone-600 mb-1">Username</label>
-              <input
-                id="editUsername"
-                type="text"
-                value={editUsername}
-                onChange={(e) => setEditUsername(e.target.value)}
-                minLength={4}
-                maxLength={30}
-                pattern="[a-zA-Z0-9_-]+"
-                className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
-                placeholder="e.g., janedoe2024"
-              />
-              <p className="text-xs text-stone-400 mt-0.5">Your public profile ID (letters, numbers, _, -)</p>
-            </div>
-            {profileSaveError && (
-              <p className="text-sm text-red-600">{profileSaveError}</p>
-            )}
-            <button
-              type="submit"
-              disabled={profileSaving || (editName.trim() === username && editUsername.trim() === userIdPublic)}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-stone-800 text-white hover:bg-stone-700 disabled:bg-stone-300 disabled:cursor-not-allowed"
-            >
-              {profileSaving ? 'Saving…' : 'Save'}
-            </button>
-          </form>
-          </div>
-        </section>
-        )}
-
-        {isOwnProfile && (
-        <section className="mb-10 rounded-2xl bg-white/90 border border-stone-100 p-4 space-y-3">
-          <div>
-            <h2 className="text-sm font-semibold text-stone-800">My credits</h2>
-            <p className="text-xs text-stone-500">Connect to existing tags, add aliases, and choose display name.</p>
-          </div>
-          <div className="space-y-3">
-            <div className="relative">
-              <input
-                value={connectName}
-                onChange={(e) => setConnectName(e.target.value)}
-                placeholder="Search for yourself or a tag (e.g. name, producer, designer…)"
-                className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
-              />
-              {creditSearching && (
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">Searching…</span>
-              )}
-            </div>
-            {creditSearchResults.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {creditSearchResults.map((identity) => (
-                  <button
-                    key={identity.id}
-                    type="button"
-                    onClick={() => selectCreditSearchResult(identity)}
-                    className="text-xs px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:border-stone-300"
-                  >
-                    <span className="font-medium">{identity.canonical_name}</span>
-                    <span className="ml-1.5 text-stone-400">{identity.tag_type.replace('custom:', '')}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-stone-100">
-              <span className="text-xs text-stone-500">Not in the list?</span>
-              <select
-                value={connectType}
-                onChange={(e) => setConnectType(e.target.value as TagType)}
-                className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white"
-              >
-                <option value="producer">Producer</option>
-                <option value="designer">Designer</option>
-                <option value="model">Model</option>
-                <option value="hair_makeup">Hair & Makeup</option>
-                <option value="header_tags">Header Tag</option>
-                <option value="footer_tags">Footer Tag</option>
-              </select>
-              <input
-                value={connectName}
-                onChange={(e) => setConnectName(e.target.value)}
-                placeholder="Name"
-                className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white min-w-[140px]"
-              />
-              <button
-                type="button"
-                onClick={() => connectOrCreateCredit(true)}
-                className="text-xs px-2.5 py-1.5 rounded-md bg-stone-900 text-white hover:bg-stone-800"
-              >
-                Create + connect
-              </button>
-            </div>
-          </div>
-          {creditsError && <p className="text-xs text-amber-700">{creditsError}</p>}
-          {credits.length > 0 && (
-            <div className="space-y-2">
-              {credits.map((credit) => {
-                const currentAlias = credit.aliases.find((a) => a.id === credit.preferred_alias_id)?.alias || credit.canonical_name;
-                const knownAs = credit.aliases.filter((a) => a.alias !== currentAlias);
-                return (
-                  <div key={credit.id} className="rounded-xl border border-stone-100 p-3 bg-stone-50/70">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs px-2 py-1 rounded-md bg-white border border-stone-200 text-stone-700">
-                        {credit.tag_type.replace('custom:', 'custom: ')}
-                      </span>
-                      <span className="text-sm font-medium text-stone-900">{currentAlias}</span>
-                      <button
-                        type="button"
-                        onClick={() => { if (window.confirm('Remove this credit?')) removeCredit(credit.id); }}
-                        className="ml-auto text-[11px] text-stone-400 hover:text-red-600"
-                        title="Remove credit"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <select
-                        value={credit.preferred_alias_id || ''}
-                        onChange={(e) => setPreferredAlias(credit.id, e.target.value || null)}
-                        className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white"
-                      >
-                        <option value="">Canonical</option>
-                        {credit.aliases.map((a) => (
-                          <option key={a.id} value={a.id}>{a.alias}</option>
-                        ))}
-                      </select>
-                      <input
-                        value={newAliasByIdentity[credit.identity_id] || ''}
-                        onChange={(e) => setNewAliasByIdentity((prev) => ({ ...prev, [credit.identity_id]: e.target.value }))}
-                        placeholder="Add alias"
-                        className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white min-w-[160px]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => addAliasForCredit(credit)}
-                        className="text-xs px-2.5 py-1.5 rounded-md border border-stone-200 text-stone-600 hover:bg-stone-50"
-                      >
-                        Add alias
-                      </button>
-                    </div>
-                    {knownAs.length > 0 && (
-                      <p className="mt-2 text-[11px] text-stone-500">
-                        Previously known as: {knownAs.map((a) => a.alias).join(', ')}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-        )}
 
         <section className="space-y-4">
           <h2 className="text-lg font-semibold text-stone-900">My reviews</h2>

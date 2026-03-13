@@ -52,7 +52,7 @@ CREATE POLICY "Authenticated users can insert settings"
   WITH CHECK (true);
 
 INSERT INTO app_settings (key, value) VALUES
-  ('app_name', 'Runway Rate'),
+  ('app_name', 'Secret Blogger'),
   ('app_icon_url', ''),
   ('app_logo_url', ''),
   ('tagline', 'Fashion Show Reviews')

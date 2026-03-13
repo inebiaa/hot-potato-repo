@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, BarChart3, User } from 'lucide-react';
+import AppHeader from './components/AppHeader';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
 import { getSeasonFromDate } from './lib/season';
@@ -21,10 +22,11 @@ interface EventWithStats extends Event {
 
 interface AppSettings {
   [key: string]: string | undefined;
-  app_name: string;
-  app_icon_url: string;
-  app_logo_url: string;
-  tagline: string;
+  app_name?: string;
+  app_icon_url?: string;
+  app_logo_url?: string;
+  app_favicon_url?: string;
+  tagline?: string;
   color_scheme?: string;
   collapsible_cards_enabled?: string;
   producer_bg_color?: string;
@@ -70,7 +72,7 @@ function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isTagRatingsModalOpen, setIsTagRatingsModalOpen] = useState(false);
   const [tagRatingsData, setTagRatingsData] = useState<{ type: string; value: string } | null>(null);
-  const [isStatisticsPageOpen, setIsStatisticsPageOpen] = useState(false);
+  const [navKey, setNavKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedTags, setSelectedTags] = useState<{ type: string; value: string }[]>([]);
@@ -84,16 +86,11 @@ function App() {
   const [tagModalRefreshTrigger, setTagModalRefreshTrigger] = useState(0);
   const [upcomingExpanded, setUpcomingExpanded] = useState(false);
   const [footerTagExpanded, setFooterTagExpanded] = useState<Record<string, boolean>>({});
-  const [showProfileView, setShowProfileView] = useState(false);
   const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasClearedFiltersForSharedLink = useRef(false);
-  const [appSettings, setAppSettings] = useState<AppSettings>({
-    app_name: 'Runway Rate',
-    app_icon_url: '',
-    app_logo_url: '',
-    tagline: 'Fashion Show Reviews',
-    color_scheme: 'custom',
-  });
+  const overlayReorderEnteredAtRef = useRef<number>(0);
+  const overlayCardWrapperRef = useRef<HTMLDivElement | null>(null);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchDragOver, setSearchDragOver] = useState(false);
 
@@ -119,7 +116,7 @@ function App() {
 
       const settingsObj: any = {};
       data?.forEach((item) => {
-        settingsObj[item.key] = item.value || '';
+        settingsObj[item.key] = item.value;
       });
       const iconValue = (key: keyof AppSettings, fallback: string) =>
         Object.prototype.hasOwnProperty.call(settingsObj, key) ? settingsObj[key] : fallback;
@@ -141,10 +138,11 @@ function App() {
       const optionalBg = settingsObj.optional_tags_bg_color || '#e0e7ff';
 
       setAppSettings({
-        app_name: settingsObj.app_name || 'Runway Rate',
-        app_icon_url: settingsObj.app_icon_url || '',
-        app_logo_url: settingsObj.app_logo_url || '',
-        tagline: settingsObj.tagline || 'Fashion Show Reviews',
+        app_name: settingsObj.app_name ?? undefined,
+        app_icon_url: settingsObj.app_icon_url ?? undefined,
+        app_logo_url: settingsObj.app_logo_url ?? undefined,
+        app_favicon_url: settingsObj.app_favicon_url ?? undefined,
+        tagline: settingsObj.tagline ?? undefined,
         color_scheme: scheme,
         collapsible_cards_enabled: settingsObj.collapsible_cards_enabled || 'true',
         producer_bg_color: producerBg,
@@ -275,6 +273,15 @@ function App() {
     fetchEvents();
   }, [user]);
 
+  useEffect(() => {
+    if (appSettings?.app_favicon_url) {
+      const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+      if (link) {
+        link.href = appSettings.app_favicon_url;
+      }
+    }
+  }, [appSettings?.app_favicon_url]);
+
   const searchableTags = useMemo(() => {
     const seen = new Set<string>();
     const tags: { type: string; value: string; label: string }[] = [];
@@ -322,12 +329,13 @@ function App() {
 
   const handleTagClick = (type: string, value: string) => {
     if (overlayEventId) closeEventOverlay();
-    setShowProfileView(false);
     setIsTagRatingsModalOpen(false);
-    setIsStatisticsPageOpen(false);
     setIsSettingsModalOpen(false);
     setIsAddEventModalOpen(false);
-    if (typeof window !== 'undefined') window.history.replaceState(null, '', pathname);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', pathname);
+      setNavKey((k) => k + 1);
+    }
     setSelectedTags((prev) => {
       const key = `${type}:${value}`;
       const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
@@ -361,15 +369,14 @@ function App() {
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const embedMode = urlParams?.get('embed') === '1';
   const eventIdFromUrl = urlParams?.get('event') || null;
-  const showProfile = showProfileView || urlParams?.get('profile') === '1';
+  const showProfile = urlParams?.get('profile') === '1';
   const showStats = urlParams?.get('stats') === '1';
 
-  // Sync profile/stats view with URL (initial load + browser back/forward)
-  const [, setUrlSync] = useState(0);
+  // Sync URL with React: re-render when user navigates (pushState or popstate)
   useEffect(() => {
     const sync = () => {
-      setShowProfileView(new URLSearchParams(window.location.search).get('profile') === '1');
-      setUrlSync((n) => n + 1);
+      setNavKey((k) => k + 1);
+      if (typeof window !== 'undefined') window.scrollTo(0, 0);
     };
     sync();
     window.addEventListener('popstate', sync);
@@ -379,15 +386,17 @@ function App() {
   const openStats = () => {
     if (typeof window !== 'undefined') {
       window.history.pushState(null, '', `${pathname}?stats=1`);
+      window.scrollTo(0, 0);
+      setNavKey((k) => k + 1);
     }
-    setIsStatisticsPageOpen(true);
   };
 
   const goBackFromStats = () => {
     if (typeof window !== 'undefined') {
       window.history.replaceState(null, '', pathname);
+      window.scrollTo(0, 0);
+      setNavKey((k) => k + 1);
     }
-    setIsStatisticsPageOpen(false);
   };
 
   // When opening shared link (?event=xxx), clear filters once so the event is visible (don't clear again when user searches)
@@ -418,11 +427,51 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [overlayEventId]);
 
-  // Lock background scroll when any popup/overlay is open so only the popup scrolls
+  /* Focus overlay content when it opens so first tap isn't consumed by "activation" */
+  useEffect(() => {
+    if (overlayEventId && overlayCardWrapperRef.current) {
+      overlayCardWrapperRef.current.focus();
+    }
+  }, [overlayEventId]);
+
+  useEffect(() => {
+    if (overlayEventId && overlayCardWrapperRef.current) {
+      overlayCardWrapperRef.current.focus();
+    }
+  }, [overlayEventId]);
+
+  /* Focus overlay content so first tap works immediately (avoids browser "activation" delay) */
+  useEffect(() => {
+    if (overlayEventId && overlayCardWrapperRef.current) {
+      overlayCardWrapperRef.current.focus({ preventScroll: true });
+    }
+  }, [overlayEventId]);
+
+  /* Focus overlay content when it opens so first tap isn't consumed by "activation" */
+  useEffect(() => {
+    if (overlayEventId && overlayCardWrapperRef.current) {
+      overlayCardWrapperRef.current.focus({ preventScroll: true });
+    }
+  }, [overlayEventId]);
+
+  useEffect(() => {
+    if (overlayEventId && overlayCardWrapperRef.current) {
+      overlayCardWrapperRef.current.focus();
+    }
+  }, [overlayEventId]);
+
+  useEffect(() => {
+    if (overlayEventId && overlayCardWrapperRef.current) {
+      overlayCardWrapperRef.current.focus();
+    }
+  }, [overlayEventId]);
+
+  // Lock background scroll when any popup/overlay or full-page view (stats/profile) is open
   useEffect(() => {
     const anyPopupOpen = !!(
       overlayEventId ||
-      isStatisticsPageOpen ||
+      showStats ||
+      showProfile ||
       isTagRatingsModalOpen ||
       isSettingsModalOpen ||
       isAddEventModalOpen ||
@@ -432,7 +481,7 @@ function App() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [overlayEventId, isStatisticsPageOpen, isTagRatingsModalOpen, isSettingsModalOpen, isAddEventModalOpen, isAuthModalOpen]);
+  }, [overlayEventId, showStats, showProfile, isTagRatingsModalOpen, isSettingsModalOpen, isAddEventModalOpen, isAuthModalOpen]);
 
   useEffect(() => {
     if (!embedMode && eventIdFromUrl && !loading && filteredEvents.length > 0 && !overlayEventId) {
@@ -533,7 +582,41 @@ function App() {
   }, [searchQuery, selectedCity, selectedTags, dateFilter]);
 
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
-  const overlayEvent = overlayEventId ? (events.find((e) => e.id === overlayEventId) ?? filteredEvents.find((e) => e.id === overlayEventId)) : null;
+  const overlayEventFromCache = overlayEventId ? (events.find((e) => e.id === overlayEventId) ?? filteredEvents.find((e) => e.id === overlayEventId)) : null;
+  const [overlayEventFetched, setOverlayEventFetched] = useState<EventWithStats | null>(null);
+
+  // When overlay opens with an event not in cache (e.g. from Stats TagRatingsModal), fetch it
+  useEffect(() => {
+    if (!overlayEventId || overlayEventFromCache) {
+      setOverlayEventFetched(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('id', overlayEventId)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+      const { data: ratingsData } = await supabase.from('ratings').select('*').eq('event_id', data.id);
+      const eventRatings = (ratingsData || []).filter((r: { event_id: string }) => r.event_id === data.id);
+      const total = eventRatings.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0);
+      const average = eventRatings.length > 0 ? total / eventRatings.length : 0;
+      const userRating = user ? eventRatings.find((r: { user_id: string }) => r.user_id === user.id) : undefined;
+      if (!cancelled) {
+        setOverlayEventFetched({
+          ...data,
+          average_rating: average,
+          rating_count: eventRatings.length,
+          user_rating: userRating,
+        } as EventWithStats);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [overlayEventId, overlayEventFromCache, user?.id]);
+
+  const overlayEvent = overlayEventFromCache ?? overlayEventFetched;
 
   const openEventOverlay = (
     eventId: string,
@@ -555,28 +638,38 @@ function App() {
   };
 
   const closeEventOverlay = () => {
+    overlayReorderEnteredAtRef.current = 0;
     setOverlayEventId(null);
     setOverlaySource(null);
     setOverlayOpenWithWiggle(false);
     setOverlaySuggestSection(undefined);
     setOverlaySuggestCustomSlug(undefined);
     setTagModalRefreshTrigger((t) => t + 1);
-    if (typeof window !== 'undefined') window.history.replaceState(null, '', pathname);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('event');
+      const qs = url.searchParams.toString();
+      window.history.replaceState(null, '', url.pathname + (qs ? '?' + qs : ''));
+    }
   };
 
   const goBack = () => {
     if (showProfile) {
-      setShowProfileView(false);
-      if (typeof window !== 'undefined') window.history.replaceState(null, '', pathname);
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', pathname);
+        window.scrollTo(0, 0);
+        setNavKey((k) => k + 1);
+      }
     } else if (typeof window !== 'undefined') {
       window.location.href = pathname;
     }
   };
 
   const openProfile = () => {
-    setShowProfileView(true);
     if (typeof window !== 'undefined') {
       window.history.pushState(null, '', `${pathname}?profile=1`);
+      window.scrollTo(0, 0);
+      setNavKey((k) => k + 1);
     }
   };
 
@@ -623,6 +716,7 @@ function App() {
             onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
             tagColors={appSettings}
             customPerformerTags={[]}
+            wiggleOnlyClearsOnClickAway
           />
         </div>
         <TagRatingsModal
@@ -639,110 +733,88 @@ function App() {
     );
   }
 
+  if (!appSettings) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
   if (showStats) {
     return (
       <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
-        <header className="shrink-0 bg-white shadow-sm border-b z-40">
-          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {appSettings.app_logo_url ? (
-                  <a href={pathname}>
-                    <img src={appSettings.app_logo_url} alt={appSettings.app_name} className="h-10 object-contain" />
-                  </a>
-                ) : (
-                  <>
-                    {appSettings.app_icon_url ? (
-                      <img src={appSettings.app_icon_url} alt="App Icon" className="w-10 h-10" />
-                    ) : (
-                      <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2">
-                        <Sparkles className="text-white" size={24} />
-                      </div>
-                    )}
-                    <div>
-                      <h1 className="text-2xl font-bold text-gray-900">{appSettings.app_name}</h1>
-                      {appSettings.tagline && (
-                        <p className="text-xs text-gray-500">{appSettings.tagline}</p>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => {}}
-                  className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-blue-50 text-blue-700 transition-colors"
-                  title="View Statistics"
-                  aria-current="page"
-                >
-                  <BarChart3 size={20} />
-                  <span className="hidden sm:inline text-sm">Stats</span>
-                </button>
-                {user ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={openProfile}
-                      className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                      title="My Profile"
-                    >
-                      <User size={20} />
-                      <span className="hidden sm:inline text-sm">My Profile</span>
-                    </button>
-                    {isAdmin && (
-                      <button
-                        onClick={() => setIsSettingsModalOpen(true)}
-                        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                        title="App Settings"
-                      >
-                        <Settings size={20} />
-                        <span className="hidden sm:inline text-sm">Settings</span>
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setIsAddEventModalOpen(true)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                    >
-                      <Plus size={20} />
-                      <span className="hidden sm:inline">Add Show</span>
-                    </button>
-                    <button
-                      onClick={() => signOut()}
-                      className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <LogOut size={20} />
-                      <span className="hidden sm:inline">Sign Out</span>
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => openAuthModal('signin')}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                  >
-                    <LogIn size={20} />
-                    Sign In
-                  </button>
-                )}
-                <button onClick={goBackFromStats} className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50">
-                  ← Back to shows
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
+        <AppHeader
+          pathname={pathname}
+          appSettings={appSettings}
+          user={user}
+          isAdmin={!!isAdmin}
+          onGoHome={goBackFromStats}
+          onOpenStats={openStats}
+          onOpenProfile={openProfile}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onAddEvent={() => setIsAddEventModalOpen(true)}
+          onSignIn={() => openAuthModal('signin')}
+          onSignOut={() => signOut()}
+        />
         <main className="flex-1 min-h-0 overflow-y-auto">
-          <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
+            <button
+              onClick={goBackFromStats}
+              className="text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
+            >
+              ← Back to shows
+            </button>
             <StatisticsPage
               isOpen={true}
               onClose={goBackFromStats}
               tagColors={appSettings}
-              onOpenEvent={(id) => openEventOverlay(id)}
+              onOpenEvent={(id) => openEventOverlay(id, 'tagModal')}
               tagModalRefreshTrigger={tagModalRefreshTrigger}
               asPage
+              events={events}
+              eventOverlayOpen={!!overlayEventId}
+              onCloseEventOverlay={closeEventOverlay}
             />
           </div>
         </main>
+
+        {overlayEventId && (
+          <div
+            className={`fixed inset-0 flex items-center justify-center p-4 bg-black/50 overflow-y-auto ${overlaySource ? 'z-[75]' : 'z-[60]'}`}
+            onClick={(e) => {
+              if (e.target !== e.currentTarget) return;
+              if (overlayReorderEnteredAtRef.current && Date.now() - overlayReorderEnteredAtRef.current < 800) return;
+              closeEventOverlay();
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Event details"
+          >
+            {overlayEvent ? (
+              <div ref={overlayCardWrapperRef} tabIndex={-1} className="relative max-w-md w-full my-8 flex-shrink-0 outline-none" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                <EventCard
+                  event={overlayEvent}
+                  averageRating={overlayEvent.average_rating}
+                  ratingCount={overlayEvent.rating_count}
+                  userRating={overlayEvent.user_rating}
+                  onRatingSubmitted={fetchEvents}
+                  onEventUpdated={fetchEvents}
+                  onTagClick={handleTagClick}
+                  onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
+                  tagColors={appSettings}
+                  customPerformerTags={[]}
+                  wiggleOnlyClearsOnClickAway
+                  onReorderModeEntered={() => { overlayReorderEnteredAtRef.current = Date.now(); }}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-16">
+                <div className="animate-spin rounded-full h-12 w-12 border-2 border-white border-t-transparent" />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -765,58 +837,36 @@ function App() {
         </div>
       );
     }
+    if (!appSettings) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+        </div>
+      );
+    }
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
-        <header className="bg-white shadow-sm border-b sticky top-0 z-40">
-          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {appSettings.app_logo_url ? (
-                <img src={appSettings.app_logo_url} alt={appSettings.app_name} className="h-10 object-contain" />
-              ) : (
-                <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2">
-                  <Sparkles className="text-white" size={24} />
-                </div>
-              )}
-              <a href={pathname} className="text-lg font-semibold text-gray-900 hover:text-blue-600">
-                {appSettings.app_name}
-              </a>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={openStats}
-                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
-                title="View Statistics"
-              >
-                <BarChart3 size={18} />
-                <span className="hidden sm:inline">Stats</span>
-              </button>
-              {isAdmin && (
-                <button
-                  onClick={() => setIsSettingsModalOpen(true)}
-                  className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
-                  title="App Settings"
-                >
-                  <Settings size={18} />
-                  <span className="hidden sm:inline">Settings</span>
-                </button>
-              )}
-              <button
-                onClick={() => setIsAddEventModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm"
-              >
-                <Plus size={18} />
-                <span className="hidden sm:inline">Add Show</span>
-              </button>
-              <button onClick={goBack} className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50">
-                ← Back to shows
-              </button>
-              <button onClick={() => signOut()} className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
-                Sign Out
-              </button>
-            </div>
-          </div>
-        </header>
-        <main className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 overflow-visible">
+      <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+        <AppHeader
+          pathname={pathname}
+          appSettings={appSettings}
+          user={user}
+          isAdmin={!!isAdmin}
+          onGoHome={goBack}
+          onOpenStats={openStats}
+          onOpenProfile={openProfile}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onAddEvent={() => setIsAddEventModalOpen(true)}
+          onSignIn={() => openAuthModal('signin')}
+          onSignOut={() => signOut()}
+        />
+        <main className="flex-1 min-h-0 overflow-y-auto">
+          <div className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
+          <button
+            onClick={goBack}
+            className="text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
+          >
+            ← Back to shows
+          </button>
           <ProfilePage
             userId={user.id}
             pathname={pathname}
@@ -826,6 +876,7 @@ function App() {
             tagColors={appSettings}
             customPerformerTags={[]}
           />
+          </div>
         </main>
 
         <TagRatingsModal
@@ -839,30 +890,42 @@ function App() {
           onTagClick={openTagModal}
         />
 
-        {overlayEvent && (
+        {overlayEventId && (
           <div
             className={`fixed inset-0 flex items-center justify-center p-4 bg-black/50 overflow-y-auto ${overlaySource ? 'z-[75]' : 'z-[60]'}`}
-            onClick={closeEventOverlay}
+            onClick={(e) => {
+              if (e.target !== e.currentTarget) return;
+              if (overlayReorderEnteredAtRef.current && Date.now() - overlayReorderEnteredAtRef.current < 800) return;
+              closeEventOverlay();
+            }}
             role="dialog"
             aria-modal="true"
             aria-label="Event details"
           >
-            <div className="relative max-w-md w-full my-8 flex-shrink-0" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-              <EventCard
-                event={overlayEvent}
-                averageRating={overlayEvent.average_rating}
-                ratingCount={overlayEvent.rating_count}
-                userRating={overlayEvent.user_rating}
-                onRatingSubmitted={() => { fetchEvents(); }}
-                onEventUpdated={() => { fetchEvents(); }}
-                onTagClick={handleTagClick}
-                onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
-                tagColors={appSettings}
-                customPerformerTags={[]}
-                initialReorderSection={overlaySuggestCustomSlug ? undefined : overlaySuggestSection}
-                initialCustomReorderSlug={overlaySuggestCustomSlug}
-              />
-            </div>
+            {overlayEvent ? (
+              <div ref={overlayCardWrapperRef} tabIndex={-1} className="relative max-w-md w-full my-8 flex-shrink-0 outline-none" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                <EventCard
+                  event={overlayEvent}
+                  averageRating={overlayEvent.average_rating}
+                  ratingCount={overlayEvent.rating_count}
+                  userRating={overlayEvent.user_rating}
+                  onRatingSubmitted={() => { fetchEvents(); }}
+                  onEventUpdated={() => { fetchEvents(); }}
+                  onTagClick={handleTagClick}
+                  onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
+                  tagColors={appSettings}
+                  customPerformerTags={[]}
+                  initialReorderSection={overlaySuggestCustomSlug ? undefined : overlaySuggestSection}
+                  initialCustomReorderSlug={overlaySuggestCustomSlug}
+                  wiggleOnlyClearsOnClickAway
+                  onReorderModeEntered={() => { overlayReorderEnteredAtRef.current = Date.now(); }}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-16">
+                <div className="animate-spin rounded-full h-12 w-12 border-2 border-white border-t-transparent" />
+              </div>
+            )}
           </div>
         )}
 
@@ -882,95 +945,42 @@ function App() {
     );
   }
 
+  const goToHome = () => {
+    if (typeof window !== 'undefined') window.location.href = pathname;
+  };
+
+  if (!appSettings) {
+    return (
+      <div className="min-h-screen w-full h-full bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100" />
+    );
+  }
+
+  if (!appSettings) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
-      <header className="bg-white shadow-sm border-b sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {appSettings.app_logo_url ? (
-                <img src={appSettings.app_logo_url} alt={appSettings.app_name} className="h-10 object-contain" />
-              ) : (
-                <>
-                  {appSettings.app_icon_url ? (
-                    <img src={appSettings.app_icon_url} alt="App Icon" className="w-10 h-10" />
-                  ) : (
-                    <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2">
-                      <Sparkles className="text-white" size={24} />
-                    </div>
-                  )}
-                  <div>
-                    <h1 className="text-2xl font-bold text-gray-900">{appSettings.app_name}</h1>
-                    {appSettings.tagline && (
-                      <p className="text-xs text-gray-500">{appSettings.tagline}</p>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
+    <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+      <AppHeader
+        pathname={pathname}
+        appSettings={appSettings}
+        user={user}
+        isAdmin={!!isAdmin}
+        onGoHome={goToHome}
+        onOpenStats={openStats}
+        onOpenProfile={openProfile}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onAddEvent={() => setIsAddEventModalOpen(true)}
+        onSignIn={() => openAuthModal('signin')}
+        onSignOut={() => signOut()}
+      />
 
-            <div className="flex items-center gap-3">
-              <button
-                onClick={openStats}
-                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                title="View Statistics"
-              >
-                <BarChart3 size={20} />
-                <span className="hidden sm:inline text-sm">Stats</span>
-              </button>
-              {user ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={openProfile}
-                    className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    title="My Profile"
-                  >
-                    <User size={20} />
-                    <span className="hidden sm:inline text-sm">My Profile</span>
-                  </button>
-                  {isAdmin && (
-                    <>
-                      <button
-                        onClick={() => setIsSettingsModalOpen(true)}
-                        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                        title="App Settings"
-                      >
-                        <Settings size={20} />
-                        <span className="hidden sm:inline text-sm">Settings</span>
-                      </button>
-                    </>
-                  )}
-                  <button
-                    onClick={() => setIsAddEventModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                  >
-                    <Plus size={20} />
-                    <span className="hidden sm:inline">Add Show</span>
-                  </button>
-                  <button
-                    onClick={() => signOut()}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <LogOut size={20} />
-                    <span className="hidden sm:inline">Sign Out</span>
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => openAuthModal('signin')}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                >
-                  <LogIn size={20} />
-                  Sign In
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 overflow-visible">
+      <main className="flex-1 min-h-0 overflow-y-auto">
+        <div className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
         <div className="mb-8 overflow-visible">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Fashion Shows</h2>
           <p className="text-gray-600 mb-6">
@@ -986,7 +996,7 @@ function App() {
                 onDrop={handleSearchDrop}
               >
                 <Search className="shrink-0 text-gray-400" size={18} />
-                <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
+                <div className="flex flex-nowrap items-center gap-1.5 min-w-0 flex-1 overflow-x-auto">
                   {selectedTags.map((selectedTag) => {
                     const isHex = (s: string | undefined) => s && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s);
                     const type = selectedTag.type;
@@ -1540,6 +1550,7 @@ function App() {
               </div>
             );
         })()}
+        </div>
       </main>
 
       <AuthModal
@@ -1573,30 +1584,42 @@ function App() {
         onTagClick={openTagModal}
       />
 
-      {overlayEvent && (
+      {overlayEventId && (
         <div
           className={`fixed inset-0 flex items-center justify-center p-4 bg-black/50 overflow-y-auto ${overlaySource ? 'z-[75]' : 'z-[60]'}`}
-          onClick={closeEventOverlay}
+          onClick={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (overlayReorderEnteredAtRef.current && Date.now() - overlayReorderEnteredAtRef.current < 800) return;
+            closeEventOverlay();
+          }}
           role="dialog"
           aria-modal="true"
           aria-label="Event details"
         >
-          <div className="relative max-w-md w-full my-8 flex-shrink-0" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-            <EventCard
-              event={overlayEvent}
-              averageRating={overlayEvent.average_rating}
-              ratingCount={overlayEvent.rating_count}
-              userRating={overlayEvent.user_rating}
-              onRatingSubmitted={() => { fetchEvents(); }}
-              onEventUpdated={() => { fetchEvents(); }}
-              onTagClick={handleTagClick}
-              onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
-              tagColors={appSettings}
-              customPerformerTags={[]}
-              initialReorderSection={overlaySuggestCustomSlug ? undefined : overlaySuggestSection}
-              initialCustomReorderSlug={overlaySuggestCustomSlug}
-            />
-          </div>
+          {overlayEvent ? (
+            <div ref={overlayCardWrapperRef} tabIndex={-1} className="relative max-w-md w-full my-8 flex-shrink-0 outline-none" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+              <EventCard
+                event={overlayEvent}
+                averageRating={overlayEvent.average_rating}
+                ratingCount={overlayEvent.rating_count}
+                userRating={overlayEvent.user_rating}
+                onRatingSubmitted={() => { fetchEvents(); }}
+                onEventUpdated={() => { fetchEvents(); }}
+                onTagClick={handleTagClick}
+                onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
+                tagColors={appSettings}
+                customPerformerTags={[]}
+                initialReorderSection={overlaySuggestCustomSlug ? undefined : overlaySuggestSection}
+                initialCustomReorderSlug={overlaySuggestCustomSlug}
+                wiggleOnlyClearsOnClickAway
+                onReorderModeEntered={() => { overlayReorderEnteredAtRef.current = Date.now(); }}
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-12 w-12 border-2 border-white border-t-transparent" />
+            </div>
+          )}
         </div>
       )}
 
