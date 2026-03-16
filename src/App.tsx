@@ -940,6 +940,7 @@ function App() {
           onClose={() => { setIsSettingsModalOpen(false); fetchSettings(); }}
           onSettingsUpdated={fetchSettings}
           onSettingsPreview={setAppSettings}
+          onAccountUpdated={fetchEvents}
         />
       </div>
     );

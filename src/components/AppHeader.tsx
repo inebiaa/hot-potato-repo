@@ -91,16 +91,14 @@ export default function AppHeader({
                   <User size={20} />
                   <span className="hidden sm:inline text-sm">My Profile</span>
                 </button>
-                {isAdmin && (
-                  <button
-                    onClick={onOpenSettings}
-                    className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    title="App Settings"
-                  >
-                    <Settings size={20} />
-                    <span className="hidden sm:inline text-sm">Settings</span>
-                  </button>
-                )}
+                <button
+                  onClick={onOpenSettings}
+                  className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  title="App Settings"
+                >
+                  <Settings size={20} />
+                  <span className="hidden sm:inline text-sm">Settings</span>
+                </button>
                 <button
                   onClick={onAddEvent}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
