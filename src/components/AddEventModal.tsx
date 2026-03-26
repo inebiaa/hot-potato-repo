@@ -212,9 +212,9 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             value={producers}
             onChange={setProducers}
             tagColumn="producers"
-            placeholder="e.g., Fashion Production Co, Creative Studios"
+            placeholder="e.g., Fashion Production Co, Designer Studios"
             required
-            hint="Companies or individuals who produced the show"
+            hint="Type and press Enter to add; suggestions appear as you type"
           />
 
           <TagInput
@@ -225,7 +225,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             tagColumn="featured_designers"
             placeholder="e.g., Valentino, Gucci, Alexander McQueen"
             required
-            hint="Type and press Enter to add; suggestions appear as you type"
+            hint="Designers whose collections were featured in the show"
           />
 
           <TagInput
