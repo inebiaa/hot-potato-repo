@@ -8,6 +8,12 @@ export function getSeasonFromDate(dateString: string): string {
   return `Fall ${y}`;
 }
 
+/** Calendar year as YYYY from the date string (ISO prefix), same basis as getSeasonFromDate. */
+export function getYearFromDate(dateString: string): string {
+  const [y] = (dateString || '').split('-');
+  return y && /^\d{4}$/.test(y) ? y : '';
+}
+
 /** Order for sorting season names (e.g. "Spring 2024") by calendar date */
 export const SEASON_ORDER: Record<string, number> = { Spring: 0, Summer: 1, Fall: 2 };
 

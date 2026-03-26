@@ -3,7 +3,7 @@ import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, BarCha
 import AppHeader from './components/AppHeader';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
-import { getSeasonFromDate } from './lib/season';
+import { getSeasonFromDate, getYearFromDate } from './lib/season';
 import { normalizeForSearch } from './lib/normalize';
 import { readableTextForBg } from './lib/colorUtils';
 import EventCard from './components/EventCard';
@@ -301,6 +301,10 @@ function App() {
       (e.footer_tags || []).forEach((v) => add('footer_tags', v));
       if (e.city) add('city', e.city);
       add('season', getSeasonFromDate(e.date));
+      {
+        const y = getYearFromDate(e.date);
+        if (y) add('year', y);
+      }
       if (e.custom_tags && typeof e.custom_tags === 'object') {
         Object.entries(e.custom_tags).forEach(([slug, vals]) => {
           (vals || []).forEach((v) => {
@@ -535,7 +539,22 @@ function App() {
           const hairMakeupMatch = event.hair_makeup?.some((h) =>
             normalizeForSearch(h).includes(queryNorm)
           ) || false;
-          return nameMatch || descriptionMatch || cityMatch || locationMatch || designersMatch || modelsMatch || producersMatch || headerTagsMatch || footerTagsMatch || customTagsMatch || hairMakeupMatch;
+          const yearMatch =
+            /^\d{4}$/.test(queryNorm) && getYearFromDate(event.date) === queryNorm;
+          return (
+            nameMatch ||
+            descriptionMatch ||
+            cityMatch ||
+            locationMatch ||
+            designersMatch ||
+            modelsMatch ||
+            producersMatch ||
+            headerTagsMatch ||
+            footerTagsMatch ||
+            customTagsMatch ||
+            hairMakeupMatch ||
+            yearMatch
+          );
         });
       }
     }
@@ -551,6 +570,8 @@ function App() {
             return event.city === tag.value;
           case 'season':
             return getSeasonFromDate(event.date) === tag.value;
+          case 'year':
+            return getYearFromDate(event.date) === tag.value;
           case 'producer':
             return event.producers?.includes(tag.value);
           case 'designer':
@@ -1006,7 +1027,7 @@ function App() {
                       : (type === 'model' && isHex(appSettings.model_bg_color)) ? appSettings.model_bg_color!
                       : (type === 'hair_makeup' && isHex(appSettings.hair_makeup_bg_color)) ? appSettings.hair_makeup_bg_color!
                       : (type === 'city' && isHex(appSettings.city_bg_color)) ? appSettings.city_bg_color!
-                      : (type === 'season' && isHex(appSettings.season_bg_color)) ? appSettings.season_bg_color!
+                      : (type === 'season' || type === 'year') && isHex(appSettings.season_bg_color) ? appSettings.season_bg_color!
                       : (type === 'header_tags' && isHex(appSettings.header_tags_bg_color)) ? appSettings.header_tags_bg_color!
                       : (type === 'footer_tags' && isHex(appSettings.footer_tags_bg_color)) ? appSettings.footer_tags_bg_color!
                       : '#dbeafe';
@@ -1015,11 +1036,11 @@ function App() {
                       : (type === 'model' && isHex(appSettings.model_text_color)) ? appSettings.model_text_color!
                       : (type === 'hair_makeup' && isHex(appSettings.hair_makeup_text_color)) ? appSettings.hair_makeup_text_color!
                       : (type === 'city' && isHex(appSettings.city_text_color)) ? appSettings.city_text_color!
-                      : (type === 'season' && isHex(appSettings.season_text_color)) ? appSettings.season_text_color!
+                      : (type === 'season' || type === 'year') && isHex(appSettings.season_text_color) ? appSettings.season_text_color!
                       : (type === 'header_tags' && isHex(appSettings.header_tags_text_color)) ? appSettings.header_tags_text_color!
                       : (type === 'footer_tags' && isHex(appSettings.footer_tags_text_color)) ? appSettings.footer_tags_text_color!
                       : '#1e40af';
-                    const label = type === 'designer' ? 'Designer: ' : type === 'model' ? 'Model: ' : type === 'producer' ? 'Producer: ' : type === 'city' ? 'City: ' : type === 'season' ? 'Season: ' : type === 'hair_makeup' ? 'Hair & Makeup: ' : type === 'header_tags' ? 'Genre: ' : type === 'footer_tags' ? 'Collection: ' : type === 'custom_performer' ? 'Custom: ' : '';
+                    const label = type === 'designer' ? 'Designer: ' : type === 'model' ? 'Model: ' : type === 'producer' ? 'Producer: ' : type === 'city' ? 'City: ' : type === 'season' ? 'Season: ' : type === 'year' ? 'Year: ' : type === 'hair_makeup' ? 'Hair & Makeup: ' : type === 'header_tags' ? 'Genre: ' : type === 'footer_tags' ? 'Collection: ' : type === 'custom_performer' ? 'Custom: ' : '';
                     const val = type === 'custom_performer' ? selectedTag.value.split('\x00')[1] : selectedTag.value;
                     return (
                       <span
