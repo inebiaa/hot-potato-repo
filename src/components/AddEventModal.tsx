@@ -235,7 +235,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             onChange={setModels}
             tagColumn="models"
             placeholder="e.g., Gigi Hadid, Bella Hadid, Karlie Kloss"
-            hint="Notable models who walked in the show"
+            hint="Type and press Enter to add; suggestions appear as you type"
           />
 
           <TagInput
@@ -245,7 +245,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             onChange={setHairMakeup}
             tagColumn="hair_makeup"
             placeholder="e.g., James Boehmer, Pat McGrath"
-            hint="Type and press Enter to add; suggestions appear as you type"
+            hint="Artists responsible for hair and makeup styling"
           />
 
           <TagInput
