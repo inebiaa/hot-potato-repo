@@ -255,7 +255,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             onChange={setHeaderTags}
             tagColumn="header_tags"
             placeholder="e.g., Spring 2024, Couture, Limited Edition"
-            hint="Categories or themes that describe the show"
+            hint="Optional tags for the header section"
           />
 
           {inlineCustomTypes.map(({ slug, label, icon }) => (
@@ -334,7 +334,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             onChange={setFooterTags}
             tagColumn="footer_tags"
             placeholder="e.g., Award Winning, Sustainable Fashion, NYFW Fall 2024"
-            hint="Optional tags; use a shared tag (e.g. NYFW Fall 2024) to group related shows"
+            hint="Additional descriptors or event groupings (e.g., NYFW Fall 2024)"
           />
 
           <div>
