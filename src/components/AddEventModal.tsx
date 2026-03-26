@@ -245,7 +245,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             onChange={setHairMakeup}
             tagColumn="hair_makeup"
             placeholder="e.g., James Boehmer, Pat McGrath"
-            hint="Artists responsible for hair and makeup styling"
+            hint="Type and press Enter to add; suggestions appear as you type"
           />
 
           <TagInput
@@ -255,7 +255,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             onChange={setHeaderTags}
             tagColumn="header_tags"
             placeholder="e.g., Spring 2024, Couture, Limited Edition"
-            hint="Optional tags for the header section"
+            hint="Categories or themes that describe the show"
           />
 
           {inlineCustomTypes.map(({ slug, label, icon }) => (
