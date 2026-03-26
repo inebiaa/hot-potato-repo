@@ -225,7 +225,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             tagColumn="featured_designers"
             placeholder="e.g., Valentino, Gucci, Alexander McQueen"
             required
-            hint="Designers whose collections were featured in the show"
+            hint="Type and press Enter to add; suggestions appear as you type"
           />
 
           <TagInput
@@ -235,7 +235,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             onChange={setModels}
             tagColumn="models"
             placeholder="e.g., Gigi Hadid, Bella Hadid, Karlie Kloss"
-            hint="Type and press Enter to add; suggestions appear as you type"
+            hint="Notable models who walked in the show"
           />
 
           <TagInput
