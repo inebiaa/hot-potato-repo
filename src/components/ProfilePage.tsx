@@ -532,7 +532,7 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
           {listsError ? (
             <div className="rounded-2xl bg-amber-50/90 border border-amber-200/80 p-6">
               <p className="text-sm text-amber-800 mb-4">
-                Lists need a one-time setup. Copy the SQL below and run it in your Supabase SQL Editor.
+                Lists require a one-time database setup. Copy the SQL and run it in your Supabase SQL Editor.
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
