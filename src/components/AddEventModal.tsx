@@ -212,9 +212,9 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             value={producers}
             onChange={setProducers}
             tagColumn="producers"
-            placeholder="e.g., Fashion Production Co, Designer Studios"
+            placeholder="e.g., Fashion Production Co, Creative Studios"
             required
-            hint="Type and press Enter to add; suggestions appear as you type"
+            hint="Companies or individuals who produced the show"
           />
 
           <TagInput
