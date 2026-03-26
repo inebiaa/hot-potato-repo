@@ -95,7 +95,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
             <>
               <div>
                 <label htmlFor="yourName" className="block text-sm font-medium text-gray-700 mb-1">
-                  Your Name
+                  Display Name
                 </label>
                 <input
                   id="yourName"
@@ -107,7 +107,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g., Jane Doe"
                 />
-                <p className="text-xs text-gray-500 mt-1">Display name; can act as a credit when connected</p>
+                <p className="text-xs text-gray-500 mt-1">Your public display name for credits and mentions</p>
               </div>
               <div>
                 <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
@@ -126,7 +126,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g., janedoe2024"
                 />
-                <p className="text-xs text-gray-500 mt-1">Your public profile ID for mentions and admin lookup</p>
+                <p className="text-xs text-gray-500 mt-1">Your unique username for profile links and admin lookup</p>
               </div>
             </>
           )}
