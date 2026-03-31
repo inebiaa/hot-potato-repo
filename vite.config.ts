@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react'
 import tsconfigPaths from "vite-tsconfig-paths";
 
 // https://vite.dev/config/
+// GitHub Pages: workflow sets VITE_BASE=/hot-potato-repo/ so asset URLs resolve under the project path.
 export default defineConfig({
+  base: process.env.VITE_BASE ?? '/',
   plugins: [
     react({
       babel: {
