@@ -60,6 +60,14 @@ function tagLabel(type: string): string {
   return '';
 }
 
+function suggestionTypeLabel(type: string): string {
+  if (type === 'header_tags') return 'Genre';
+  if (type === 'footer_tags') return 'Collection';
+  if (type === 'hair_makeup') return 'Hair & Makeup';
+  if (type === 'custom_performer') return 'Custom';
+  return type.replace(/_/g, ' ');
+}
+
 export default function PrimarySearchBar({
   appSettings,
   searchDragOver,
@@ -193,7 +201,7 @@ export default function PrimarySearchBar({
                   className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
                 >
                   <span className="text-gray-400 text-xs capitalize">
-                    {t.type === 'custom_performer' ? 'Custom' : t.type.replace(/_/g, ' ')}:
+                    {suggestionTypeLabel(t.type)}:
                   </span>
                   <span className="text-gray-900">{t.label}</span>
                 </button>
