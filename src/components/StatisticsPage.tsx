@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase, Event } from '../lib/supabase';
 import { getSeasonFromDate, sortSeasonsByDate } from '../lib/season';
+import { sameTagSpelling, tagArrayContainsNormalized } from '../lib/tagIdentity';
+import type { TagResolutionMap } from '../lib/tagDisplayResolution';
 import TagRatingsModal from './TagRatingsModal';
 import StatisticsPageContent from './StatisticsPageContent';
 
@@ -25,6 +27,7 @@ interface StatisticsPageProps {
   onCloseEventOverlay?: () => void;
   /** Optional: preloaded events from shared cache; when provided, skips fetch */
   events?: Event[];
+  tagResolutionMap?: TagResolutionMap | null;
 }
 
 export default function StatisticsPage({
@@ -37,13 +40,13 @@ export default function StatisticsPage({
   eventOverlayOpen = false,
   onCloseEventOverlay,
   events: eventsProp,
+  tagResolutionMap,
 }: StatisticsPageProps) {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedCity, setSelectedCity] = useState<string>('');
   const [selectedSeason, setSelectedSeason] = useState<string>('');
   const [sortBy, setSortBy] = useState<'count' | 'name'>('count');
-  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [isTagRatingsModalOpen, setIsTagRatingsModalOpen] = useState(false);
   const [selectedTag, setSelectedTag] = useState<{ type: string; value: string } | null>(null);
@@ -87,7 +90,7 @@ export default function StatisticsPage({
     let filteredEvents = [...events];
 
     if (selectedCity) {
-      filteredEvents = filteredEvents.filter(e => e.city === selectedCity);
+      filteredEvents = filteredEvents.filter((e) => sameTagSpelling(e.city, selectedCity));
     }
 
     if (selectedSeason) {
@@ -189,22 +192,18 @@ export default function StatisticsPage({
 
   const allCities = Array.from(new Set(events.map(e => e.city).filter(Boolean))).sort();
   const allSeasons = sortSeasonsByDate(Array.from(new Set(events.map(e => getSeasonFromDate(e.date)))));
-  const rawTagStats = calculateTagStats();
-  const searchNorm = searchQuery.trim().toLowerCase();
-  const tagStats = searchNorm
-    ? rawTagStats.filter((t) => t.name.toLowerCase().includes(searchNorm))
-    : rawTagStats;
+  const tagStats = calculateTagStats();
 
   const matchEventForTag = (e: Event, type: string, value: string) => {
     switch (type) {
-      case 'producer': return (e.producers || []).includes(value);
-      case 'designer': return (e.featured_designers || []).includes(value);
-      case 'model': return (e.models || []).includes(value);
-      case 'hair_makeup': return (e.hair_makeup || []).includes(value);
-      case 'city': return e.city === value;
+      case 'producer': return tagArrayContainsNormalized(e.producers, value);
+      case 'designer': return tagArrayContainsNormalized(e.featured_designers, value);
+      case 'model': return tagArrayContainsNormalized(e.models, value);
+      case 'hair_makeup': return tagArrayContainsNormalized(e.hair_makeup, value);
+      case 'city': return sameTagSpelling(e.city, value);
       case 'season': return (e.season || getSeasonFromDate(e.date)) === value;
-      case 'header_tags': return (e.header_tags || e.genre || []).includes(value);
-      case 'footer_tags': return (e.footer_tags || []).includes(value);
+      case 'header_tags': return tagArrayContainsNormalized(e.header_tags || e.genre, value);
+      case 'footer_tags': return tagArrayContainsNormalized(e.footer_tags, value);
       default: return false;
     }
   };
@@ -212,7 +211,7 @@ export default function StatisticsPage({
   const eventsForTag = useMemo(() => {
     if (!selectedTag?.type || !selectedTag?.value) return [];
     let filtered = [...events];
-    if (selectedCity) filtered = filtered.filter(e => e.city === selectedCity);
+    if (selectedCity) filtered = filtered.filter((e) => sameTagSpelling(e.city, selectedCity));
     if (selectedSeason) filtered = filtered.filter(e => (e.season || getSeasonFromDate(e.date)) === selectedSeason);
     return filtered.filter(e => matchEventForTag(e, selectedTag.type, selectedTag.value));
   }, [events, selectedTag, selectedCity, selectedSeason]);
@@ -230,8 +229,6 @@ export default function StatisticsPage({
     allCities,
     allSeasons,
     sortBy,
-    searchQuery,
-    setSearchQuery,
     getTagColors,
     setSelectedType,
     setSelectedCity,
@@ -251,7 +248,9 @@ export default function StatisticsPage({
           tagValue={selectedTag?.value || ''}
           onEventClick={onOpenEvent}
           refreshTrigger={tagModalRefreshTrigger}
+          tagColors={tagColors}
           eventsForTag={eventsForTag}
+          tagResolutionMap={tagResolutionMap}
         eventOverlayOpen={eventOverlayOpen}
         onCloseEventOverlay={onCloseEventOverlay}
       />
@@ -275,7 +274,9 @@ export default function StatisticsPage({
         tagValue={selectedTag?.value || ''}
         onEventClick={onOpenEvent}
         refreshTrigger={tagModalRefreshTrigger}
+        tagColors={tagColors}
         eventsForTag={eventsForTag}
+        tagResolutionMap={tagResolutionMap}
         eventOverlayOpen={eventOverlayOpen}
         onCloseEventOverlay={onCloseEventOverlay}
       />

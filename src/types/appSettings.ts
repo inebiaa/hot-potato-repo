@@ -1,0 +1,38 @@
+export interface AppSettings {
+  [key: string]: string | undefined;
+  app_name?: string;
+  app_icon_url?: string;
+  app_logo_url?: string;
+  app_favicon_url?: string;
+  tagline?: string;
+  color_scheme?: string;
+  collapsible_cards_enabled?: string;
+  producer_bg_color?: string;
+  producer_text_color?: string;
+  designer_bg_color?: string;
+  designer_text_color?: string;
+  model_bg_color?: string;
+  model_text_color?: string;
+  hair_makeup_bg_color?: string;
+  hair_makeup_text_color?: string;
+  city_bg_color?: string;
+  city_text_color?: string;
+  season_bg_color?: string;
+  season_text_color?: string;
+  header_tags_bg_color?: string;
+  header_tags_text_color?: string;
+  countdown_bg_color?: string;
+  countdown_text_color?: string;
+  footer_tags_bg_color?: string;
+  footer_tags_text_color?: string;
+  producer_icon?: string;
+  designer_icon?: string;
+  model_icon?: string;
+  hair_makeup_icon?: string;
+  city_icon?: string;
+  season_icon?: string;
+  header_tags_icon?: string;
+  footer_tags_icon?: string;
+  optional_tags_bg_color?: string;
+  optional_tags_text_color?: string;
+}

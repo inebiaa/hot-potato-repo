@@ -28,6 +28,8 @@ export interface Event {
   location: string | null;
   address: string | null;
   image_url: string | null;
+  /** Optional URL opened when the countdown pill is clicked (upcoming events). */
+  countdown_link?: string | null;
   producers: string[] | null;
   featured_designers: string[] | null;
   models: string[] | null;

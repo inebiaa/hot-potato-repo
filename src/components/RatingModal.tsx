@@ -48,10 +48,8 @@ export default function RatingModal({
   const [rating, setRating] = useState(existingRating?.rating || 0);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [comment, setComment] = useState(existingRating?.comment || '');
-  const [starColor, setStarColor] = useState('#f59e0b');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const starColorOptions = ['#f59e0b', '#ef4444', '#3b82f6', '#22c55e', '#a855f7'];
   const editorRef = useRef<{ insertAtCursor: (text: string) => void; focus: () => void }>(null);
   const { user } = useAuth();
 
@@ -63,35 +61,6 @@ export default function RatingModal({
   useEffect(() => {
     if (isOpen) setComment(existingRating?.comment || '');
   }, [isOpen, existingRating?.id, existingRating?.comment]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const raw = window.localStorage.getItem('rating_star_colors');
-    if (!raw) return;
-    try {
-      const map = JSON.parse(raw) as Record<string, string>;
-      if (existingRating?.id && map[existingRating.id]) {
-        setStarColor(map[existingRating.id]);
-      }
-    } catch {
-      // Ignore invalid saved JSON.
-    }
-  }, [isOpen, existingRating?.id]);
-
-  useEffect(() => {
-    if (!existingRating?.id) return;
-    const raw = window.localStorage.getItem('rating_star_colors');
-    let map: Record<string, string> = {};
-    if (raw) {
-      try {
-        map = JSON.parse(raw) as Record<string, string>;
-      } catch {
-        map = {};
-      }
-    }
-    map[existingRating.id] = starColor;
-    window.localStorage.setItem('rating_star_colors', JSON.stringify(map));
-  }, [starColor, existingRating?.id]);
 
   const insertTag = (tag: string) => {
     editorRef.current?.insertAtCursor(tag);
@@ -184,30 +153,9 @@ export default function RatingModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <div className="flex items-center justify-between gap-3 mb-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Your Rating
-              </label>
-              <div className="flex items-center gap-1.5">
-                {starColorOptions.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => setStarColor(color)}
-                    className={`h-5 w-5 rounded-full border transition-transform ${starColor === color ? 'scale-110 border-gray-500' : 'border-gray-200'}`}
-                    style={{ backgroundColor: color }}
-                    aria-label={`Set star color ${color}`}
-                  />
-                ))}
-                <input
-                  type="color"
-                  value={starColor}
-                  onChange={(e) => setStarColor(e.target.value)}
-                  className="h-6 w-6 p-0 border border-gray-200 rounded cursor-pointer bg-transparent"
-                  aria-label="Custom star color"
-                />
-              </div>
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Your Rating
+            </label>
             <div className="flex gap-2">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
@@ -220,8 +168,7 @@ export default function RatingModal({
                 >
                   <Star
                     size={32}
-                    className={star <= (hoveredRating || rating) ? '' : 'text-gray-300'}
-                    style={star <= (hoveredRating || rating) ? { color: starColor, fill: starColor } : undefined}
+                    className={star <= (hoveredRating || rating) ? 'text-amber-500 fill-amber-500' : 'text-gray-300'}
                   />
                 </button>
               ))}
