@@ -2,13 +2,16 @@ import { Calendar, Clock, MapPin, Star, Edit, Trash2, Share2, MoreVertical, Plus
 import { Event, Rating, supabase } from '../lib/supabase';
 import { getIcon } from '../lib/eventCardIcons';
 import { getSeasonFromDate } from '../lib/season';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import RatingModal from './RatingModal';
 import EditEventModal from './EditEventModal';
 import ViewRatingsModal from './ViewRatingsModal';
 import CommentWithTags from './CommentWithTags';
 import { useAuth } from '../contexts/AuthContext';
+import { useTagDisplayMap } from '../contexts/TagDisplayContext';
+import { tagResolutionKey } from '../lib/tagDisplayResolution';
 import { ensureAlias, ensureIdentity, findIdentityByName, normalizeTagName, type TagType } from '../lib/tagIdentity';
+import { tryNormalizeExternalUrl } from '../lib/externalUrl';
 
 interface EventCardProps {
   event: Event;
@@ -152,6 +155,14 @@ export default function EventCard({
   const [pendingSuggestions, setPendingSuggestions] = useState<PendingTagSuggestion[]>([]);
   const [pendingError, setPendingError] = useState<string | null>(null);
   const [addingFor, setAddingFor] = useState<{ section: keyof typeof orderedTags | 'custom' | 'footer_tags'; customSlug?: string; label?: string } | null>(null);
+  const tagDisplayMap = useTagDisplayMap();
+  const resolveTag = (tagType: string, raw: string) => {
+    const entry = tagDisplayMap?.get(tagResolutionKey(tagType, raw));
+    return {
+      display: entry?.display ?? raw,
+      canonical: entry?.canonical ?? raw,
+    };
+  };
   const [newTagValue, setNewTagValue] = useState('');
   const [processingSuggestionId, setProcessingSuggestionId] = useState<string | null>(null);
 
@@ -315,6 +326,11 @@ export default function EventCard({
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
   }, [event.date]);
+
+  const countdownOpenUrl = useMemo(
+    () => tryNormalizeExternalUrl(event.countdown_link),
+    [event.countdown_link]
+  );
 
   const suggestionMatchesSection = (
     suggestion: PendingTagSuggestion,
@@ -862,7 +878,7 @@ export default function EventCard({
   }
 
   const suggestPlaceholder = (section: keyof typeof orderedTags | 'custom' | 'footer_tags', label?: string) =>
-    label ? `Suggest ${label}` : { header_tags: 'Suggest tag', producers: 'Suggest producer', featured_designers: 'Suggest designer', models: 'Suggest model', hair_makeup: 'Suggest artist', footer_tags: 'Suggest tag', custom: 'Suggest tag' }[section] || 'Suggest tag';
+    label ? `Suggest ${label}` : { header_tags: 'Suggest tag', producers: 'Suggest producer', featured_designers: 'Suggest designer', models: 'Suggest model', hair_makeup: 'Suggest artist', footer_tags: 'Suggest collection', custom: 'Suggest tag' }[section] || 'Suggest tag';
 
   const suggestPill = (section: keyof typeof orderedTags | 'custom' | 'footer_tags', customSlug?: string, label?: string) => {
     const isActive = addingFor?.section === section && (section !== 'custom' || addingFor?.customSlug === customSlug);
@@ -1111,7 +1127,7 @@ export default function EventCard({
                     <button
                       key={idx}
                       onClick={(e) => handlePillClick(e, () => {
-                        if (!isAnyReorderMode) onTagClick('header_tags', tag);
+                        if (!isAnyReorderMode) onTagClick('header_tags', resolveTag('header_tags', tag).canonical);
                       })}
                       data-tag-pill
                       className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 whitespace-nowrap ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
@@ -1123,7 +1139,7 @@ export default function EventCard({
                       }}
                     >
                       <HeaderTagsIcon size={12} className="shrink-0" />
-                      {tag}
+                      {resolveTag('header_tags', tag).display}
                     </button>
                   ))}
                     {pendingForSection('header_tags').map((suggestion) => {
@@ -1147,11 +1163,16 @@ export default function EventCard({
                     <button
                       type="button"
                       data-tag-pill
-                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 tabular-nums whitespace-nowrap ${showWiggle ? 'pill-wiggle' : ''}`}
+                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 tabular-nums whitespace-nowrap ${countdownOpenUrl ? 'cursor-pointer' : ''} ${showWiggle ? 'pill-wiggle' : ''}`}
                       style={{
                         backgroundColor: tagColors?.countdown_bg_color || '#fef3c7',
                         color: tagColors?.countdown_text_color || '#92400e'
                       }}
+                      aria-label={countdownOpenUrl ? `Open countdown link for ${event.name}` : undefined}
+                      title={countdownOpenUrl ? countdownOpenUrl : undefined}
+                      onClick={(e) => handlePillClick(e, () => {
+                        if (countdownOpenUrl) window.open(countdownOpenUrl, '_blank', 'noopener,noreferrer');
+                      })}
                       onMouseDown={() => startLongPress('header_tags')}
                       onMouseUp={(e: React.MouseEvent) => clearLongPress(e)}
                       onMouseLeave={(e: React.MouseEvent) => clearLongPress(e)}
@@ -1233,7 +1254,7 @@ export default function EventCard({
                       <button
                         key={idx}
                         onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) onTagClick('producer', producer);
+                          if (!isAnyReorderMode) onTagClick('producer', resolveTag('producer', producer).canonical);
                         })}
                         data-tag-pill
                         className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
@@ -1244,7 +1265,7 @@ export default function EventCard({
                           color: tagColors?.producer_text_color || '#374151'
                         }}
                       >
-                        {producer}
+                        {resolveTag('producer', producer).display}
                       </button>
                     ))}
                     {pendingForSection('producers').map((suggestion) => {
@@ -1302,7 +1323,7 @@ export default function EventCard({
                       <button
                         key={idx}
                         onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) onTagClick('designer', designer);
+                          if (!isAnyReorderMode) onTagClick('designer', resolveTag('designer', designer).canonical);
                         })}
                         data-tag-pill
                         className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
@@ -1313,7 +1334,7 @@ export default function EventCard({
                           color: tagColors?.designer_text_color || '#b45309'
                         }}
                       >
-                        {designer}
+                        {resolveTag('designer', designer).display}
                       </button>
                     ))}
                     {pendingForSection('featured_designers').map((suggestion) => {
@@ -1358,7 +1379,7 @@ export default function EventCard({
                       <button
                         key={idx}
                         onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) onTagClick('model', model);
+                          if (!isAnyReorderMode) onTagClick('model', resolveTag('model', model).canonical);
                         })}
                         data-tag-pill
                         className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
@@ -1369,7 +1390,7 @@ export default function EventCard({
                           color: tagColors?.model_text_color || '#be185d'
                         }}
                       >
-                        {model}
+                        {resolveTag('model', model).display}
                       </button>
                     ))}
                     {pendingForSection('models').map((suggestion) => {
@@ -1414,7 +1435,7 @@ export default function EventCard({
                       <button
                         key={idx}
                         onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) onTagClick('hair_makeup', artist);
+                          if (!isAnyReorderMode) onTagClick('hair_makeup', resolveTag('hair_makeup', artist).canonical);
                         })}
                         data-tag-pill
                         className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
@@ -1425,7 +1446,7 @@ export default function EventCard({
                           color: tagColors?.hair_makeup_text_color || '#7e22ce'
                         }}
                       >
-                        {artist}
+                        {resolveTag('hair_makeup', artist).display}
                       </button>
                     ))}
                     {pendingForSection('hair_makeup').map((suggestion) => {
@@ -1496,7 +1517,10 @@ export default function EventCard({
                           <button
                             key={idx}
                             onClick={(e) => handlePillClick(e, () => {
-                              if (!isAnyReorderMode) onTagClick(`custom_performer`, `${tagDef.slug}\x00${val}`);
+                              if (!isAnyReorderMode) {
+                                const r = resolveTag(`custom:${tagDef.slug}`, val);
+                                onTagClick(`custom_performer`, `${tagDef.slug}\x00${r.canonical}`);
+                              }
                             })}
                             data-tag-pill
                             className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && customDropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
@@ -1507,7 +1531,7 @@ export default function EventCard({
                               color: tagDef.text_color || '#3730a3',
                             }}
                           >
-                            {val}
+                            {resolveTag(`custom:${tagDef.slug}`, val).display}
                           </button>
                         ))}
                         {pendingForSection('custom', tagDef.slug).map((suggestion) => {
@@ -1618,7 +1642,7 @@ export default function EventCard({
                     <button
                       key={idx}
                       onClick={(e) => handlePillClick(e, () => {
-                        if (!isAnyReorderMode) onTagClick('footer_tags', tag);
+                        if (!isAnyReorderMode) onTagClick('footer_tags', resolveTag('footer_tags', tag).canonical);
                       })}
                       data-tag-pill
                       className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
@@ -1629,7 +1653,7 @@ export default function EventCard({
                         color: tagColors?.footer_tags_text_color || '#065f46'
                       }}
                     >
-                      {tag}
+                      {resolveTag('footer_tags', tag).display}
                     </button>
                   ))}
                     {pendingForSection('footer_tags').map((suggestion) => {
@@ -1655,7 +1679,7 @@ export default function EventCard({
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'footer_tags' }); setNewTagValue(''); }}
                       className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex"
-                      title="Suggest footer tag"
+                      title="Suggest collection"
                     >
                       <Plus size={12} />
                     </button>

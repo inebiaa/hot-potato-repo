@@ -1,3 +1,4 @@
+import { normalizeTagNameKey } from './normalize';
 import { supabase } from './supabase';
 
 export type TagType =
@@ -5,6 +6,7 @@ export type TagType =
   | 'designer'
   | 'model'
   | 'hair_makeup'
+  | 'venue'
   | 'header_tags'
   | 'footer_tags'
   | `custom:${string}`;
@@ -15,8 +17,21 @@ export interface TagIdentityRecord {
   canonical_name: string;
 }
 
+/** Trim, collapse spaces, lowercase, strip accents (aligned with DB `fold_tag_normalize`). */
 export function normalizeTagName(input: string): string {
-  return input.trim().toLowerCase().replace(/\s+/g, ' ');
+  return normalizeTagNameKey(input);
+}
+
+/** True if `value` matches any entry (accent/case/spacing insensitive). */
+export function tagArrayContainsNormalized(arr: string[] | null | undefined, value: string): boolean {
+  if (!arr?.length || !String(value).trim()) return false;
+  const v = normalizeTagName(value);
+  return arr.some((x) => normalizeTagName(x) === v);
+}
+
+/** Accent/case/spacing insensitive string compare for city-like fields. */
+export function sameTagSpelling(a: string | null | undefined, b: string | null | undefined): boolean {
+  return normalizeTagName(a ?? '') === normalizeTagName(b ?? '');
 }
 
 export async function findIdentityByName(tagType: TagType, name: string): Promise<TagIdentityRecord | null> {
@@ -46,6 +61,39 @@ export async function findIdentityByName(tagType: TagType, name: string): Promis
     .eq('tag_type', tagType)
     .limit(1);
   return identities && identities.length > 0 ? (identities[0] as TagIdentityRecord) : null;
+}
+
+/**
+ * All distinct alias display strings for an identity resolved from `headlineTagValue`, excluding any
+ * spelling that matches the headline (normalized). Empty when there is no identity (e.g. city/season).
+ */
+export async function fetchAliasStringsForTag(tagType: string, headlineTagValue: string): Promise<string[]> {
+  if (tagType === 'city' || tagType === 'season') return [];
+
+  const headlineNorm = normalizeTagName(headlineTagValue);
+  if (!headlineNorm) return [];
+
+  const identity = await findIdentityByName(tagType as TagType, headlineTagValue);
+  if (!identity) return [];
+
+  const { data: rows, error } = await supabase
+    .from('tag_aliases')
+    .select('alias')
+    .eq('identity_id', identity.id)
+    .order('alias', { ascending: true });
+
+  if (error || !rows?.length) return [];
+
+  const seenNorm = new Set<string>();
+  const out: string[] = [];
+  for (const row of rows as { alias: string }[]) {
+    const n = normalizeTagName(row.alias);
+    if (!n || n === headlineNorm) continue;
+    if (seenNorm.has(n)) continue;
+    seenNorm.add(n);
+    out.push(row.alias);
+  }
+  return out;
 }
 
 export async function ensureIdentity(tagType: TagType, name: string, createdBy?: string): Promise<TagIdentityRecord | null> {
@@ -170,6 +218,7 @@ interface EventTagSource {
   featured_designers?: string[] | null;
   models?: string[] | null;
   hair_makeup?: string[] | null;
+  location?: string | null;
   header_tags?: string[] | null;
   footer_tags?: string[] | null;
 }
@@ -181,7 +230,7 @@ export async function searchEventTags(query: string): Promise<Pick<TagIdentityRe
 
   const { data: events, error } = await supabase
     .from('events')
-    .select('producers, featured_designers, models, hair_makeup, header_tags, footer_tags')
+    .select('producers, featured_designers, models, hair_makeup, location, header_tags, footer_tags')
     .order('date', { ascending: false })
     .limit(500);
 
@@ -205,6 +254,7 @@ export async function searchEventTags(query: string): Promise<Pick<TagIdentityRe
         }
       }
     }
+    if (typeof ev.location === 'string') add('venue', ev.location);
   }
 
   return Array.from(seen.values()).slice(0, 15);

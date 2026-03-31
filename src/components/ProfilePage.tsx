@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, X, ChevronRight, Rows3, LayoutGrid, Copy, RefreshCw, Star } from 'lucide-react';
 import { supabase, UserList, UserListEvent, Rating, Event } from '../lib/supabase';
 import EventCard from './EventCard';
 import { useAuth } from '../contexts/AuthContext';
 import { USER_LISTS_SETUP_SQL, getSupabaseSqlEditorUrl } from '../lib/userListsSetupSql';
+import { TagDisplayProvider } from '../contexts/TagDisplayContext';
+import { fetchTagResolutionForEvents, type TagResolutionMap } from '../lib/tagDisplayResolution';
+import { normalizeForSearch } from '../lib/normalize';
 
 interface ProfilePageProps {
   userId: string;
@@ -35,6 +38,9 @@ interface ProfilePageProps {
   refreshTrigger?: number;
   /** Optional cached events from App - avoids re-fetching when navigating */
   cachedEvents?: Event[];
+  /** Optional app-wide filtered event ids from primary search bar. */
+  visibleEventIds?: Set<string>;
+  onVisibleReviewCountsChange?: (counts: { visible: number; total: number }) => void;
 }
 
 interface ReviewRow {
@@ -50,7 +56,19 @@ interface ListWithCount extends UserList {
   event_count: number;
 }
 
-export default function ProfilePage({ userId, pathname, onClose, onTagClick, onOpenEvent, tagColors, customPerformerTags = [], refreshTrigger = 0, cachedEvents }: ProfilePageProps) {
+export default function ProfilePage({
+  userId,
+  pathname,
+  onClose,
+  onTagClick,
+  onOpenEvent,
+  tagColors,
+  customPerformerTags = [],
+  refreshTrigger = 0,
+  cachedEvents,
+  visibleEventIds,
+  onVisibleReviewCountsChange,
+}: ProfilePageProps) {
   const { user: currentUser } = useAuth();
   const isOwnProfile = !!currentUser && currentUser.id === userId;
   const [username, setUsername] = useState<string>('');
@@ -70,6 +88,7 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [addEventSearch, setAddEventSearch] = useState('');
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [tagDisplayMap, setTagDisplayMap] = useState<TagResolutionMap | null>(null);
   const [reviewsLayout, setReviewsLayout] = useState<'list' | 'cards'>(() => {
     try {
       const saved = window.localStorage.getItem('profile_reviews_layout');
@@ -85,6 +104,25 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
       // Ignore storage errors.
     }
   }, [reviewsLayout]);
+
+  const profileEventsForTags = useMemo(
+    () => reviews.filter((r) => r.event?.id).map((r) => r.event),
+    [reviews]
+  );
+
+  useEffect(() => {
+    if (profileEventsForTags.length === 0) {
+      setTagDisplayMap(new Map());
+      return;
+    }
+    let cancelled = false;
+    fetchTagResolutionForEvents(profileEventsForTags).then((m) => {
+      if (!cancelled) setTagDisplayMap(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [profileEventsForTags]);
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -275,12 +313,21 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
     }
   };
 
+  const addSearchNorm = normalizeForSearch(addEventSearch);
   const filteredAddEvents = allEvents.filter(
     (e) =>
       !listEvents.some((le) => le.event.id === e.id) &&
-      (e.name.toLowerCase().includes(addEventSearch.toLowerCase()) ||
-        (e.city || '').toLowerCase().includes(addEventSearch.toLowerCase()))
+      (!addSearchNorm ||
+        normalizeForSearch(e.name || '').includes(addSearchNorm) ||
+        normalizeForSearch(e.city || '').includes(addSearchNorm))
   );
+  const visibleReviews = useMemo(
+    () => (visibleEventIds ? reviews.filter((r) => visibleEventIds.has(r.event?.id)) : reviews),
+    [reviews, visibleEventIds]
+  );
+  useEffect(() => {
+    onVisibleReviewCountsChange?.({ visible: visibleReviews.length, total: reviews.length });
+  }, [onVisibleReviewCountsChange, visibleReviews.length, reviews.length]);
 
   if (loading) {
     return (
@@ -426,7 +473,7 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
                   <p className="text-stone-500">Sign in as: <span className="font-mono text-stone-600">{userIdPublic}</span></p>
                 )}
                 <p>
-                  {reviews.length} review{reviews.length !== 1 ? 's' : ''}
+                  {visibleReviews.length} review{visibleReviews.length !== 1 ? 's' : ''}
                   {lists.length > 0 && ` · ${lists.length} list${lists.length !== 1 ? 's' : ''}`}
                 </p>
               </div>
@@ -462,11 +509,12 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
 
         <section className="space-y-4">
           <h2 className="text-lg font-semibold text-stone-900">My reviews</h2>
-          {reviews.length === 0 ? (
+          {visibleReviews.length === 0 ? (
             <div className="rounded-2xl bg-white/80 py-16 px-6 text-center"><p className="text-stone-500 text-sm">No reviews yet. Rate a show to see it here.</p></div>
           ) : reviewsLayout === 'cards' ? (
+            <TagDisplayProvider map={tagDisplayMap}>
             <div className="columns-[300px] gap-6">
-              {reviews
+              {visibleReviews
                 .filter((row, idx, arr) => arr.findIndex((x) => x.event.id === row.event.id) === idx)
                 .map(({ rating, event, averageRating, ratingCount }) => (
                   event?.id ? (
@@ -487,9 +535,10 @@ export default function ProfilePage({ userId, pathname, onClose, onTagClick, onO
                   ) : null
                 ))}
             </div>
+            </TagDisplayProvider>
           ) : (
             <ul className="space-y-2">
-              {reviews.map(({ rating, eventName, eventDate, event }) => (
+              {visibleReviews.map(({ rating, eventName, eventDate, event }) => (
                 <li key={rating.id}>
                   <button
                     type="button"

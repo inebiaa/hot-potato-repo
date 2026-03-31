@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
-import { Plus, LogOut, LogIn, Sparkles, Search, Filter, Settings, MapPin, BarChart3, User } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, useCallback, startTransition, type ReactNode } from 'react';
+import { Sparkles, Search } from 'lucide-react';
 import AppHeader from './components/AppHeader';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
@@ -13,50 +13,22 @@ import SettingsModal from './components/SettingsModal';
 import TagRatingsModal from './components/TagRatingsModal';
 import StatisticsPage from './components/StatisticsPage';
 import ProfilePage from './components/ProfilePage';
+import type { AppSettings } from './types/appSettings';
+import { TagDisplayProvider } from './contexts/TagDisplayContext';
+import { eventMatchesVenueTag, fetchTagResolutionForEvents, tagResolutionKey, type TagResolutionMap } from './lib/tagDisplayResolution';
+import {
+  normalizeTagName,
+  sameTagSpelling,
+  searchTagIdentities,
+  tagArrayContainsNormalized,
+  type TagIdentityRecord,
+} from './lib/tagIdentity';
+import PrimarySearchBar from './components/PrimarySearchBar';
 
 interface EventWithStats extends Event {
   average_rating: number;
   rating_count: number;
   user_rating?: Rating;
-}
-
-interface AppSettings {
-  [key: string]: string | undefined;
-  app_name?: string;
-  app_icon_url?: string;
-  app_logo_url?: string;
-  app_favicon_url?: string;
-  tagline?: string;
-  color_scheme?: string;
-  collapsible_cards_enabled?: string;
-  producer_bg_color?: string;
-  producer_text_color?: string;
-  designer_bg_color?: string;
-  designer_text_color?: string;
-  model_bg_color?: string;
-  model_text_color?: string;
-  hair_makeup_bg_color?: string;
-  hair_makeup_text_color?: string;
-  city_bg_color?: string;
-  city_text_color?: string;
-  season_bg_color?: string;
-  season_text_color?: string;
-  header_tags_bg_color?: string;
-  header_tags_text_color?: string;
-  countdown_bg_color?: string;
-  countdown_text_color?: string;
-  footer_tags_bg_color?: string;
-  footer_tags_text_color?: string;
-  producer_icon?: string;
-  designer_icon?: string;
-  model_icon?: string;
-  hair_makeup_icon?: string;
-  city_icon?: string;
-  season_icon?: string;
-  header_tags_icon?: string;
-  footer_tags_icon?: string;
-  optional_tags_bg_color?: string;
-  optional_tags_text_color?: string;
 }
 
 function App() {
@@ -84,8 +56,8 @@ function App() {
   const [overlaySuggestSection, setOverlaySuggestSection] = useState<keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | undefined>(undefined);
   const [overlaySuggestCustomSlug, setOverlaySuggestCustomSlug] = useState<string | undefined>(undefined);
   const [tagModalRefreshTrigger, setTagModalRefreshTrigger] = useState(0);
+  const [identitySearchHits, setIdentitySearchHits] = useState<TagIdentityRecord[]>([]);
   const [upcomingExpanded, setUpcomingExpanded] = useState(false);
-  const [footerTagExpanded, setFooterTagExpanded] = useState<Record<string, boolean>>({});
   const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasClearedFiltersForSharedLink = useRef(false);
   const overlayReorderEnteredAtRef = useRef<number>(0);
@@ -93,6 +65,12 @@ function App() {
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchDragOver, setSearchDragOver] = useState(false);
+  const [tagResolutionMap, setTagResolutionMap] = useState<TagResolutionMap | null>(null);
+  const [profileReviewCounts, setProfileReviewCounts] = useState<{ visible: number; total: number } | null>(null);
+
+  const openSettingsModal = useCallback(() => {
+    startTransition(() => setIsSettingsModalOpen(true));
+  }, []);
 
   const handleSearchDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -104,6 +82,14 @@ function App() {
       const searchTerm = type === 'custom_performer' ? value.split('\x00')[1] ?? value : value;
       setSearchQuery(searchTerm);
     }
+  };
+  const handleSearchDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setSearchDragOver(true);
+  };
+  const handleSearchDragLeave = () => {
+    setSearchDragOver(false);
   };
 
   const fetchSettings = async () => {
@@ -274,6 +260,20 @@ function App() {
   }, [user]);
 
   useEffect(() => {
+    if (events.length === 0) {
+      setTagResolutionMap(new Map());
+      return;
+    }
+    let cancelled = false;
+    fetchTagResolutionForEvents(events).then((map) => {
+      if (!cancelled) setTagResolutionMap(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [events]);
+
+  useEffect(() => {
     if (appSettings?.app_favicon_url) {
       const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
       if (link) {
@@ -285,21 +285,36 @@ function App() {
   const searchableTags = useMemo(() => {
     const seen = new Set<string>();
     const tags: { type: string; value: string; label: string }[] = [];
-    const add = (type: string, value: string) => {
-      const key = `${type}:${value}`;
+    const add = (type: string, value: string, label?: string) => {
+      const lab = label ?? value;
+      const key = `${type}:${value}:${lab}`;
       if (!seen.has(key) && value) {
         seen.add(key);
-        tags.push({ type, value, label: value });
+        tags.push({ type, value, label: lab });
+      }
+    };
+    const map = tagResolutionMap;
+    const expandIdentity = (tagType: string, raw: string) => {
+      const entry = map?.get(tagResolutionKey(tagType, raw));
+      const canonical = entry?.canonical ?? raw;
+      add(tagType, canonical, canonical);
+      if (entry) {
+        entry.searchable.forEach((s) => {
+          if (normalizeTagName(s) !== normalizeTagName(canonical)) {
+            add(tagType, canonical, s);
+          }
+        });
       }
     };
     events.forEach((e) => {
-      (e.producers || []).forEach((v) => add('producer', v));
-      (e.featured_designers || []).forEach((v) => add('designer', v));
-      (e.models || []).forEach((v) => add('model', v));
-      (e.hair_makeup || []).forEach((v) => add('hair_makeup', v));
-      (e.genre || e.header_tags || []).forEach((v: string) => add('header_tags', v));
-      (e.footer_tags || []).forEach((v) => add('footer_tags', v));
+      (e.producers || []).forEach((v) => expandIdentity('producer', v));
+      (e.featured_designers || []).forEach((v) => expandIdentity('designer', v));
+      (e.models || []).forEach((v) => expandIdentity('model', v));
+      (e.hair_makeup || []).forEach((v) => expandIdentity('hair_makeup', v));
+      (e.genre || e.header_tags || []).forEach((v: string) => expandIdentity('header_tags', v));
+      (e.footer_tags || []).forEach((v) => expandIdentity('footer_tags', v));
       if (e.city) add('city', e.city);
+      if (e.location) expandIdentity('venue', e.location);
       add('season', getSeasonFromDate(e.date));
       {
         const y = getYearFromDate(e.date);
@@ -307,24 +322,59 @@ function App() {
       }
       if (e.custom_tags && typeof e.custom_tags === 'object') {
         Object.entries(e.custom_tags).forEach(([slug, vals]) => {
+          const tt = `custom:${slug}` as const;
           (vals || []).forEach((v) => {
-            const key = `custom_performer:${slug}:${v}`;
-            if (!seen.has(key) && v) {
-              seen.add(key);
-              tags.push({ type: 'custom_performer', value: `${slug}\x00${v}`, label: v });
-            }
+            const entry = map?.get(tagResolutionKey(tt, v));
+            const canonical = entry?.canonical ?? v;
+            const filterVal = `${slug}\x00${canonical}`;
+            add('custom_performer', filterVal, canonical);
+            entry?.searchable.forEach((s) => {
+              if (normalizeTagName(s) !== normalizeTagName(canonical)) {
+                add('custom_performer', filterVal, s);
+              }
+            });
           });
         });
       }
     });
     return tags.sort((a, b) => a.label.localeCompare(b.label));
-  }, [events]);
+  }, [events, tagResolutionMap]);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setIdentitySearchHits([]);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      searchTagIdentities(q).then(setIdentitySearchHits).catch(() => setIdentitySearchHits([]));
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
 
   const tagSuggestions = useMemo(() => {
     const q = normalizeForSearch(searchQuery);
     if (!q || q.length < 2) return [];
-    return searchableTags.filter((t) => normalizeForSearch(t.label).includes(q)).slice(0, 8);
-  }, [searchQuery, searchableTags]);
+    const fromEvents = searchableTags.filter((t) => normalizeForSearch(t.label).includes(q));
+    const seen = new Set(fromEvents.map((t) => `${t.type}:${t.value}`));
+    const out: { type: string; value: string; label: string }[] = [...fromEvents];
+    for (const id of identitySearchHits) {
+      const sug =
+        id.tag_type.startsWith('custom:')
+          ? {
+              type: 'custom_performer',
+              value: `${id.tag_type.slice(7)}\x00${id.canonical_name}`,
+              label: id.canonical_name,
+            }
+          : { type: id.tag_type, value: id.canonical_name, label: id.canonical_name };
+      const key = `${sug.type}:${sug.value}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(sug);
+      }
+    }
+    return out.slice(0, 8);
+  }, [searchQuery, searchableTags, identitySearchHits]);
 
   const openTagModal = (type: string, value: string) => {
     setTagRatingsData({ type, value });
@@ -511,34 +561,35 @@ function App() {
     if (searchQuery.trim()) {
       const queryNorm = normalizeForSearch(searchQuery);
       if (queryNorm) {
+        const map = tagResolutionMap;
+        const tagLineMatch = (tagType: string, raw: string) => {
+          if (normalizeForSearch(raw).includes(queryNorm)) return true;
+          const entry = map?.get(tagResolutionKey(tagType, raw));
+          return entry?.searchable.some((s) => normalizeForSearch(s).includes(queryNorm)) ?? false;
+        };
+        const customLineMatch = (slug: string, raw: string) => {
+          if (normalizeForSearch(raw).includes(queryNorm)) return true;
+          const entry = map?.get(tagResolutionKey(`custom:${slug}`, raw));
+          return entry?.searchable.some((s) => normalizeForSearch(s).includes(queryNorm)) ?? false;
+        };
         filtered = filtered.filter((event) => {
           const nameMatch = normalizeForSearch(event.name || '').includes(queryNorm);
           const descriptionMatch = normalizeForSearch(event.description || '').includes(queryNorm);
           const cityMatch = normalizeForSearch(event.city || '').includes(queryNorm);
           const locationMatch = normalizeForSearch(event.location || '').includes(queryNorm);
-          const designersMatch = event.featured_designers?.some((d) =>
-            normalizeForSearch(d).includes(queryNorm)
-          ) || false;
-          const modelsMatch = event.models?.some((m) =>
-            normalizeForSearch(m).includes(queryNorm)
-          ) || false;
-          const producersMatch = event.producers?.some((p) =>
-            normalizeForSearch(p).includes(queryNorm)
-          ) || false;
-          const headerTagsMatch = (event.genre || event.header_tags)?.some((t: string) =>
-            normalizeForSearch(t).includes(queryNorm)
-          ) || false;
-          const footerTagsMatch = event.footer_tags?.some((t) =>
-            normalizeForSearch(t).includes(queryNorm)
-          ) || false;
-          const customTagsMatch = (event.custom_tags && typeof event.custom_tags === 'object')
-            ? Object.values(event.custom_tags).flat().some((v: string) =>
-                normalizeForSearch(v || '').includes(queryNorm)
-              )
-          : false;
-          const hairMakeupMatch = event.hair_makeup?.some((h) =>
-            normalizeForSearch(h).includes(queryNorm)
-          ) || false;
+          const venueMatch = event.location ? tagLineMatch('venue', event.location) : false;
+          const designersMatch = event.featured_designers?.some((d) => tagLineMatch('designer', d)) || false;
+          const modelsMatch = event.models?.some((m) => tagLineMatch('model', m)) || false;
+          const producersMatch = event.producers?.some((p) => tagLineMatch('producer', p)) || false;
+          const headerTagsMatch = (event.genre || event.header_tags)?.some((t: string) => tagLineMatch('header_tags', t)) || false;
+          const footerTagsMatch = event.footer_tags?.some((t) => tagLineMatch('footer_tags', t)) || false;
+          const customTagsMatch =
+            event.custom_tags && typeof event.custom_tags === 'object'
+              ? Object.entries(event.custom_tags).some(([slug, vals]) =>
+                  (vals || []).some((v: string) => customLineMatch(slug, v))
+                )
+              : false;
+          const hairMakeupMatch = event.hair_makeup?.some((h) => tagLineMatch('hair_makeup', h)) || false;
           const yearMatch =
             /^\d{4}$/.test(queryNorm) && getYearFromDate(event.date) === queryNorm;
           return (
@@ -546,6 +597,7 @@ function App() {
             descriptionMatch ||
             cityMatch ||
             locationMatch ||
+            venueMatch ||
             designersMatch ||
             modelsMatch ||
             producersMatch ||
@@ -560,33 +612,37 @@ function App() {
     }
 
     if (selectedCity) {
-      filtered = filtered.filter((event) => event.city === selectedCity);
+      filtered = filtered.filter((event) => sameTagSpelling(event.city, selectedCity));
     }
 
     selectedTags.forEach((tag) => {
       filtered = filtered.filter((event) => {
         switch (tag.type) {
           case 'city':
-            return event.city === tag.value;
+            return sameTagSpelling(event.city, tag.value);
+          case 'venue':
+            return eventMatchesVenueTag(event, tag.value, tagResolutionMap);
           case 'season':
             return getSeasonFromDate(event.date) === tag.value;
           case 'year':
             return getYearFromDate(event.date) === tag.value;
           case 'producer':
-            return event.producers?.includes(tag.value);
+            return tagArrayContainsNormalized(event.producers, tag.value);
           case 'designer':
-            return event.featured_designers?.includes(tag.value);
+            return tagArrayContainsNormalized(event.featured_designers, tag.value);
           case 'model':
-            return event.models?.includes(tag.value);
+            return tagArrayContainsNormalized(event.models, tag.value);
           case 'hair_makeup':
-            return event.hair_makeup?.includes(tag.value);
+            return tagArrayContainsNormalized(event.hair_makeup, tag.value);
           case 'header_tags':
-            return (event.genre || event.header_tags)?.includes(tag.value);
+            return tagArrayContainsNormalized(event.genre || event.header_tags, tag.value);
           case 'footer_tags':
-            return event.footer_tags?.includes(tag.value);
+            return tagArrayContainsNormalized(event.footer_tags, tag.value);
           case 'custom_performer': {
             const [slug, tagValue] = tag.value.split('\x00');
-            return slug && tagValue && event.custom_tags?.[slug]?.includes(tagValue);
+            if (!slug || !tagValue) return false;
+            const vals = event.custom_tags?.[slug];
+            return tagArrayContainsNormalized(Array.isArray(vals) ? vals : null, tagValue);
           }
           default:
             return true;
@@ -595,11 +651,10 @@ function App() {
     });
 
     setFilteredEvents(filtered);
-  }, [searchQuery, selectedCity, selectedTags, dateFilter, events]);
+  }, [searchQuery, selectedCity, selectedTags, dateFilter, events, tagResolutionMap]);
 
   useEffect(() => {
     setUpcomingExpanded(false);
-    setFooterTagExpanded({});
   }, [searchQuery, selectedCity, selectedTags, dateFilter]);
 
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
@@ -724,6 +779,7 @@ function App() {
       );
     }
     return (
+      <TagDisplayProvider map={tagResolutionMap}>
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-md mx-auto">
           <EventCard
@@ -749,8 +805,11 @@ function App() {
           refreshTrigger={tagModalRefreshTrigger}
           tagColors={appSettings}
           onTagClick={openTagModal}
+          tagResolutionMap={tagResolutionMap}
+          cachedAllEvents={events}
         />
       </div>
+      </TagDisplayProvider>
     );
   }
 
@@ -764,6 +823,7 @@ function App() {
 
   if (showStats) {
     return (
+      <TagDisplayProvider map={tagResolutionMap}>
       <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
         <AppHeader
           pathname={pathname}
@@ -773,13 +833,37 @@ function App() {
           onGoHome={goBackFromStats}
           onOpenStats={openStats}
           onOpenProfile={openProfile}
-          onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onOpenSettings={openSettingsModal}
           onAddEvent={() => setIsAddEventModalOpen(true)}
           onSignIn={() => openAuthModal('signin')}
           onSignOut={() => signOut()}
         />
         <main className="flex-1 min-h-0 overflow-y-auto">
           <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
+            <PrimarySearchBar
+              appSettings={appSettings}
+              searchDragOver={searchDragOver}
+              searchFocused={searchFocused}
+              selectedTags={selectedTags}
+              selectedCity={selectedCity}
+              dateFilter={dateFilter}
+              allCities={allCities}
+              searchQuery={searchQuery}
+              tagSuggestions={tagSuggestions}
+              filteredCount={filteredEvents.length}
+              totalCount={filteredEvents.length}
+              onSearchDrop={handleSearchDrop}
+              onSearchDragOver={handleSearchDragOver}
+              onSearchDragLeave={handleSearchDragLeave}
+              onSearchFocus={() => setSearchFocused(true)}
+              onSearchBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+              onSearchQueryChange={setSearchQuery}
+              onSelectTagFilter={selectTagFilter}
+              onRemoveTagFilter={removeTagFilter}
+              onSelectedCityChange={setSelectedCity}
+              onDateFilterChange={setDateFilter}
+              onClearFilters={clearFilters}
+            />
             <button
               onClick={goBackFromStats}
               className="text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
@@ -793,9 +877,10 @@ function App() {
               onOpenEvent={(id) => openEventOverlay(id, 'tagModal')}
               tagModalRefreshTrigger={tagModalRefreshTrigger}
               asPage
-              events={events}
+              events={filteredEvents}
               eventOverlayOpen={!!overlayEventId}
               onCloseEventOverlay={closeEventOverlay}
+              tagResolutionMap={tagResolutionMap}
             />
           </div>
         </main>
@@ -836,7 +921,27 @@ function App() {
             )}
           </div>
         )}
+
+        <AddEventModal
+          isOpen={isAddEventModalOpen}
+          onClose={() => setIsAddEventModalOpen(false)}
+          onEventAdded={fetchEvents}
+        />
+
+        {isSettingsModalOpen && (
+          <SettingsModal
+            isOpen
+            onClose={() => { setIsSettingsModalOpen(false); fetchSettings(); }}
+            onSettingsUpdated={() => {
+              fetchSettings();
+              fetchTagResolutionForEvents(events).then(setTagResolutionMap);
+            }}
+            onSettingsPreview={setAppSettings}
+            onAccountUpdated={fetchEvents}
+          />
+        )}
       </div>
+      </TagDisplayProvider>
     );
   }
 
@@ -866,6 +971,7 @@ function App() {
       );
     }
     return (
+      <TagDisplayProvider map={tagResolutionMap}>
       <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
         <AppHeader
           pathname={pathname}
@@ -875,13 +981,39 @@ function App() {
           onGoHome={goBack}
           onOpenStats={openStats}
           onOpenProfile={openProfile}
-          onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onOpenSettings={openSettingsModal}
           onAddEvent={() => setIsAddEventModalOpen(true)}
           onSignIn={() => openAuthModal('signin')}
           onSignOut={() => signOut()}
         />
         <main className="flex-1 min-h-0 overflow-y-auto">
           <div className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
+          <PrimarySearchBar
+            appSettings={appSettings}
+            searchDragOver={searchDragOver}
+            searchFocused={searchFocused}
+            selectedTags={selectedTags}
+            selectedCity={selectedCity}
+            dateFilter={dateFilter}
+            allCities={allCities}
+            searchQuery={searchQuery}
+            tagSuggestions={tagSuggestions}
+            filteredCount={profileReviewCounts?.visible}
+            totalCount={profileReviewCounts?.total}
+            summaryLabelSingular="review"
+            summaryLabelPlural="reviews"
+            onSearchDrop={handleSearchDrop}
+            onSearchDragOver={handleSearchDragOver}
+            onSearchDragLeave={handleSearchDragLeave}
+            onSearchFocus={() => setSearchFocused(true)}
+            onSearchBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+            onSearchQueryChange={setSearchQuery}
+            onSelectTagFilter={selectTagFilter}
+            onRemoveTagFilter={removeTagFilter}
+            onSelectedCityChange={setSelectedCity}
+            onDateFilterChange={setDateFilter}
+            onClearFilters={clearFilters}
+          />
           <button
             onClick={goBack}
             className="text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
@@ -896,6 +1028,8 @@ function App() {
             onOpenEvent={(id, openWithWiggle, suggestSection, suggestCustomSlug) => openEventOverlay(id, 'viewRatings', openWithWiggle, suggestSection, suggestCustomSlug)}
             tagColors={appSettings}
             customPerformerTags={[]}
+            visibleEventIds={new Set(filteredEvents.map((e) => e.id))}
+            onVisibleReviewCountsChange={setProfileReviewCounts}
           />
           </div>
         </main>
@@ -909,6 +1043,8 @@ function App() {
           refreshTrigger={tagModalRefreshTrigger}
           tagColors={appSettings}
           onTagClick={openTagModal}
+          tagResolutionMap={tagResolutionMap}
+          cachedAllEvents={events}
         />
 
         {overlayEventId && (
@@ -956,14 +1092,20 @@ function App() {
           onEventAdded={fetchEvents}
         />
 
-        <SettingsModal
-          isOpen={isSettingsModalOpen}
-          onClose={() => { setIsSettingsModalOpen(false); fetchSettings(); }}
-          onSettingsUpdated={fetchSettings}
-          onSettingsPreview={setAppSettings}
-          onAccountUpdated={fetchEvents}
-        />
+        {isSettingsModalOpen && (
+          <SettingsModal
+            isOpen
+            onClose={() => { setIsSettingsModalOpen(false); fetchSettings(); }}
+            onSettingsUpdated={() => {
+              fetchSettings();
+              fetchTagResolutionForEvents(events).then(setTagResolutionMap);
+            }}
+            onSettingsPreview={setAppSettings}
+            onAccountUpdated={fetchEvents}
+          />
+        )}
       </div>
+      </TagDisplayProvider>
     );
   }
 
@@ -986,6 +1128,7 @@ function App() {
   }
 
   return (
+    <TagDisplayProvider map={tagResolutionMap}>
     <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
       <AppHeader
         pathname={pathname}
@@ -995,7 +1138,7 @@ function App() {
         onGoHome={goToHome}
         onOpenStats={openStats}
         onOpenProfile={openProfile}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenSettings={openSettingsModal}
         onAddEvent={() => setIsAddEventModalOpen(true)}
         onSignIn={() => openAuthModal('signin')}
         onSignOut={() => signOut()}
@@ -1009,167 +1152,30 @@ function App() {
             {user ? 'Discover, rate, and review fashion shows from around the world' : 'Sign in to rate shows and add your own!'}
           </p>
 
-          <div className="border-b border-gray-200 pb-4 mb-6">
-            <div className="flex flex-wrap gap-3 items-center">
-              <div
-                className={`relative flex-1 min-w-[200px] flex items-center gap-2 pl-3 pr-4 py-2 border border-gray-200 rounded-lg bg-white transition-colors text-sm focus-within:ring-1 focus-within:ring-gray-300 focus-within:border-gray-300 ${searchDragOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
-                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setSearchDragOver(true); }}
-                onDragLeave={() => setSearchDragOver(false)}
-                onDrop={handleSearchDrop}
-              >
-                <Search className="shrink-0 text-gray-400" size={18} />
-                <div className="flex flex-nowrap items-center gap-1.5 min-w-0 flex-1 overflow-x-auto">
-                  {selectedTags.map((selectedTag) => {
-                    const isHex = (s: string | undefined) => s && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s);
-                    const type = selectedTag.type;
-                    const bg = (type === 'producer' && isHex(appSettings.producer_bg_color)) ? appSettings.producer_bg_color!
-                      : (type === 'designer' && isHex(appSettings.designer_bg_color)) ? appSettings.designer_bg_color!
-                      : (type === 'model' && isHex(appSettings.model_bg_color)) ? appSettings.model_bg_color!
-                      : (type === 'hair_makeup' && isHex(appSettings.hair_makeup_bg_color)) ? appSettings.hair_makeup_bg_color!
-                      : (type === 'city' && isHex(appSettings.city_bg_color)) ? appSettings.city_bg_color!
-                      : (type === 'season' || type === 'year') && isHex(appSettings.season_bg_color) ? appSettings.season_bg_color!
-                      : (type === 'header_tags' && isHex(appSettings.header_tags_bg_color)) ? appSettings.header_tags_bg_color!
-                      : (type === 'footer_tags' && isHex(appSettings.footer_tags_bg_color)) ? appSettings.footer_tags_bg_color!
-                      : '#dbeafe';
-                    const text = (type === 'producer' && isHex(appSettings.producer_text_color)) ? appSettings.producer_text_color!
-                      : (type === 'designer' && isHex(appSettings.designer_text_color)) ? appSettings.designer_text_color!
-                      : (type === 'model' && isHex(appSettings.model_text_color)) ? appSettings.model_text_color!
-                      : (type === 'hair_makeup' && isHex(appSettings.hair_makeup_text_color)) ? appSettings.hair_makeup_text_color!
-                      : (type === 'city' && isHex(appSettings.city_text_color)) ? appSettings.city_text_color!
-                      : (type === 'season' || type === 'year') && isHex(appSettings.season_text_color) ? appSettings.season_text_color!
-                      : (type === 'header_tags' && isHex(appSettings.header_tags_text_color)) ? appSettings.header_tags_text_color!
-                      : (type === 'footer_tags' && isHex(appSettings.footer_tags_text_color)) ? appSettings.footer_tags_text_color!
-                      : '#1e40af';
-                    const label = type === 'designer' ? 'Designer: ' : type === 'model' ? 'Model: ' : type === 'producer' ? 'Producer: ' : type === 'city' ? 'City: ' : type === 'season' ? 'Season: ' : type === 'year' ? 'Year: ' : type === 'hair_makeup' ? 'Hair & Makeup: ' : type === 'header_tags' ? 'Genre: ' : type === 'footer_tags' ? 'Collection: ' : type === 'custom_performer' ? 'Custom: ' : '';
-                    const val = type === 'custom_performer' ? selectedTag.value.split('\x00')[1] : selectedTag.value;
-                    return (
-                      <span
-                        key={`${type}:${selectedTag.value}`}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs shrink-0"
-                        style={{ backgroundColor: bg, color: text }}
-                      >
-                        {label}{val}
-                        <button
-                          type="button"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeTagFilter(type, selectedTag.value); }}
-                          className="opacity-80 hover:opacity-100 -mr-0.5"
-                          aria-label={`Remove ${val} filter`}
-                        >
-                          <span className="sr-only">Remove</span>
-                          <span aria-hidden>×</span>
-                        </button>
-                      </span>
-                    );
-                  })}
-                  {selectedCity && (() => {
-                    const isHexCity = (s: string | undefined) => s && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s);
-                    return (
-                    <span
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs shrink-0"
-                      style={{
-                        backgroundColor: isHexCity(appSettings.city_bg_color) ? appSettings.city_bg_color! : '#dbeafe',
-                        color: isHexCity(appSettings.city_text_color) ? appSettings.city_text_color! : '#1e40af',
-                      }}
-                    >
-                      City: {selectedCity}
-                      <button
-                        type="button"
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedCity(''); }}
-                        className="opacity-80 hover:opacity-100 -mr-0.5"
-                        aria-label={`Remove city filter`}
-                      >
-                        <span className="sr-only">Remove</span>
-                        <span aria-hidden>×</span>
-                      </button>
-                    </span>
-                    );
-                  })()}
-                  {dateFilter !== 'all' && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs shrink-0 bg-stone-200 text-stone-800">
-                      {dateFilter === 'future' ? 'Upcoming' : 'Past'}
-                      <button
-                        type="button"
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDateFilter('all'); }}
-                        className="opacity-80 hover:opacity-100 -mr-0.5"
-                        aria-label="Remove date filter"
-                      >
-                        <span className="sr-only">Remove</span>
-                        <span aria-hidden>×</span>
-                      </button>
-                    </span>
-                  )}
-                  <input
-                    type="text"
-                    placeholder={(selectedTags.length || selectedCity || dateFilter !== 'all') ? '' : 'Search shows, designers, models...'}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onFocus={() => setSearchFocused(true)}
-                    onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
-                    className="flex-1 min-w-[120px] py-0.5 border-0 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"
-                  />
-                </div>
-                {searchFocused && tagSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
-                    <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-100">Filter by tag</div>
-                    {tagSuggestions.map((t) => (
-                      <button
-                        key={`${t.type}:${t.value}`}
-                        type="button"
-                        onMouseDown={(e) => { e.preventDefault(); selectTagFilter(t.type, t.value); }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                      >
-                        <span className="text-gray-400 text-xs capitalize">{t.type.replace(/_/g, ' ')}:</span>
-                        <span className="text-gray-900">{t.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <div className="relative">
-                  <select
-                    value={selectedCity}
-                    onChange={(e) => setSelectedCity(e.target.value)}
-                    className="pl-3 pr-8 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 appearance-none cursor-pointer"
-                  >
-                    <option value="">All Cities</option>
-                    {allCities.map((city) => (
-                      <option key={city} value={city}>
-                        {city}
-                      </option>
-                    ))}
-                  </select>
-                  <MapPin className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" size={14} />
-                </div>
-                <div className="relative">
-                  <select
-                    value={dateFilter}
-                    onChange={(e) => setDateFilter(e.target.value as 'all' | 'past' | 'future')}
-                    className="pl-3 pr-8 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 appearance-none cursor-pointer"
-                  >
-                    <option value="all">All Events</option>
-                    <option value="future">Upcoming</option>
-                    <option value="past">Past</option>
-                  </select>
-                  <Filter className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" size={14} />
-                </div>
-              </div>
-            </div>
-
-            {(searchQuery || selectedCity || selectedTags.length || dateFilter !== 'all') && (
-              <div className="mt-3 flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-gray-600">
-                  Showing {filteredEvents.length} of {events.length} shows
-                </span>
-                <button
-                  onClick={clearFilters}
-                  className="text-sm text-blue-600 hover:text-blue-700"
-                >
-                  Clear filters
-                </button>
-              </div>
-            )}
-          </div>
+          <PrimarySearchBar
+            appSettings={appSettings}
+            searchDragOver={searchDragOver}
+            searchFocused={searchFocused}
+            selectedTags={selectedTags}
+            selectedCity={selectedCity}
+            dateFilter={dateFilter}
+            allCities={allCities}
+            searchQuery={searchQuery}
+            tagSuggestions={tagSuggestions}
+            filteredCount={filteredEvents.length}
+            totalCount={events.length}
+            onSearchDrop={handleSearchDrop}
+            onSearchDragOver={handleSearchDragOver}
+            onSearchDragLeave={handleSearchDragLeave}
+            onSearchFocus={() => setSearchFocused(true)}
+            onSearchBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+            onSearchQueryChange={setSearchQuery}
+            onSelectTagFilter={selectTagFilter}
+            onRemoveTagFilter={removeTagFilter}
+            onSelectedCityChange={setSelectedCity}
+            onDateFilterChange={setDateFilter}
+            onClearFilters={clearFilters}
+          />
         </div>
 
         {eventsError && (
@@ -1246,21 +1252,7 @@ function App() {
           const nextUpcoming = upcoming[0] ?? null;
           const otherUpcoming = upcoming.slice(1);
 
-          const isFilteringByFooterTag = selectedTags.some((t) => t.type === 'footer_tags');
-          const byDateAsc = (a: EventWithStats, b: EventWithStats) => new Date(a.date).getTime() - new Date(b.date).getTime();
-
-          const footerTagToEvents = new Map<string, EventWithStats[]>();
-          let ungroupedPast: EventWithStats[];
-
-          if (isFilteringByFooterTag && pastEvents.length >= 2) {
-            const footerTagValue = selectedTags.find((t) => t.type === 'footer_tags')?.value ?? '';
-            footerTagToEvents.set(footerTagValue, [...pastEvents].sort(byDateAsc));
-            ungroupedPast = [];
-          } else {
-            ungroupedPast = [...pastEvents].sort(byDateDesc);
-          }
-
-          const sortedFooterTags = [...footerTagToEvents.keys()].sort((a, b) => a.localeCompare(b));
+          const ungroupedPast = [...pastEvents].sort(byDateDesc);
 
           const CARD_TOP_SPACER = 'h-6 shrink-0';
 
@@ -1287,126 +1279,6 @@ function App() {
               />
             </div>
           );
-
-          const renderFooterTagBlock = (tag: string) => {
-            const colEvents = footerTagToEvents.get(tag)!;
-            const isExpanded = footerTagExpanded[tag];
-            const nextEvent = colEvents[0];
-            const otherEvents = colEvents.slice(1);
-            const stacked = [...otherEvents.slice(0, 3), nextEvent];
-            const n = stacked.length;
-            const offset = (n - 1) * 10;
-            const toggleExpanded = () => setFooterTagExpanded((prev) => ({ ...prev, [tag]: !prev[tag] }));
-            return (
-              <div key={tag} className={`flex flex-col w-full min-w-0 ${!isExpanded ? 'min-h-[520px] mb-16 md:mb-6 md:mr-6' : 'min-h-0 h-full'}`}>
-                <div className={`shrink-0 flex items-center ${CARD_TOP_SPACER}`} />
-                <div className={`relative flex-1 ${!isExpanded ? 'min-h-[480px] pb-3' : 'overflow-visible'}`}>
-                  {!isExpanded && (
-                    <div className="relative w-full">
-                      <button
-                        type="button"
-                        data-tag-pill
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleExpanded(); }}
-                        className="absolute top-2 right-2 z-50 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
-                        style={{
-                          backgroundColor: appSettings.footer_tags_bg_color || '#d1fae5',
-                          color: appSettings.footer_tags_text_color || '#065f46',
-                        }}
-                        aria-expanded={isExpanded}
-                        aria-label={isExpanded ? `Collapse ${tag}` : `Expand ${tag}`}
-                      >
-                        {isExpanded ? `−${colEvents.length}` : `+${colEvents.length}`}
-                      </button>
-                      {stacked.slice(0, -1).map((event, i) => {
-                        const step = (n - 1 - i) * 10;
-                        return (
-                          <div
-                            key={event.id}
-                            className="absolute overflow-hidden pointer-events-none rounded-lg bg-white shadow-md flex flex-col"
-                            style={{
-                              left: i * 10,
-                              right: offset - i * 10,
-                              top: step,
-                              bottom: -step,
-                              zIndex: i,
-                              opacity: 1,
-                            }}
-                          >
-                            {event.image_url ? (
-                              <img src={event.image_url} alt="" className="w-full h-48 object-cover rounded-t-lg" />
-                            ) : (
-                              <div className="w-full h-48 bg-white rounded-t-lg" />
-                            )}
-                            <div className="flex-1 min-h-[140px] bg-white rounded-b-lg" />
-                          </div>
-                        );
-                      })}
-                      <div
-                        ref={(el) => { if (nextEvent) eventCardRefs.current[nextEvent.id] = el; }}
-                        className="relative z-10"
-                        style={{ marginLeft: offset }}
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => {
-                          const target = e.target as HTMLElement;
-                          const isInteractive =
-                            target.closest('button') || target.closest('a') || target.closest('input') ||
-                            target.closest('[role="button"]') || target.closest('[data-event-actions]') || target.closest('[data-tag-pill]');
-                          if (isInteractive) return;
-                          e.preventDefault();
-                          e.stopPropagation();
-                          toggleExpanded();
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            toggleExpanded();
-                          }
-                        }}
-                        aria-label={`Expand ${tag}`}
-                      >
-                        <EventCard
-                          event={nextEvent!}
-                          averageRating={nextEvent!.average_rating}
-                          ratingCount={nextEvent!.rating_count}
-                          userRating={nextEvent!.user_rating}
-                          onRatingSubmitted={fetchEvents}
-                          onEventUpdated={fetchEvents}
-                          onTagClick={handleTagClick}
-                          onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
-                          tagColors={appSettings}
-                          customPerformerTags={[]}
-                          viewHref={`${pathname}?event=${nextEvent!.id}`}
-                          onViewClick={() => toggleExpanded()}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {isExpanded && (
-                    <div className="relative flex h-full w-full min-h-[200px]">
-                      <button
-                        type="button"
-                        data-tag-pill
-                        onClick={() => toggleExpanded()}
-                        className="absolute top-2 right-2 z-50 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
-                        style={{
-                          backgroundColor: appSettings.footer_tags_bg_color || '#d1fae5',
-                          color: appSettings.footer_tags_text_color || '#065f46',
-                        }}
-                        aria-expanded={isExpanded}
-                        aria-label={`Collapse ${tag}`}
-                      >
-                        −{colEvents.length}
-                      </button>
-                      <div className="flex-1 min-h-0 w-full">
-                        {renderCard(nextEvent, false)}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          };
 
           const upcomingBlock = upcoming.length > 1 && nextUpcoming ? (
             <div className={`flex flex-col w-full min-w-0 ${!upcomingExpanded ? 'min-h-[520px] mb-16 md:mb-6 md:mr-6' : 'min-h-0 h-full'}`}>
@@ -1549,21 +1421,6 @@ function App() {
                     {cardCell(renderCard(nextUpcoming, false))}
                   </div>
                 )}
-                {sortedFooterTags.flatMap((footerTag) => {
-                  const block = (
-                    <div key={footerTag} className="break-inside-avoid mb-6 w-full min-w-0">
-                      {renderFooterTagBlock(footerTag)}
-                    </div>
-                  );
-                  const others = footerTagExpanded[footerTag]
-                    ? (footerTagToEvents.get(footerTag)?.slice(1) ?? []).map((event) => (
-                        <div key={event.id} className="break-inside-avoid mb-6">
-                          {cardCell(renderCard(event, false))}
-                        </div>
-                      ))
-                    : [];
-                  return [block, ...others];
-                })}
                 {ungroupedPast.map((event) => (
                   <div key={event.id} className="break-inside-avoid mb-6">
                     {cardCell(renderCard(event, false), true)}
@@ -1588,12 +1445,17 @@ function App() {
         onEventAdded={fetchEvents}
       />
 
-      <SettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => { setIsSettingsModalOpen(false); fetchSettings(); }}
-        onSettingsUpdated={fetchSettings}
-        onSettingsPreview={setAppSettings}
-      />
+      {isSettingsModalOpen && (
+        <SettingsModal
+          isOpen
+          onClose={() => { setIsSettingsModalOpen(false); fetchSettings(); }}
+          onSettingsUpdated={() => {
+            fetchSettings();
+            fetchTagResolutionForEvents(events).then(setTagResolutionMap);
+          }}
+          onSettingsPreview={setAppSettings}
+        />
+      )}
 
       <TagRatingsModal
         isOpen={isTagRatingsModalOpen}
@@ -1604,6 +1466,8 @@ function App() {
         refreshTrigger={tagModalRefreshTrigger}
         tagColors={appSettings}
         onTagClick={openTagModal}
+        tagResolutionMap={tagResolutionMap}
+        cachedAllEvents={events}
       />
 
       {overlayEventId && (
@@ -1646,6 +1510,7 @@ function App() {
       )}
 
     </div>
+    </TagDisplayProvider>
   );
 }
 

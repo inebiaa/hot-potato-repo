@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
+import { normalizeExternalUrl } from '../lib/externalUrl';
 import { useAuth } from '../contexts/AuthContext';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
@@ -20,6 +21,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
   const [location, setLocation] = useState('');
   const [address, setAddress] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [countdownLink, setCountdownLink] = useState('');
   const [producers, setProducers] = useState<string[]>([]);
   const [designers, setDesigners] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
@@ -55,6 +57,15 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
     setError('');
     setLoading(true);
 
+    let normalizedCountdownLink: string | null = null;
+    try {
+      normalizedCountdownLink = normalizeExternalUrl(countdownLink);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid countdown link');
+      setLoading(false);
+      return;
+    }
+
     try {
       const { error: insertError } = await supabase.from('events').insert({
         name,
@@ -65,6 +76,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
         location: location || null,
         address: address || null,
         image_url: imageUrl || null,
+        countdown_link: normalizedCountdownLink,
         producers: producers.length ? producers : null,
         featured_designers: designers.length ? designers : null,
         models: models.length ? models : null,
@@ -87,6 +99,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       setLocation('');
       setAddress('');
       setImageUrl('');
+      setCountdownLink('');
       setProducers([]);
       setDesigners([]);
       setModels([]);
@@ -329,7 +342,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
 
           <TagInput
             id="footerTags"
-            label="Footer Tags"
+            label="Collection"
             value={footerTags}
             onChange={setFooterTags}
             tagColumn="footer_tags"
@@ -349,6 +362,21 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Optional image link"
             />
+          </div>
+
+          <div>
+            <label htmlFor="countdownLink" className="block text-sm font-medium text-gray-700 mb-1">
+              Countdown link (optional)
+            </label>
+            <input
+              id="countdownLink"
+              type="url"
+              value={countdownLink}
+              onChange={(e) => setCountdownLink(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="https://… opens when the countdown is clicked"
+            />
+            <p className="text-xs text-gray-500 mt-0.5">For upcoming shows only. http or https only.</p>
           </div>
 
           {error && (

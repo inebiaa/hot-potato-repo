@@ -1,4 +1,5 @@
 import React from 'react';
+import { findAccentInsensitiveMatch, normalizeTagNameKey } from '../lib/normalize';
 import { Event } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 
@@ -51,7 +52,7 @@ export function getEventTagStyles(
 ): TagStyleResult[] {
   const tags: TagStyleResult[] = [];
   const add = (value: string, type: string, slug?: string) => {
-    if (!value || tags.some((t) => t.value.toLowerCase() === value.toLowerCase())) return;
+    if (!value || tags.some((t) => normalizeTagNameKey(t.value) === normalizeTagNameKey(value))) return;
     let bg = '#e5e7eb';
     let text = '#374151';
     if (type === 'producer') {
@@ -127,9 +128,9 @@ export function parseCommentToSegments(
     let matchTag: TagStyleResult | null = null;
     let matchLen = 0;
     for (const tag of tags) {
-      const idx = remaining.toLowerCase().indexOf(tag.value.toLowerCase());
-      if (idx === -1) continue;
-      const len = tag.value.length;
+      const found = findAccentInsensitiveMatch(remaining, tag.value, 0);
+      if (!found) continue;
+      const { index: idx, length: len } = found;
       if (earliest < 0 || idx < earliest || (idx === earliest && len > matchLen)) {
         earliest = idx;
         matchTag = tag;
@@ -161,7 +162,7 @@ export default function CommentWithTags({
 
   const tags: TagStyle[] = [];
   const add = (value: string, type: string, slug?: string) => {
-    if (!value || tags.some((t) => t.value.toLowerCase() === value.toLowerCase())) return;
+    if (!value || tags.some((t) => normalizeTagNameKey(t.value) === normalizeTagNameKey(value))) return;
     let bg = '#e5e7eb';
     let text = '#374151';
     if (type === 'producer') {
@@ -224,9 +225,9 @@ export default function CommentWithTags({
     let matchLen = 0;
 
     for (const tag of tags) {
-      const idx = remaining.toLowerCase().indexOf(tag.value.toLowerCase());
-      if (idx === -1) continue;
-      const len = tag.value.length;
+      const found = findAccentInsensitiveMatch(remaining, tag.value, 0);
+      if (!found) continue;
+      const { index: idx, length: len } = found;
       if (earliest < 0 || idx < earliest || (idx === earliest && len > matchLen)) {
         earliest = idx;
         matchTag = tag;

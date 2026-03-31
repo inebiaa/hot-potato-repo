@@ -5,6 +5,7 @@ import { supabase, Event } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 import { useAuth } from '../contexts/AuthContext';
 import { ensureAlias, ensureIdentity, findIdentityByName, normalizeTagName, type TagType } from '../lib/tagIdentity';
+import { normalizeExternalUrl } from '../lib/externalUrl';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
 
@@ -23,6 +24,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
   const [location, setLocation] = useState(event.location || '');
   const [address, setAddress] = useState(event.address || '');
   const [imageUrl, setImageUrl] = useState(event.image_url || '');
+  const [countdownLink, setCountdownLink] = useState(event.countdown_link || '');
   const toArray = (v: unknown): string[] =>
     Array.isArray(v) ? v.map((s) => String(s).trim()).filter(Boolean) : [];
   const [producers, setProducers] = useState<string[]>(() => toArray(event.producers));
@@ -55,6 +57,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       setLocation(event.location || '');
       setAddress(event.address || '');
       setImageUrl(event.image_url || '');
+      setCountdownLink(event.countdown_link || '');
       setProducers(toArray(event.producers));
       setDesigners(toArray(event.featured_designers));
       setModels(event.models || []);
@@ -98,6 +101,15 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
 
     setError('');
     setLoading(true);
+
+    let normalizedCountdownLink: string | null = null;
+    try {
+      normalizedCountdownLink = normalizeExternalUrl(countdownLink);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid countdown link');
+      setLoading(false);
+      return;
+    }
 
     try {
       const resolveTags = async (
@@ -166,6 +178,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           location: location || null,
           address: address || null,
           image_url: imageUrl || null,
+          countdown_link: normalizedCountdownLink,
           producers: resolvedProducers.length ? resolvedProducers : null,
           featured_designers: resolvedDesigners.length ? resolvedDesigners : null,
           models: resolvedModels.length ? resolvedModels : null,
@@ -406,7 +419,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
 
           <TagInput
             id="footerTags"
-            label="Footer Tags"
+            label="Collection"
             value={footerTags}
             onChange={setFooterTags}
             tagColumn="footer_tags"
@@ -426,6 +439,21 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Optional image link"
             />
+          </div>
+
+          <div>
+            <label htmlFor="countdownLink" className="block text-sm font-medium text-gray-700 mb-1">
+              Countdown link (optional)
+            </label>
+            <input
+              id="countdownLink"
+              type="url"
+              value={countdownLink}
+              onChange={(e) => setCountdownLink(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="https://… opens when the countdown is clicked"
+            />
+            <p className="text-xs text-gray-500 mt-0.5">For upcoming shows only. http or https only.</p>
           </div>
 
           {error && (

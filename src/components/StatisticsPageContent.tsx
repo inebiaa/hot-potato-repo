@@ -1,4 +1,4 @@
-import { BarChart3, Search } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
 import type { TagStats } from './StatisticsPage';
 
 interface StatisticsPageContentProps {
@@ -12,8 +12,6 @@ interface StatisticsPageContentProps {
   allCities: string[];
   allSeasons: string[];
   sortBy: 'count' | 'name';
-  searchQuery?: string;
-  setSearchQuery?: (q: string) => void;
   getTagColors: (type: string) => { bg: string; text: string };
   setSelectedType: (t: string) => void;
   setSelectedCity: (c: string) => void;
@@ -38,8 +36,6 @@ export default function StatisticsPageContent({
   setSelectedCity,
   setSelectedSeason,
   setSortBy,
-  searchQuery = '',
-  setSearchQuery,
   handleTagClick,
 }: StatisticsPageContentProps) {
   const footerText = `Showing ${tagStats.length} ${tagStats.length === 1 ? 'tag' : 'tags'} across ${events.length} ${events.length === 1 ? 'show' : 'shows'}`;
@@ -66,21 +62,6 @@ export default function StatisticsPageContent({
         </div>
 
         <div className="p-6 border-b bg-gray-50 space-y-4">
-          {setSearchQuery && (
-            <div className="flex items-center gap-2 w-full">
-              <div className="flex-1 min-w-0 flex items-center gap-2 pl-3 pr-4 py-2.5 border border-gray-200 rounded-lg bg-white focus-within:ring-1 focus-within:ring-blue-300 focus-within:border-blue-400">
-                <Search className="shrink-0 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search tags by name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 min-w-0 text-sm bg-transparent focus:outline-none"
-                />
-              </div>
-            </div>
-          )}
-
           <div className="flex flex-wrap gap-3 items-center">
             <div className="flex flex-wrap gap-2">
               <button

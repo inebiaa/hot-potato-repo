@@ -1,12 +1,71 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, Trash2, Image, Users, Tags, FolderPlus, User } from 'lucide-react';
+import { Save, Trash2, Image, Users, Tags, FolderPlus, User, Plus, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getIcon, DEFAULT_ICONS } from '../lib/eventCardIcons';
 import { useAuth } from '../contexts/AuthContext';
 import { readableTextForBg } from '../lib/colorUtils';
 import IconPicker from './IconPicker';
 import { CUSTOM_COLORS_STORAGE_KEY, PRELOADED_HEX } from './ColorPicker';
-import { ensureIdentity, findIdentityByName, normalizeTagName, searchTagIdentities, searchEventTags, type TagType } from '../lib/tagIdentity';
+import {
+  ensureIdentity,
+  findIdentityByName,
+  normalizeTagName,
+  searchTagIdentities,
+  searchEventTags,
+  type TagIdentityRecord,
+  type TagType,
+} from '../lib/tagIdentity';
+import type { AppSettings } from '../types/appSettings';
+
+function formatTagTypeLabel(tagType: string): string {
+  if (tagType.startsWith('custom:')) {
+    const slug = tagType.slice(7) || 'custom';
+    return `Custom: ${slug.replace(/-/g, ' ')}`;
+  }
+  const map: Record<string, string> = {
+    producer: 'Producer',
+    designer: 'Designer',
+    model: 'Model',
+    hair_makeup: 'Hair & Makeup',
+    venue: 'Venue',
+    header_tags: 'Genre',
+    footer_tags: 'Collection',
+  };
+  return map[tagType] || tagType;
+}
+
+/** Same pattern as App.tsx tag search: "Producer: ", "Designer: ", "Genre: ", etc. */
+function connectSearchTypePrefix(tagType: string): string {
+  if (tagType.startsWith('custom:')) return 'Custom: ';
+  const map: Record<string, string> = {
+    producer: 'Producer',
+    designer: 'Designer',
+    model: 'Model',
+    hair_makeup: 'Hair & Makeup',
+    venue: 'Venue',
+    header_tags: 'Genre',
+    footer_tags: 'Collection',
+  };
+  const label = map[tagType] ?? tagType.replace(/_/g, ' ');
+  return `${label}: `;
+}
+
+const CONNECT_CREATE_TYPE_PILLS: { value: TagType; label: string }[] = [
+  { value: 'producer', label: 'Producer' },
+  { value: 'designer', label: 'Designer' },
+  { value: 'model', label: 'Model' },
+  { value: 'hair_makeup', label: 'Hair & Makeup' },
+  { value: 'header_tags', label: 'Genre' },
+  { value: 'footer_tags', label: 'Collection' },
+];
+
+/** EventCard-aligned: neutral pills use bg-gray-300 text-gray-600 rounded-md; selected adds reorder-style ring */
+function creditPillClass(active: boolean) {
+  return [
+    'inline-flex items-center justify-center max-w-[220px] truncate whitespace-nowrap text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80',
+    active ? 'bg-gray-300 text-gray-600 ring-2 ring-blue-400 ring-offset-1' : 'bg-gray-200 text-gray-600 hover:bg-gray-300',
+  ].join(' ');
+}
 
 const PALETTE_STORAGE_KEY = 'tag_settings_palette_v1';
 const COLLECTIONS_STORAGE_KEY = 'tag_color_collections_v1';
@@ -75,48 +134,10 @@ interface CreditRow {
   id: string;
   identity_id: string;
   preferred_alias_id: string | null;
+  public_display_alias_id: string | null;
   tag_type: string;
   canonical_name: string;
   aliases: { id: string; alias: string }[];
-}
-
-interface AppSettings {
-  [key: string]: string;
-  app_name: string;
-  app_icon_url: string;
-  app_logo_url: string;
-  app_favicon_url: string;
-  tagline: string;
-  color_scheme: string;
-  collapsible_cards_enabled: string;
-  producer_bg_color: string;
-  producer_text_color: string;
-  designer_bg_color: string;
-  designer_text_color: string;
-  model_bg_color: string;
-  model_text_color: string;
-  hair_makeup_bg_color: string;
-  hair_makeup_text_color: string;
-  city_bg_color: string;
-  city_text_color: string;
-  season_bg_color: string;
-  season_text_color: string;
-  header_tags_bg_color: string;
-  header_tags_text_color: string;
-  countdown_bg_color: string;
-  countdown_text_color: string;
-  footer_tags_bg_color: string;
-  footer_tags_text_color: string;
-  producer_icon: string;
-  designer_icon: string;
-  model_icon: string;
-  hair_makeup_icon: string;
-  city_icon: string;
-  season_icon: string;
-  header_tags_icon: string;
-  footer_tags_icon: string;
-  optional_tags_bg_color: string;
-  optional_tags_text_color: string;
 }
 
 interface AdminUser {
@@ -197,6 +218,25 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   const [creditSearchResults, setCreditSearchResults] = useState<{ id: string; tag_type: string; canonical_name: string; fromEvent?: boolean }[]>([]);
   const [creditSearching, setCreditSearching] = useState(false);
   const [newAliasByIdentity, setNewAliasByIdentity] = useState<Record<string, string>>({});
+  const [showCreateTagForm, setShowCreateTagForm] = useState(false);
+  const [aliasDeleteModeIdentityId, setAliasDeleteModeIdentityId] = useState<string | null>(null);
+  const [addingAliasForIdentityId, setAddingAliasForIdentityId] = useState<string | null>(null);
+  const [creditConnectSuccess, setCreditConnectSuccess] = useState('');
+  const [connectListActiveIdx, setConnectListActiveIdx] = useState(-1);
+  const connectSearchInputRef = useRef<HTMLInputElement>(null);
+
+  const [adminIdentitySearch, setAdminIdentitySearch] = useState('');
+  const [adminIdentitySearchResults, setAdminIdentitySearchResults] = useState<TagIdentityRecord[]>([]);
+  const [adminIdentitySearching, setAdminIdentitySearching] = useState(false);
+  const [adminManagedIdentity, setAdminManagedIdentity] = useState<TagIdentityRecord | null>(null);
+  const [adminManagedAliases, setAdminManagedAliases] = useState<{ id: string; alias: string; normalized_alias: string }[]>([]);
+  const [adminAliasLoading, setAdminAliasLoading] = useState(false);
+  const [adminAliasError, setAdminAliasError] = useState<string | null>(null);
+  const [adminAliasDeleteMode, setAdminAliasDeleteMode] = useState(false);
+  const [adminAddingAlias, setAdminAddingAlias] = useState(false);
+  const [newAdminAliasText, setNewAdminAliasText] = useState('');
+  const [editingAdminAliasId, setEditingAdminAliasId] = useState<string | null>(null);
+  const [editAdminAliasDraft, setEditAdminAliasDraft] = useState('');
 
   const tagOptions: { key: SwatchColorKey; label: string }[] = [
     { key: 'producer', label: 'Producer' },
@@ -206,7 +246,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     { key: 'city', label: 'City' },
     { key: 'season', label: 'Season' },
     { key: 'header_tags', label: 'Genre' },
-    { key: 'footer_tags', label: 'Footer tag' },
+    { key: 'footer_tags', label: 'Collection' },
     { key: 'countdown', label: 'Countdown' },
     { key: 'optional_tags', label: 'Custom' },
   ];
@@ -448,14 +488,19 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       setCredits([]);
       return;
     }
-    const { data: identities, error: identitiesErr } = await supabase.from('tag_identities').select('id, tag_type, canonical_name').in('id', identityIds);
+    const { data: identities, error: identitiesErr } = await supabase
+      .from('tag_identities')
+      .select('id, tag_type, canonical_name, public_display_alias_id')
+      .in('id', identityIds);
     if (identitiesErr) {
       setCreditsError(identitiesErr.message || 'Could not load credit identities');
       setCredits([]);
       return;
     }
     const { data: aliasRows } = await supabase.from('tag_aliases').select('id, identity_id, alias').in('identity_id', identityIds).order('alias', { ascending: true });
-    const identityMap = new Map((identities || []).map((i: { id: string; tag_type: string; canonical_name: string }) => [i.id, i]));
+    const identityMap = new Map(
+      (identities || []).map((i: { id: string; tag_type: string; canonical_name: string; public_display_alias_id: string | null }) => [i.id, i])
+    );
     const aliasMap = new Map<string, { id: string; alias: string }[]>();
     (aliasRows || []).forEach((a: { identity_id: string; id: string; alias: string }) => {
       const existing = aliasMap.get(a.identity_id) || [];
@@ -463,11 +508,14 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       aliasMap.set(a.identity_id, existing);
     });
     const merged: CreditRow[] = (creditRows || []).map((c: { id: string; identity_id: string; preferred_alias_id: string | null }) => {
-      const identity = identityMap.get(c.identity_id);
+      const identity = identityMap.get(c.identity_id) as
+        | { tag_type: string; canonical_name: string; public_display_alias_id: string | null }
+        | undefined;
       return {
         id: c.id,
         identity_id: c.identity_id,
         preferred_alias_id: c.preferred_alias_id || null,
+        public_display_alias_id: identity?.public_display_alias_id ?? null,
         tag_type: identity?.tag_type || 'unknown',
         canonical_name: identity?.canonical_name || 'Unknown',
         aliases: aliasMap.get(c.identity_id) || [],
@@ -531,7 +579,59 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     setConnectName('');
     setCreditSearchResults([]);
     setCreditsError(null);
+    setCreditConnectSuccess('Connected');
+    setTimeout(() => setCreditConnectSuccess(''), 3500);
     fetchCredits();
+    window.setTimeout(() => connectSearchInputRef.current?.focus(), 0);
+  };
+
+  const removeAliasForCredit = async (credit: CreditRow, aliasId: string) => {
+    const alias = credit.aliases.find((a) => a.id === aliasId);
+    if (!alias) return;
+    if (normalizeTagName(alias.alias) === normalizeTagName(credit.canonical_name)) {
+      setCreditsError('Cannot remove the default name for this tag.');
+      return;
+    }
+    setCreditsError(null);
+    if (credit.public_display_alias_id === aliasId) {
+      const { error: e1 } = await supabase.from('tag_identities').update({ public_display_alias_id: null }).eq('id', credit.identity_id);
+      if (e1) {
+        setCreditsError(e1.message || 'Could not update cards before removing alias');
+        return;
+      }
+    }
+    if (credit.preferred_alias_id === aliasId) {
+      const { error: e2 } = await supabase.from('user_tag_credits').update({ preferred_alias_id: null }).eq('id', credit.id);
+      if (e2) {
+        setCreditsError(e2.message || 'Could not clear saved label before removing alias');
+        return;
+      }
+    }
+    const { data: deleted, error } = await supabase.from('tag_aliases').delete().eq('id', aliasId).select('id');
+    if (error) {
+      setCreditsError(error.message || 'Could not remove alias');
+      return;
+    }
+    if (!deleted?.length) {
+      setCreditsError('Could not remove alias. Check that you are linked to this tag or ask an admin.');
+      return;
+    }
+    fetchCredits();
+  };
+
+  const handleConnectSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const list = creditSearchResults;
+    if (list.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setConnectListActiveIdx((i) => (i < list.length - 1 ? i + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setConnectListActiveIdx((i) => (i <= 0 ? list.length - 1 : i - 1));
+    } else if (e.key === 'Enter' && connectListActiveIdx >= 0 && connectListActiveIdx < list.length) {
+      e.preventDefault();
+      void selectCreditSearchResult(list[connectListActiveIdx]);
+    }
   };
 
   const selectCreditSearchResult = async (item: { id: string; tag_type: string; canonical_name: string; fromEvent?: boolean }) => {
@@ -555,7 +655,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     let identity = await findIdentityByName(connectType, name);
     if (!identity && createIfMissing) identity = await ensureIdentity(connectType, name, userId);
     if (!identity) {
-      setCreditsError('No matching tag found. Use "Create + connect" to add a new one.');
+      setCreditsError('No matching tag. Try another name or use Create new tag.');
       return;
     }
     await connectCreditByIdentity(identity);
@@ -564,7 +664,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   const addAliasForCredit = async (credit: CreditRow) => {
     const alias = (newAliasByIdentity[credit.identity_id] || '').trim();
     if (!alias) return;
-    const normalized = alias.toLowerCase().replace(/\s+/g, ' ');
+    const normalized = normalizeTagName(alias);
     const { data: existing } = await supabase.from('tag_aliases').select('id').eq('identity_id', credit.identity_id).eq('normalized_alias', normalized).maybeSingle();
     if (!existing) {
       const { error } = await supabase.from('tag_aliases').insert({ identity_id: credit.identity_id, alias, normalized_alias: normalized, created_by: userId });
@@ -574,14 +674,41 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       }
     }
     setNewAliasByIdentity((prev) => ({ ...prev, [credit.identity_id]: '' }));
+    setAddingAliasForIdentityId(null);
     fetchCredits();
   };
 
-  const setPreferredAlias = async (creditId: string, aliasId: string | null) => {
-    const { error } = await supabase.from('user_tag_credits').update({ preferred_alias_id: aliasId }).eq('id', creditId);
+  const setPublicDisplayAlias = async (identityId: string, aliasId: string | null) => {
+    const { error } = await supabase.from('tag_identities').update({ public_display_alias_id: aliasId }).eq('id', identityId);
     if (error) {
-      setCreditsError(error.message || 'Could not set preferred display name');
+      setCreditsError(error.message || 'Could not set name on event cards');
       return;
+    }
+    fetchCredits();
+    onSettingsUpdated();
+  };
+
+  const addProfileNameAsAlias = async (credit: CreditRow) => {
+    const name = editName.trim();
+    if (!name) {
+      setCreditsError('Save your profile name first, or type it in Your Name.');
+      return;
+    }
+    const normalized = normalizeTagName(name);
+    const { data: existing } = await supabase
+      .from('tag_aliases')
+      .select('id')
+      .eq('identity_id', credit.identity_id)
+      .eq('normalized_alias', normalized)
+      .maybeSingle();
+    if (!existing) {
+      const { error } = await supabase
+        .from('tag_aliases')
+        .insert({ identity_id: credit.identity_id, alias: name, normalized_alias: normalized, created_by: userId });
+      if (error) {
+        setCreditsError(error.message || 'Could not add alias');
+        return;
+      }
     }
     fetchCredits();
   };
@@ -630,6 +757,29 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   }, [connectName, userId]);
 
   useEffect(() => {
+    setConnectListActiveIdx(creditSearchResults.length > 0 ? 0 : -1);
+  }, [creditSearchResults]);
+
+  useEffect(() => {
+    if (!isOpen || !isAdmin) return;
+    const q = adminIdentitySearch.trim();
+    if (q.length < 2) {
+      setAdminIdentitySearchResults([]);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      setAdminIdentitySearching(true);
+      searchTagIdentities(q)
+        .then((rows) => {
+          setAdminIdentitySearchResults(rows);
+          setAdminIdentitySearching(false);
+        })
+        .catch(() => setAdminIdentitySearching(false));
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [adminIdentitySearch, isOpen, isAdmin]);
+
+  useEffect(() => {
     if (isOpen) {
       setSettingsLoaded(false);
       fetchSettings();
@@ -641,6 +791,16 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       if (!isAdmin) setActiveTab('account');
     } else {
       setSettingsLoaded(false);
+      setAdminIdentitySearch('');
+      setAdminIdentitySearchResults([]);
+      setAdminManagedIdentity(null);
+      setAdminManagedAliases([]);
+      setAdminAliasError(null);
+      setAdminAliasDeleteMode(false);
+      setAdminAddingAlias(false);
+      setNewAdminAliasText('');
+      setEditingAdminAliasId(null);
+      setEditAdminAliasDraft('');
     }
   }, [isOpen, user?.id]);
 
@@ -747,8 +907,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     }
   };
 
-  const handleAddAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddAdmin = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const newAdminId = adminUserIdPublic.trim();
     if (!newAdminId) {
       setError('Please enter a user ID');
@@ -802,6 +962,80 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove admin');
     }
+  };
+
+  const fetchAdminAliasesForIdentity = async (identityId: string) => {
+    setAdminAliasLoading(true);
+    setAdminAliasError(null);
+    const { data, error } = await supabase
+      .from('tag_aliases')
+      .select('id, alias, normalized_alias')
+      .eq('identity_id', identityId)
+      .order('alias', { ascending: true });
+    setAdminAliasLoading(false);
+    if (error) {
+      setAdminAliasError(error.message);
+      setAdminManagedAliases([]);
+      return;
+    }
+    setAdminManagedAliases((data || []) as { id: string; alias: string; normalized_alias: string }[]);
+  };
+
+  const selectAdminManagedIdentity = (identity: TagIdentityRecord) => {
+    setAdminManagedIdentity(identity);
+    setAdminIdentitySearch('');
+    setAdminIdentitySearchResults([]);
+    setEditingAdminAliasId(null);
+    setEditAdminAliasDraft('');
+    setAdminAliasDeleteMode(false);
+    void fetchAdminAliasesForIdentity(identity.id);
+  };
+
+  const deleteAdminAliasRow = async (aliasId: string) => {
+    const { error } = await supabase.rpc('admin_delete_tag_alias', { p_alias_id: aliasId });
+    if (error) {
+      setAdminAliasError(error.message);
+      return;
+    }
+    setAdminAliasError(null);
+    if (adminManagedIdentity) void fetchAdminAliasesForIdentity(adminManagedIdentity.id);
+  };
+
+  const saveAdminAliasEdit = async () => {
+    if (!editingAdminAliasId || !adminManagedIdentity) return;
+    const text = editAdminAliasDraft.trim();
+    if (!text) return;
+    const { error } = await supabase.rpc('admin_update_tag_alias', {
+      p_alias_id: editingAdminAliasId,
+      p_new_alias: text,
+    });
+    if (error) {
+      setAdminAliasError(error.message);
+      return;
+    }
+    setEditingAdminAliasId(null);
+    setEditAdminAliasDraft('');
+    void fetchAdminAliasesForIdentity(adminManagedIdentity.id);
+  };
+
+  const addAdminAliasRow = async () => {
+    if (!adminManagedIdentity) return;
+    const text = newAdminAliasText.trim();
+    if (!text) return;
+    const norm = normalizeTagName(text);
+    const { error } = await supabase.from('tag_aliases').insert({
+      identity_id: adminManagedIdentity.id,
+      alias: text,
+      normalized_alias: norm,
+      created_by: userId || null,
+    });
+    if (error) {
+      setAdminAliasError(error.message);
+      return;
+    }
+    setNewAdminAliasText('');
+    setAdminAddingAlias(false);
+    void fetchAdminAliasesForIdentity(adminManagedIdentity.id);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -970,18 +1204,29 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
 
             {activeTab === 'admins' && (
               <>
-                <form onSubmit={handleAddAdmin} className="flex gap-2">
+                <div className="flex gap-2">
                   <input
                     type="text"
                     value={adminUserIdPublic}
                     onChange={(e) => setAdminUserIdPublic(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void handleAddAdmin();
+                      }
+                    }}
                     placeholder="User ID"
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
-                  <button type="submit" disabled={adminLoading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50">
+                  <button
+                    type="button"
+                    disabled={adminLoading}
+                    onClick={() => void handleAddAdmin()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50"
+                  >
                     {adminLoading ? 'Adding...' : 'Add Admin'}
                   </button>
-                </form>
+                </div>
                 <p className="text-xs text-gray-500 -mt-1">Use the member's public User ID from their profile.</p>
                 <div className="space-y-2">
                   {adminUsers.map((admin) => (
@@ -1001,6 +1246,198 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                     </div>
                   ))}
                 </div>
+
+                <section className="border-t border-stone-100 pt-5 mt-5 space-y-3">
+                  <h3 className="text-sm font-semibold text-stone-800 mb-1">Manage tag aliases</h3>
+                  <p className="text-xs text-stone-500 mb-3">Search for a tag identity, then add, edit, or remove aliases.</p>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={adminIdentitySearch}
+                      onChange={(e) => setAdminIdentitySearch(e.target.value)}
+                      placeholder="Search shows, designers, models…"
+                      className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
+                      autoComplete="off"
+                    />
+                    {adminIdentitySearching && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">Searching…</span>
+                    )}
+                  </div>
+                  {adminIdentitySearch.trim().length >= 2 && adminIdentitySearchResults.length > 0 && (
+                    <div className="rounded-md border border-stone-200 bg-white divide-y divide-stone-100 max-h-48 overflow-y-auto shadow-sm">
+                      {adminIdentitySearchResults.map((row) => (
+                        <button
+                          key={row.id}
+                          type="button"
+                          onClick={() => selectAdminManagedIdentity(row)}
+                          className="w-full flex items-stretch gap-2 px-3 py-2 text-left hover:bg-gray-50"
+                        >
+                          <div className="flex flex-1 min-w-0 items-center gap-2">
+                            <span className="text-gray-400 text-xs shrink-0">{connectSearchTypePrefix(row.tag_type)}</span>
+                            <span className="text-sm text-gray-900 truncate">{row.canonical_name}</span>
+                          </div>
+                          <span className="shrink-0 self-center text-xs text-stone-500">Open</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {adminIdentitySearch.trim().length >= 2 && !adminIdentitySearching && adminIdentitySearchResults.length === 0 && (
+                    <p className="text-xs text-stone-600">No identities match.</p>
+                  )}
+
+                  {adminManagedIdentity && (
+                    <div className="rounded-xl border border-stone-100 p-3 bg-stone-50/70 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center text-xs px-2 py-1 rounded-md bg-gray-300 text-gray-600">
+                          {formatTagTypeLabel(adminManagedIdentity.tag_type)}
+                        </span>
+                        <span className="text-sm font-medium text-stone-900">{adminManagedIdentity.canonical_name}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminManagedIdentity(null);
+                            setAdminManagedAliases([]);
+                            setAdminAliasDeleteMode(false);
+                            setEditingAdminAliasId(null);
+                            setAdminAddingAlias(false);
+                          }}
+                          className="ml-auto text-[11px] text-stone-400 hover:text-stone-700"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      {adminAliasLoading && <p className="text-xs text-stone-500">Loading aliases…</p>}
+                      {adminAliasError && <p className="text-xs text-amber-800">{adminAliasError}</p>}
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                          <span className="text-[11px] font-medium text-stone-600">Also known as</span>
+                          {adminAliasDeleteMode ? (
+                            <button
+                              type="button"
+                              onClick={() => setAdminAliasDeleteMode(false)}
+                              className="text-[11px] text-stone-600 hover:text-stone-900"
+                            >
+                              Done
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setAdminAliasDeleteMode(true)}
+                              className="text-[11px] text-stone-500 hover:text-stone-800"
+                            >
+                              Remove aliases
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 items-center">
+                          {adminManagedAliases.map((al) =>
+                            editingAdminAliasId === al.id ? (
+                              <div key={al.id} className="inline-flex flex-wrap items-center gap-1.5">
+                                <input
+                                  value={editAdminAliasDraft}
+                                  onChange={(e) => setEditAdminAliasDraft(e.target.value)}
+                                  className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white min-w-[140px]"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => void saveAdminAliasEdit()}
+                                  className="text-xs px-2.5 py-1.5 rounded-md border border-stone-200 text-stone-700 hover:bg-stone-50"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingAdminAliasId(null);
+                                    setEditAdminAliasDraft('');
+                                  }}
+                                  className="text-xs text-stone-500 hover:text-stone-800"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <span
+                                key={al.id}
+                                data-tag-pill
+                                className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 ${adminAliasDeleteMode ? 'pill-wiggle' : ''}`}
+                              >
+                                {al.alias}
+                                {!adminAliasDeleteMode && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingAdminAliasId(al.id);
+                                      setEditAdminAliasDraft(al.alias);
+                                    }}
+                                    className="ml-1 text-[10px] text-stone-400 hover:text-stone-700 underline"
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                                {adminAliasDeleteMode && (
+                                  <button
+                                    type="button"
+                                    className="absolute -top-1.5 -right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white border border-stone-300 text-stone-600 shadow-sm hover:bg-stone-50"
+                                    title="Remove alias"
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      if (!window.confirm('Remove this alias?')) return;
+                                      void deleteAdminAliasRow(al.id);
+                                    }}
+                                    aria-label={`Remove alias ${al.alias}`}
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                )}
+                              </span>
+                            )
+                          )}
+                          {adminAddingAlias ? (
+                            <div className="inline-flex flex-wrap items-center gap-1.5">
+                              <input
+                                value={newAdminAliasText}
+                                onChange={(e) => setNewAdminAliasText(e.target.value)}
+                                placeholder="New alias"
+                                className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white min-w-[140px]"
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void addAdminAliasRow()}
+                                className="text-xs px-2.5 py-1.5 rounded-md border border-stone-200 text-stone-700 hover:bg-stone-50"
+                              >
+                                Add
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAdminAddingAlias(false);
+                                  setNewAdminAliasText('');
+                                }}
+                                className="text-xs text-stone-500 hover:text-stone-800"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setAdminAddingAlias(true)}
+                              className="inline-flex items-center justify-center text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50"
+                              title="Add alias"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </section>
               </>
             )}
 
@@ -1330,7 +1767,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
               <div className="space-y-6">
                 <section>
                   <h3 className="text-sm font-semibold text-gray-700 mb-2">Profile</h3>
-                  <p className="text-xs text-gray-500 mb-3">Edit your display name and sign-in username.</p>
+                  <p className="text-xs text-gray-500 mb-3">Display name and username.</p>
                   <form onSubmit={saveAccountProfile} className="space-y-4">
                     <div>
                       <label htmlFor="editName" className="block text-xs font-medium text-stone-600 mb-1">Your Name</label>
@@ -1341,9 +1778,9 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                         onChange={(e) => setEditName(e.target.value)}
                         maxLength={80}
                         className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
-                        placeholder="e.g., Jane Doe"
+                        placeholder="Jane Doe"
                       />
-                      <p className="text-xs text-stone-400 mt-0.5">Display name; can act as a credit when connected</p>
+                      <p className="text-xs text-stone-400 mt-0.5">Shown on your profile.</p>
                     </div>
                     <div>
                       <label htmlFor="editUsername" className="block text-xs font-medium text-stone-600 mb-1">Username</label>
@@ -1356,9 +1793,9 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                         maxLength={30}
                         pattern="[a-zA-Z0-9_-]+"
                         className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
-                        placeholder="e.g., janedoe2024"
+                        placeholder="janedoe2024"
                       />
-                      <p className="text-xs text-stone-400 mt-0.5">Your public profile ID (letters, numbers, _, -)</p>
+                      <p className="text-xs text-stone-400 mt-0.5">Letters, numbers, underscore, hyphen.</p>
                     </div>
                     {profileSaveError && <p className="text-sm text-red-600">{profileSaveError}</p>}
                     <button
@@ -1372,116 +1809,265 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                 </section>
 
                 <section>
-                  <h3 className="text-sm font-semibold text-stone-800 mb-2">Connect to existing tags</h3>
-                  <p className="text-xs text-stone-500 mb-3">Search for yourself or a tag, add aliases, and choose display name.</p>
+                  <h3 className="text-sm font-semibold text-stone-800 mb-1">Tags linked to your profile</h3>
+                  <p className="text-xs text-stone-500 mb-3">Link credits from shows. Pick the name shown on cards.</p>
                   <div className="space-y-3">
                     <div className="relative">
                       <input
+                        ref={connectSearchInputRef}
                         value={connectName}
                         onChange={(e) => setConnectName(e.target.value)}
-                        placeholder="Search for yourself or a tag (e.g. name, producer, designer…)"
+                        onKeyDown={handleConnectSearchKeyDown}
+                        placeholder="Search shows, designers, models…"
                         className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
+                        aria-autocomplete="list"
+                        aria-controls="connect-tag-results"
+                        aria-expanded={connectName.trim().length >= 2 && creditSearchResults.length > 0}
                       />
                       {creditSearching && (
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">Searching…</span>
                       )}
                     </div>
-                    {creditSearchResults.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {creditSearchResults.map((identity) => (
-                          <button
+                    {connectName.trim().length >= 2 && creditSearchResults.length > 0 && (
+                      <div
+                        id="connect-tag-results"
+                        role="listbox"
+                        className="rounded-md border border-stone-200 bg-white divide-y divide-stone-100 max-h-56 overflow-y-auto shadow-sm"
+                      >
+                        {creditSearchResults.map((identity, idx) => (
+                          <div
                             key={identity.id}
-                            type="button"
-                            onClick={() => selectCreditSearchResult(identity)}
-                            className="text-xs px-2.5 py-1.5 rounded-md border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:border-stone-300"
+                            role="option"
+                            aria-selected={idx === connectListActiveIdx}
+                            id={`connect-opt-${idx}`}
+                            className={`flex items-stretch gap-2 px-3 py-2 ${idx === connectListActiveIdx ? 'bg-gray-50' : ''}`}
+                            onMouseEnter={() => setConnectListActiveIdx(idx)}
                           >
-                            <span className="font-medium">{identity.canonical_name}</span>
-                            <span className="ml-1.5 text-stone-400">{identity.tag_type.replace('custom:', '')}</span>
-                          </button>
+                            <div className="flex flex-1 min-w-0 items-center gap-2 text-left">
+                              <span className="text-gray-400 text-xs shrink-0">{connectSearchTypePrefix(identity.tag_type)}</span>
+                              <span className="text-sm text-gray-900 truncate">{identity.canonical_name}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => selectCreditSearchResult(identity)}
+                              className="shrink-0 self-center text-xs px-2.5 py-1.5 rounded-md bg-stone-900 text-white hover:bg-stone-800"
+                            >
+                              Connect
+                            </button>
+                          </div>
                         ))}
                       </div>
                     )}
-                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-stone-100">
-                      <span className="text-xs text-stone-500">Not in the list?</span>
-                      <select
-                        value={connectType}
-                        onChange={(e) => setConnectType(e.target.value as TagType)}
-                        className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white"
-                      >
-                        <option value="producer">Producer</option>
-                        <option value="designer">Designer</option>
-                        <option value="model">Model</option>
-                        <option value="hair_makeup">Hair & Makeup</option>
-                        <option value="header_tags">Header Tag</option>
-                        <option value="footer_tags">Footer Tag</option>
-                      </select>
-                      <input
-                        value={connectName}
-                        onChange={(e) => setConnectName(e.target.value)}
-                        placeholder="Name"
-                        className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white min-w-[140px]"
-                      />
+                    {connectName.trim().length >= 2 && !creditSearching && creditSearchResults.length === 0 && (
+                      <p className="text-xs text-stone-600">
+                        No match.{' '}
+                        <button
+                          type="button"
+                          className="text-stone-800 underline hover:no-underline"
+                          onClick={() => setShowCreateTagForm(true)}
+                        >
+                          Create tag
+                        </button>
+                      </p>
+                    )}
+                    <div className="pt-1 border-t border-stone-100">
                       <button
                         type="button"
-                        onClick={() => connectOrCreateCredit(true)}
-                        className="text-xs px-2.5 py-1.5 rounded-md bg-stone-900 text-white hover:bg-stone-800"
+                        onClick={() => setShowCreateTagForm((v) => !v)}
+                        aria-expanded={showCreateTagForm}
+                        className="text-xs text-stone-700 underline hover:text-stone-900"
                       >
-                        Create + connect
+                        {showCreateTagForm ? 'Hide' : 'Create new tag'}
                       </button>
+                      {showCreateTagForm && (
+                        <div className="mt-3 p-3 rounded-lg border border-stone-200 bg-white space-y-2">
+                          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tag type">
+                            {CONNECT_CREATE_TYPE_PILLS.map((p) => (
+                              <button
+                                key={p.value}
+                                type="button"
+                                data-tag-pill
+                                onClick={() => setConnectType(p.value)}
+                                className={creditPillClass(connectType === p.value)}
+                              >
+                                {p.label}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex flex-wrap gap-2 items-end">
+                            <div className="flex-1 min-w-[140px]">
+                              <label htmlFor="connect-create-name" className="block text-[11px] text-stone-500 mb-0.5">Name</label>
+                              <input
+                                id="connect-create-name"
+                                value={connectName}
+                                onChange={(e) => setConnectName(e.target.value)}
+                                placeholder="Name as it should appear"
+                                className="w-full text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => connectOrCreateCredit(true)}
+                              className="text-xs px-2.5 py-1.5 rounded-md bg-stone-900 text-white hover:bg-stone-800"
+                            >
+                              Create and link
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
+                  {creditConnectSuccess && <p className="text-xs text-green-700 mt-2">{creditConnectSuccess}</p>}
                   {creditsError && <p className="text-xs text-amber-700 mt-2">{creditsError}</p>}
+                  {credits.length === 0 && (
+                    <div className="mt-4 rounded-lg border border-dashed border-stone-200 bg-stone-50/50 p-4 text-sm text-stone-600">
+                      <p className="font-medium text-stone-800 mb-1">No tags yet</p>
+                      <p className="text-xs text-stone-500">Search for how you are credited on a show. Add aliases after linking.</p>
+                    </div>
+                  )}
                   {credits.length > 0 && (
-                    <div className="space-y-2 mt-4">
+                    <div className="space-y-3 mt-4">
                       {credits.map((credit) => {
-                        const currentAlias = credit.aliases.find((a) => a.id === credit.preferred_alias_id)?.alias || credit.canonical_name;
-                        const knownAs = credit.aliases.filter((a) => a.alias !== currentAlias);
+                        const publicLabel =
+                          credit.aliases.find((a) => a.id === credit.public_display_alias_id)?.alias ?? credit.canonical_name;
+                        const aliasRemovable = (alias: { alias: string }) =>
+                          normalizeTagName(alias.alias) !== normalizeTagName(credit.canonical_name);
+                        const inDeleteMode = aliasDeleteModeIdentityId === credit.identity_id;
                         return (
-                          <div key={credit.id} className="rounded-xl border border-stone-100 p-3 bg-stone-50/70">
+                          <div key={credit.id} className="rounded-xl border border-stone-100 p-3 bg-stone-50/70 space-y-3">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs px-2 py-1 rounded-md bg-white border border-stone-200 text-stone-700">
-                                {credit.tag_type.replace('custom:', 'custom: ')}
+                              <span className="inline-flex items-center text-xs px-2 py-1 rounded-md bg-gray-300 text-gray-600">
+                                {formatTagTypeLabel(credit.tag_type)}
                               </span>
-                              <span className="text-sm font-medium text-stone-900">{currentAlias}</span>
+                              <span className="text-sm font-medium text-stone-900">{publicLabel}</span>
                               <button
                                 type="button"
-                                onClick={() => { if (window.confirm('Remove this credit?')) removeCredit(credit.id); }}
+                                onClick={() => { if (window.confirm('Remove this credit from your profile?')) removeCredit(credit.id); }}
                                 className="ml-auto text-[11px] text-stone-400 hover:text-red-600"
                                 title="Remove credit"
                               >
                                 <Trash2 size={12} />
                               </button>
                             </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <select
-                                value={credit.preferred_alias_id || ''}
-                                onChange={(e) => setPreferredAlias(credit.id, e.target.value || null)}
-                                className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white"
-                              >
-                                <option value="">Canonical</option>
+                            <div>
+                              <label className="block text-[11px] font-medium text-stone-600 mb-1">Name on event cards</label>
+                              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Name on event cards">
+                                <button
+                                  type="button"
+                                  data-tag-pill
+                                  onClick={() => setPublicDisplayAlias(credit.identity_id, null)}
+                                  className={creditPillClass(!credit.public_display_alias_id)}
+                                  title={`Default · ${credit.canonical_name}`}
+                                >
+                                  Default · {credit.canonical_name}
+                                </button>
                                 {credit.aliases.map((a) => (
-                                  <option key={a.id} value={a.id}>{a.alias}</option>
+                                  <button
+                                    key={a.id}
+                                    type="button"
+                                    data-tag-pill
+                                    onClick={() => setPublicDisplayAlias(credit.identity_id, a.id)}
+                                    className={creditPillClass(credit.public_display_alias_id === a.id)}
+                                  >
+                                    {a.alias}
+                                  </button>
                                 ))}
-                              </select>
-                              <input
-                                value={newAliasByIdentity[credit.identity_id] || ''}
-                                onChange={(e) => setNewAliasByIdentity((prev) => ({ ...prev, [credit.identity_id]: e.target.value }))}
-                                placeholder="Add alias"
-                                className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white min-w-[160px]"
-                              />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                <span className="text-[11px] font-medium text-stone-600">Also known as</span>
+                                {inDeleteMode ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setAliasDeleteModeIdentityId(null)}
+                                    className="text-[11px] text-stone-600 hover:text-stone-900"
+                                  >
+                                    Done
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setAliasDeleteModeIdentityId(credit.identity_id)}
+                                    className="text-[11px] text-stone-500 hover:text-stone-800"
+                                  >
+                                    Remove aliases
+                                  </button>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 items-center">
+                                {credit.aliases.map((alias) => {
+                                  const removable = aliasRemovable(alias);
+                                  return (
+                                    <span
+                                      key={alias.id}
+                                      data-tag-pill
+                                      className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 ${inDeleteMode && removable ? 'pill-wiggle' : ''}`}
+                                    >
+                                      {alias.alias}
+                                      {inDeleteMode && removable && (
+                                        <button
+                                          type="button"
+                                          className="absolute -top-1.5 -right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white border border-stone-300 text-stone-600 shadow-sm hover:bg-stone-50"
+                                          title="Remove alias"
+                                          onMouseDown={(e) => e.stopPropagation()}
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (!window.confirm('Remove this alias?')) return;
+                                            void removeAliasForCredit(credit, alias.id);
+                                          }}
+                                          aria-label={`Remove alias ${alias.alias}`}
+                                        >
+                                          <X size={10} />
+                                        </button>
+                                      )}
+                                    </span>
+                                  );
+                                })}
+                                {addingAliasForIdentityId === credit.identity_id ? (
+                                  <div className="inline-flex flex-wrap items-center gap-1.5">
+                                    <input
+                                      value={newAliasByIdentity[credit.identity_id] || ''}
+                                      onChange={(e) => setNewAliasByIdentity((prev) => ({ ...prev, [credit.identity_id]: e.target.value }))}
+                                      placeholder="New alias"
+                                      className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white min-w-[140px]"
+                                      autoFocus
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => addAliasForCredit(credit)}
+                                      className="text-xs px-2.5 py-1.5 rounded-md border border-stone-200 text-stone-700 hover:bg-stone-50"
+                                    >
+                                      Add
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setAddingAliasForIdentityId(null)}
+                                      className="text-xs text-stone-500 hover:text-stone-800"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setAddingAliasForIdentityId(credit.identity_id)}
+                                    className="inline-flex items-center justify-center text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50"
+                                    title="Add alias"
+                                  >
+                                    <Plus size={14} />
+                                  </button>
+                                )}
+                              </div>
                               <button
                                 type="button"
-                                onClick={() => addAliasForCredit(credit)}
-                                className="text-xs px-2.5 py-1.5 rounded-md border border-stone-200 text-stone-600 hover:bg-stone-50"
+                                onClick={() => addProfileNameAsAlias(credit)}
+                                className="mt-2 text-xs text-stone-600 hover:text-stone-900 underline-offset-2 hover:underline"
                               >
-                                Add alias
+                                Use profile name as alias
                               </button>
                             </div>
-                            {knownAs.length > 0 && (
-                              <p className="mt-2 text-[11px] text-stone-500">
-                                Previously known as: {knownAs.map((a) => a.alias).join(', ')}
-                              </p>
-                            )}
                           </div>
                         );
                       })}
