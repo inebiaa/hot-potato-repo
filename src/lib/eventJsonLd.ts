@@ -51,6 +51,35 @@ function buildPlace(event: Event): Record<string, unknown> {
   return place;
 }
 
+function cleanTagList(arr: string[] | null | undefined): string[] {
+  if (!arr?.length) return [];
+  return arr.map((s) => String(s).trim()).filter(Boolean);
+}
+
+/**
+ * Producers → organizer (host/production). Designers → performer (show talent).
+ * Matches app labels "Produced By" and "Featured Designers".
+ */
+function addOrganizerAndPerformers(event: Event, obj: Record<string, unknown>): void {
+  const producers = cleanTagList(event.producers);
+  if (producers.length > 0) {
+    obj.organizer = {
+      '@type': 'Organization',
+      name: producers.join(', '),
+    };
+  }
+
+  const designers = cleanTagList(event.featured_designers);
+  if (designers.length === 0) return;
+
+  const asPerson = (name: string) => ({ '@type': 'Person', name });
+  if (designers.length === 1) {
+    obj.performer = asPerson(designers[0]);
+  } else {
+    obj.performer = designers.map(asPerson);
+  }
+}
+
 /**
  * Schema.org Event as JSON-LD object (Google Event rich results).
  * @see https://developers.google.com/search/docs/appearance/structured-data/event
@@ -83,6 +112,8 @@ export function buildEventJsonLd(event: Event): Record<string, unknown> {
       url: ticket,
     };
   }
+
+  addOrganizerAndPerformers(event, obj);
 
   return obj;
 }
