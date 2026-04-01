@@ -1,13 +1,43 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tsconfigPaths from "vite-tsconfig-paths";
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import type { Plugin } from 'vite'
+import type { Event } from './src/lib/eventTypes'
+import { canonicalEventUrlFromParts } from './src/lib/siteBase'
+import { eventJsonLdScriptContentPrerender } from './src/lib/eventJsonLd'
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+}
+
+function escapeHtmlAttr(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+}
+
+function escapeTitleText(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** JSON-LD safe inside <script> (prevents closing script if event text contains HTML). */
+function jsonLdForHtml(json: string): string {
+  return json.replace(/</g, '\\u003c')
+}
+
+function injectEventSeoShell(indexHtml: string, event: Event, site: string, viteBase: string): string {
+  const prerender = { siteOrigin: site, viteBase }
+  const canonical = canonicalEventUrlFromParts(event.id, site, viteBase)
+  const jsonLd = jsonLdForHtml(eventJsonLdScriptContentPrerender(event, prerender))
+  const title = `${event.name} | Secret Blogger`
+  let html = indexHtml.replace(/<title>.*?<\/title>/s, `<title>${escapeTitleText(title)}</title>`)
+  const block = `  <link rel="canonical" href="${escapeHtmlAttr(canonical)}" />\n  <script id="secret-blogger-event-jsonld" type="application/ld+json">${jsonLd}</script>\n`
+  html = html.replace('</head>', `${block}</head>`)
+  return html
 }
 
 /**
@@ -21,9 +51,13 @@ function staticSitePlugin(): Plugin {
   return {
     name: 'secret-blogger-static-site',
     async closeBundle() {
-      const url = process.env.VITE_SUPABASE_URL
-      const key = process.env.VITE_SUPABASE_ANON_KEY
-      const site = (process.env.VITE_PUBLIC_SITE_URL || 'https://www.secretblogger.app').replace(/\/$/, '')
+      const env = loadEnv('production', process.cwd(), '')
+      const url = env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL
+      const key = env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+      const site = (env.VITE_PUBLIC_SITE_URL || process.env.VITE_PUBLIC_SITE_URL || 'https://www.secretblogger.app').replace(
+        /\/$/,
+        ''
+      )
       const distDir = resolve(process.cwd(), 'dist')
       const rootIndex = resolve(distDir, 'index.html')
 
@@ -40,10 +74,12 @@ function staticSitePlugin(): Plugin {
 
       try {
         const client = createClient(url, key)
-        const { data, error } = await client.from('events').select('id')
+        const viteBase = env.VITE_BASE || process.env.VITE_BASE || '/'
+        const { data, error } = await client.from('events').select('*')
         if (error) throw error
 
-        const urls = [site + '/', ...(data || []).map((row: { id: string }) => `${site}/event/${row.id}`)]
+        const rows = (data || []) as Event[]
+        const urls = [site + '/', ...rows.map((row) => `${site}/event/${row.id}`)]
         const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map((loc) => `  <url><loc>${escapeXml(loc)}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
@@ -54,18 +90,22 @@ ${urls.map((loc) => `  <url><loc>${escapeXml(loc)}</loc><changefreq>weekly</chan
 
         const indexHtml = readFileSync(rootIndex, 'utf8')
         let eventPages = 0
-        for (const row of data || []) {
+        for (const row of rows) {
           const id = row?.id
           if (!id || typeof id !== 'string') continue
           const dir = resolve(distDir, 'event', id)
           mkdirSync(dir, { recursive: true })
-          writeFileSync(resolve(dir, 'index.html'), indexHtml, 'utf8')
+          const html = injectEventSeoShell(indexHtml, row, site, viteBase)
+          writeFileSync(resolve(dir, 'index.html'), html, 'utf8')
           eventPages += 1
         }
         console.log('[static-site] Wrote', eventPages, 'event/*/index.html copies (HTTP 200 for crawlers)')
 
         writeFileSync(resolve(distDir, '404.html'), indexHtml, 'utf8')
         console.log('[static-site] Wrote 404.html (SPA fallback for static hosts)')
+
+        writeFileSync(resolve(distDir, '.nojekyll'), '')
+        console.log('[static-site] Wrote .nojekyll (disable Jekyll on any hosts that still run it)')
       } catch (e) {
         console.warn('[static-site] Failed:', e)
       }
