@@ -24,15 +24,24 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`}</pre>
     </div>
   );
 } else {
-  import('./App.tsx').then(({ default: App }) => {
+  import('./AppRoutes.tsx').then(({ default: AppRoutes }) => {
     import('./contexts/AuthContext').then(({ AuthProvider }) => {
-      createRoot(document.getElementById('root')!).render(
-        <StrictMode>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </StrictMode>
-      );
+      import('react-router-dom').then(({ BrowserRouter }) => {
+        const raw = import.meta.env.BASE_URL || '/';
+        const basename: string | undefined =
+          raw === '/' || raw === './'
+            ? undefined
+            : raw.replace(/\/$/, '') || undefined;
+        createRoot(document.getElementById('root')!).render(
+          <StrictMode>
+            <BrowserRouter basename={basename}>
+              <AuthProvider>
+                <AppRoutes />
+              </AuthProvider>
+            </BrowserRouter>
+          </StrictMode>
+        );
+      });
     });
   });
 }

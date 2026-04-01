@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, startTransition, type ReactNode } from 'react';
+import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { Sparkles, Search } from 'lucide-react';
 import AppHeader from './components/AppHeader';
 import { useAuth } from './contexts/AuthContext';
@@ -24,6 +25,8 @@ import {
   type TagIdentityRecord,
 } from './lib/tagIdentity';
 import PrimarySearchBar from './components/PrimarySearchBar';
+import EventJsonLd from './components/EventJsonLd';
+import { eventPagePath } from './lib/siteBase';
 
 interface EventWithStats extends Event {
   average_rating: number;
@@ -32,6 +35,10 @@ interface EventWithStats extends Event {
 }
 
 function App() {
+  const navigate = useNavigate();
+  const params = useParams();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { user, loading: authLoading, signOut, isAdmin } = useAuth();
   const [events, setEvents] = useState<EventWithStats[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<EventWithStats[]>([]);
@@ -44,7 +51,6 @@ function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isTagRatingsModalOpen, setIsTagRatingsModalOpen] = useState(false);
   const [tagRatingsData, setTagRatingsData] = useState<{ type: string; value: string } | null>(null);
-  const [navKey, setNavKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedTags, setSelectedTags] = useState<{ type: string; value: string }[]>([]);
@@ -383,13 +389,10 @@ function App() {
 
   const handleTagClick = (type: string, value: string) => {
     if (overlayEventId) closeEventOverlay();
+    else navigate('/');
     setIsTagRatingsModalOpen(false);
     setIsSettingsModalOpen(false);
     setIsAddEventModalOpen(false);
-    if (typeof window !== 'undefined') {
-      window.history.replaceState(null, '', pathname);
-      setNavKey((k) => k + 1);
-    }
     setSelectedTags((prev) => {
       const key = `${type}:${value}`;
       const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
@@ -420,16 +423,41 @@ function App() {
     setDateFilter('all');
   };
 
-  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const embedMode = urlParams?.get('embed') === '1';
-  const eventIdFromUrl = urlParams?.get('event') || null;
-  const showProfile = urlParams?.get('profile') === '1';
-  const showStats = urlParams?.get('stats') === '1';
+  // Legacy URLs: /?event=uuid → /event/uuid (keeps embed, stats, etc.)
+  useEffect(() => {
+    const q = searchParams.get('event');
+    if (!q || params.eventId) return;
+    if (location.pathname !== '/') return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('event');
+    const qs = next.toString();
+    navigate(`/event/${q}${qs ? `?${qs}` : ''}`, { replace: true });
+  }, [location.pathname, searchParams, params.eventId, navigate]);
+
+  const embedMode = searchParams.get('embed') === '1';
+  const eventIdFromQuery = searchParams.get('event');
+  const eventIdFromPath = params.eventId ?? null;
+  const eventIdFromUrl = eventIdFromPath ?? eventIdFromQuery;
+  const showProfile = searchParams.get('profile') === '1';
+  const showStats = searchParams.get('stats') === '1';
+  const pathname = location.pathname;
+
+  // Keep overlay state in sync with /event/:eventId (e.g. browser back)
+  useEffect(() => {
+    if (params.eventId) {
+      setOverlayEventId(params.eventId);
+    } else if (!searchParams.get('event')) {
+      setOverlayEventId(null);
+      setOverlaySource(null);
+      setOverlayOpenWithWiggle(false);
+      setOverlaySuggestSection(undefined);
+      setOverlaySuggestCustomSlug(undefined);
+    }
+  }, [params.eventId, searchParams]);
 
   // Sync URL with React: re-render when user navigates (pushState or popstate)
   useEffect(() => {
     const sync = () => {
-      setNavKey((k) => k + 1);
       if (typeof window !== 'undefined') window.scrollTo(0, 0);
     };
     sync();
@@ -438,19 +466,13 @@ function App() {
   }, []);
 
   const openStats = () => {
-    if (typeof window !== 'undefined') {
-      window.history.pushState(null, '', `${pathname}?stats=1`);
-      window.scrollTo(0, 0);
-      setNavKey((k) => k + 1);
-    }
+    navigate({ pathname: '/', search: '?stats=1' });
+    window.scrollTo(0, 0);
   };
 
   const goBackFromStats = () => {
-    if (typeof window !== 'undefined') {
-      window.history.replaceState(null, '', pathname);
-      window.scrollTo(0, 0);
-      setNavKey((k) => k + 1);
-    }
+    navigate({ pathname: '/', search: '' });
+    window.scrollTo(0, 0);
   };
 
   // When opening shared link (?event=xxx), clear filters once so the event is visible (don't clear again when user searches)
@@ -657,7 +679,6 @@ function App() {
     setUpcomingExpanded(false);
   }, [searchQuery, selectedCity, selectedTags, dateFilter]);
 
-  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
   const overlayEventFromCache = overlayEventId ? (events.find((e) => e.id === overlayEventId) ?? filteredEvents.find((e) => e.id === overlayEventId)) : null;
   const [overlayEventFetched, setOverlayEventFetched] = useState<EventWithStats | null>(null);
 
@@ -706,11 +727,7 @@ function App() {
     setOverlayOpenWithWiggle(!!openWithWiggle);
     setOverlaySuggestSection(openWithWiggle && !suggestCustomSlug && suggestSection !== 'custom' ? (suggestSection ?? 'header_tags') : undefined);
     setOverlaySuggestCustomSlug(openWithWiggle ? suggestCustomSlug : undefined);
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('event', eventId);
-      window.history.replaceState(null, '', url.pathname + '?' + url.searchParams.toString());
-    }
+    navigate(`/event/${eventId}`);
   };
 
   const closeEventOverlay = () => {
@@ -721,32 +738,21 @@ function App() {
     setOverlaySuggestSection(undefined);
     setOverlaySuggestCustomSlug(undefined);
     setTagModalRefreshTrigger((t) => t + 1);
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('event');
-      const qs = url.searchParams.toString();
-      window.history.replaceState(null, '', url.pathname + (qs ? '?' + qs : ''));
-    }
+    navigate('/');
   };
 
   const goBack = () => {
     if (showProfile) {
-      if (typeof window !== 'undefined') {
-        window.history.replaceState(null, '', pathname);
-        window.scrollTo(0, 0);
-        setNavKey((k) => k + 1);
-      }
-    } else if (typeof window !== 'undefined') {
-      window.location.href = pathname;
+      navigate({ pathname: '/', search: '' });
+      window.scrollTo(0, 0);
+    } else {
+      window.location.href = pathname || '/';
     }
   };
 
   const openProfile = () => {
-    if (typeof window !== 'undefined') {
-      window.history.pushState(null, '', `${pathname}?profile=1`);
-      window.scrollTo(0, 0);
-      setNavKey((k) => k + 1);
-    }
+    navigate({ pathname: '/', search: '?profile=1' });
+    window.scrollTo(0, 0);
   };
 
   const openAuthModal = (mode: 'signin' | 'signup' = 'signin', prompt?: string) => {
@@ -780,6 +786,7 @@ function App() {
     }
     return (
       <TagDisplayProvider map={tagResolutionMap}>
+      <EventJsonLd event={embedEvent} />
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-md mx-auto">
           <EventCard
@@ -1110,14 +1117,8 @@ function App() {
   }
 
   const goToHome = () => {
-    if (typeof window !== 'undefined') window.location.href = pathname;
+    navigate('/');
   };
-
-  if (!appSettings) {
-    return (
-      <div className="min-h-screen w-full h-full bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100" />
-    );
-  }
 
   if (!appSettings) {
     return (
@@ -1129,6 +1130,7 @@ function App() {
 
   return (
     <TagDisplayProvider map={tagResolutionMap}>
+    {params.eventId && overlayEvent ? <EventJsonLd event={overlayEvent} /> : null}
     <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
       <AppHeader
         pathname={pathname}
@@ -1273,7 +1275,7 @@ function App() {
                 onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
                 tagColors={appSettings}
                 customPerformerTags={[]}
-                viewHref={`${pathname}?event=${event.id}`}
+                viewHref={eventPagePath(event.id)}
                 onViewClick={(id, openWithWiggle, suggestSection, suggestCustomSlug) => openEventOverlay(id, undefined, openWithWiggle, suggestSection, suggestCustomSlug)}
                 imageOpacity={upcoming ? 0.6 : undefined}
               />
