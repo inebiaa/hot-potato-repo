@@ -28,8 +28,8 @@ jobs:
 
       - run: npm run build
         env:
-          # Relative base so assets resolve on github.io/<repo>/ and on a custom domain (root URL).
-          VITE_BASE: './'
+          # Root base so /assets/* works from nested /event/<id>/ (static copies for Google). For github.io/<repo>/ only, use VITE_BASE: /<repo>/
+          VITE_BASE: '/'
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           # Canonical URLs in Event JSON-LD and sitemap.xml (override if needed).
