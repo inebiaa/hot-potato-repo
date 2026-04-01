@@ -8,7 +8,6 @@ import { ensureAlias, ensureIdentity, findIdentityByName, normalizeTagName, type
 import { normalizeExternalUrl } from '../lib/externalUrl';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
-import VenueAutocompleteInput from './VenueAutocompleteInput';
 
 interface EditEventModalProps {
   isOpen: boolean;
@@ -24,8 +23,6 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
   const [city, setCity] = useState<string[]>(event.city ? [event.city] : []);
   const [location, setLocation] = useState(event.location || '');
   const [address, setAddress] = useState(event.address || '');
-  const [formattedAddress, setFormattedAddress] = useState(event.formatted_address || '');
-  const [googlePlaceId, setGooglePlaceId] = useState(event.google_place_id || '');
   const [imageUrl, setImageUrl] = useState(event.image_url || '');
   const [countdownLink, setCountdownLink] = useState(event.countdown_link || '');
   const toArray = (v: unknown): string[] =>
@@ -59,8 +56,6 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       setCity(event.city ? [event.city] : []);
       setLocation(event.location || '');
       setAddress(event.address || '');
-      setFormattedAddress(event.formatted_address || '');
-      setGooglePlaceId(event.google_place_id || '');
       setImageUrl(event.image_url || '');
       setCountdownLink(event.countdown_link || '');
       setProducers(toArray(event.producers));
@@ -182,8 +177,6 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           season: date ? getSeasonFromDate(date) : null,
           location: location || null,
           address: address || null,
-          formatted_address: formattedAddress || null,
-          google_place_id: googlePlaceId || null,
           image_url: imageUrl || null,
           countdown_link: normalizedCountdownLink,
           producers: resolvedProducers.length ? resolvedProducers : null,
@@ -279,22 +272,14 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
               Venue
             </label>
-            <VenueAutocompleteInput
+            <input
               id="location"
+              type="text"
               value={location}
-              onChange={setLocation}
-              onPlaceSelected={(p) => {
-                setAddress(p.address);
-                setFormattedAddress(p.formatted_address);
-                setGooglePlaceId(p.google_place_id);
-                if (p.city) setCity([p.city]);
-              }}
+              onChange={(e) => setLocation(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Search for a venue (Google Places when API key is set)"
+              placeholder="e.g., Grand Palais, Fashion Week"
             />
-            <p className="text-xs text-gray-500 mt-0.5">
-              Selecting a place fills address data for search listings (not shown on event cards). You can edit below.
-            </p>
           </div>
 
           <div>
@@ -307,7 +292,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
               onChange={(e) => setAddress(e.target.value)}
               rows={2}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-              placeholder="For structured search data only"
+              placeholder="Optional; used for search structured data, not shown on event cards"
             />
           </div>
 
