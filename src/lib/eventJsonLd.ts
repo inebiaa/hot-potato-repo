@@ -20,16 +20,31 @@ export function eventStartDateIso(dateStr: string): string {
   }
 }
 
+/** End of calendar day for date-only strings (Google recommends endDate for Event rich results). */
+export function eventEndDateIso(dateStr: string): string {
+  const d = dateStr.trim();
+  if (!d) return new Date().toISOString();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return `${d}T23:59:59`;
+  try {
+    const dt = new Date(d);
+    if (!Number.isNaN(dt.getTime())) return dt.toISOString();
+  } catch {
+    /* fall through */
+  }
+  return `${d}T23:59:59`;
+}
+
 function buildPostalAddress(event: Event): Record<string, unknown> {
   const addr: Record<string, unknown> = {
     '@type': 'PostalAddress',
   };
+  /** Same source as the card: formatted line preferred, else user-entered address (multiline OK for schema.org Text). */
   const line =
     (event.formatted_address && event.formatted_address.trim()) ||
     (event.address && event.address.trim()) ||
     '';
   if (line) {
-    addr.streetAddress = line;
+    addr.streetAddress = line.replace(/\r\n/g, '\n').trim();
   }
   if (event.city?.trim()) {
     addr.addressLocality = event.city.trim();
@@ -91,7 +106,9 @@ export function buildEventJsonLd(event: Event): Record<string, unknown> {
     '@type': 'Event',
     name: event.name,
     startDate: eventStartDateIso(event.date),
+    endDate: eventEndDateIso(event.date),
     eventStatus: 'https://schema.org/EventScheduled',
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     url: canonical,
     location: buildPlace(event),
   };
@@ -110,6 +127,7 @@ export function buildEventJsonLd(event: Event): Record<string, unknown> {
     obj.offers = {
       '@type': 'Offer',
       url: ticket,
+      availability: 'https://schema.org/InStock',
     };
   }
 

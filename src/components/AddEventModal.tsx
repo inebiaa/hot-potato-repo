@@ -18,7 +18,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
   const [description, setDescription] = useState('');
   const [date, setDate] = useState('');
   const [city, setCity] = useState<string[]>([]);
-  const [location, setLocation] = useState('');
+  const [venue, setVenue] = useState<string[]>([]);
   const [address, setAddress] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [countdownLink, setCountdownLink] = useState('');
@@ -73,7 +73,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
         date,
         city: (city && city[0]) || '',
         season: date ? getSeasonFromDate(date) : null,
-        location: location || null,
+        location: venue[0] || null,
         address: address || null,
         image_url: imageUrl || null,
         countdown_link: normalizedCountdownLink,
@@ -96,7 +96,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       setDescription('');
       setDate('');
       setCity([]);
-      setLocation('');
+      setVenue([]);
       setAddress('');
       setImageUrl('');
       setCountdownLink('');
@@ -157,7 +157,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Optional description"
+              placeholder="Short description of the show"
             />
           </div>
 
@@ -191,23 +191,20 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             </div>
           </div>
 
-          <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
-              Venue
-            </label>
-            <input
-              id="location"
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g., Grand Palais, Fashion Week"
-            />
-          </div>
+          <TagInput
+            id="location"
+            label="Venue"
+            value={venue}
+            onChange={setVenue}
+            useVenueSuggestions
+            maxTags={1}
+            placeholder="e.g., Grand Palais, Fashion Week"
+            hint="Type and press Enter; suggestions from venues already used on events"
+          />
 
           <div>
             <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-              Street address (optional)
+              Street address
             </label>
             <textarea
               id="address"
@@ -215,7 +212,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
               onChange={(e) => setAddress(e.target.value)}
               rows={2}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-              placeholder="Optional; used for search structured data, not shown on event cards"
+              placeholder="Shown on the card when set; included in Event structured data"
             />
           </div>
 
@@ -268,7 +265,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             onChange={setHeaderTags}
             tagColumn="header_tags"
             placeholder="e.g., Spring 2024, Couture, Limited Edition"
-            hint="Optional tags for the header section"
+            hint="Tags for the header section"
           />
 
           {inlineCustomTypes.map(({ slug, label, icon }) => (
@@ -360,13 +357,13 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Optional image link"
+              placeholder="https://…"
             />
           </div>
 
           <div>
             <label htmlFor="countdownLink" className="block text-sm font-medium text-gray-700 mb-1">
-              Official ticket link (optional)
+              Official ticket link
             </label>
             <input
               id="countdownLink"

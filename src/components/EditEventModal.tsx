@@ -21,7 +21,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
   const [description, setDescription] = useState(event.description || '');
   const [date, setDate] = useState(event.date.slice(0, 10));
   const [city, setCity] = useState<string[]>(event.city ? [event.city] : []);
-  const [location, setLocation] = useState(event.location || '');
+  const [venue, setVenue] = useState<string[]>(event.location ? [event.location] : []);
   const [address, setAddress] = useState(event.address || '');
   const [imageUrl, setImageUrl] = useState(event.image_url || '');
   const [countdownLink, setCountdownLink] = useState(event.countdown_link || '');
@@ -54,7 +54,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       setDescription(event.description || '');
       setDate(event.date.slice(0, 10));
       setCity(event.city ? [event.city] : []);
-      setLocation(event.location || '');
+      setVenue(event.location ? [event.location] : []);
       setAddress(event.address || '');
       setImageUrl(event.image_url || '');
       setCountdownLink(event.countdown_link || '');
@@ -175,7 +175,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           date,
           city: (city && city[0]) || '',
           season: date ? getSeasonFromDate(date) : null,
-          location: location || null,
+          location: venue[0] || null,
           address: address || null,
           image_url: imageUrl || null,
           countdown_link: normalizedCountdownLink,
@@ -234,7 +234,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Optional description"
+              placeholder="Short description of the show"
             />
           </div>
 
@@ -268,23 +268,20 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             </div>
           </div>
 
-          <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
-              Venue
-            </label>
-            <input
-              id="location"
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g., Grand Palais, Fashion Week"
-            />
-          </div>
+          <TagInput
+            id="location"
+            label="Venue"
+            value={venue}
+            onChange={setVenue}
+            useVenueSuggestions
+            maxTags={1}
+            placeholder="e.g., Grand Palais, Fashion Week"
+            hint="Type and press Enter; suggestions from venues already used on events"
+          />
 
           <div>
             <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-              Street address (optional)
+              Street address
             </label>
             <textarea
               id="address"
@@ -292,7 +289,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
               onChange={(e) => setAddress(e.target.value)}
               rows={2}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-              placeholder="Optional; used for search structured data, not shown on event cards"
+              placeholder="Shown on the card when set; included in Event structured data"
             />
           </div>
 
@@ -345,7 +342,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             onChange={setHeaderTags}
             tagColumn="header_tags"
             placeholder="e.g., Spring 2024, Couture, Limited Edition"
-            hint="Optional tags for the header section"
+            hint="Tags for the header section"
           />
 
           {inlineCustomTypes.map(({ slug, label, icon }) => (
@@ -424,7 +421,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             onChange={setFooterTags}
             tagColumn="footer_tags"
             placeholder="e.g., Award Winning, Sustainable Fashion, NYFW Fall 2024"
-            hint="Optional tags; use a shared tag (e.g. NYFW Fall 2024) to group related shows"
+            hint="Use a shared tag (e.g. NYFW Fall 2024) to group related shows"
           />
 
           <div>
@@ -443,7 +440,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
 
           <div>
             <label htmlFor="countdownLink" className="block text-sm font-medium text-gray-700 mb-1">
-              Official ticket link (optional)
+              Official ticket link
             </label>
             <input
               id="countdownLink"

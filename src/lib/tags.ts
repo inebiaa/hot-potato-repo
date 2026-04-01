@@ -38,6 +38,21 @@ export async function fetchExistingCities(): Promise<string[]> {
   return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
+/** Fetch unique non-empty venue names from events (`location` column) */
+export async function fetchExistingVenues(): Promise<string[]> {
+  const { data, error } = await supabase.from('events').select('location');
+  if (error) return [];
+  const set = new Set<string>();
+  (data || []).forEach((row: { location?: string | null }) => {
+    const v = row.location;
+    if (v && typeof v === 'string') {
+      const trimmed = v.trim();
+      if (trimmed) set.add(trimmed);
+    }
+  });
+  return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
 /** Fetch unique tag values from custom_tags JSONB for a given slug */
 export async function fetchCustomTagSuggestions(slug: string): Promise<string[]> {
   const { data, error } = await supabase

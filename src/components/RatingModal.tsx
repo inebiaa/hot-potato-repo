@@ -177,7 +177,7 @@ export default function RatingModal({
 
           <div>
             <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">
-              Comment (optional)
+              Comment
             </label>
             {eventTags.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-1 items-center">

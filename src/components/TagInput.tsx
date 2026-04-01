@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, GripVertical } from 'lucide-react';
-import { fetchExistingTags, fetchCustomTagSuggestions, fetchExistingCities, TagColumn } from '../lib/tags';
+import { fetchExistingTags, fetchCustomTagSuggestions, fetchExistingCities, fetchExistingVenues, TagColumn } from '../lib/tags';
 import { tagMatchesQuery } from '../lib/normalize';
 
 interface TagInputProps {
@@ -10,6 +10,8 @@ interface TagInputProps {
   customTagSlug?: string;
   /** When true, fetches city suggestions (single-value field) */
   useCitySuggestions?: boolean;
+  /** When true, fetches venue (`location`) suggestions from existing events */
+  useVenueSuggestions?: boolean;
   /** When 1, only a single tag is allowed (e.g. for city) */
   maxTags?: number;
   placeholder?: string;
@@ -25,6 +27,7 @@ export default function TagInput({
   tagColumn,
   customTagSlug,
   useCitySuggestions = false,
+  useVenueSuggestions = false,
   maxTags,
   placeholder = 'Type and press Enter to add',
   required = false,
@@ -47,6 +50,10 @@ export default function TagInput({
       fetchExistingCities().then((tags) => {
         if (!cancelled) setAllTags(tags);
       });
+    } else if (useVenueSuggestions) {
+      fetchExistingVenues().then((tags) => {
+        if (!cancelled) setAllTags(tags);
+      });
     } else if (customTagSlug) {
       fetchCustomTagSuggestions(customTagSlug).then((tags) => {
         if (!cancelled) setAllTags(tags);
@@ -57,7 +64,7 @@ export default function TagInput({
       });
     }
     return () => { cancelled = true; };
-  }, [tagColumn, customTagSlug, useCitySuggestions]);
+  }, [tagColumn, customTagSlug, useCitySuggestions, useVenueSuggestions]);
 
   const addTag = useCallback((tag: string) => {
     const trimmed = tag.trim();
