@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Calendar, Clock, MapPin, Star, Edit, Trash2, Share2, MoreVertical, Plus, Check, X } from 'lucide-react';
 import { Event, Rating, supabase } from '../lib/supabase';
 import { getIcon } from '../lib/eventCardIcons';
@@ -12,6 +13,7 @@ import { useTagDisplayMap } from '../contexts/TagDisplayContext';
 import { tagResolutionKey } from '../lib/tagDisplayResolution';
 import { ensureAlias, ensureIdentity, findIdentityByName, normalizeTagName, type TagType } from '../lib/tagIdentity';
 import { tryNormalizeExternalUrl } from '../lib/externalUrl';
+import { canonicalEventUrl } from '../lib/siteBase';
 
 interface EventCardProps {
   event: Event;
@@ -546,9 +548,8 @@ export default function EventCard({
   const SeasonIcon = getIcon(tagColors?.season_icon, 'season_icon');
   const HeaderTagsIcon = getIcon(tagColors?.header_tags_icon, 'header_tags_icon');
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
-  const shareLink = `${baseUrl}?event=${event.id}`;
-  const embedLink = `${baseUrl}?embed=1&event=${event.id}`;
+  const shareLink = canonicalEventUrl(event.id);
+  const embedLink = `${canonicalEventUrl(event.id)}?embed=1`;
   const embedCode = `<iframe src="${embedLink}" width="400" height="600" frameborder="0" title="${event.name}"></iframe>`;
 
   const copyToClipboard = async (text: string, type: 'link' | 'embed' | 'embedcode') => {
@@ -981,9 +982,15 @@ export default function EventCard({
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="flex-1 min-w-0">
               {viewHref && !onViewClick ? (
-                <a href={viewHref} className="text-xl font-bold text-gray-900 block min-w-0">
-                  {event.name}
-                </a>
+                viewHref.startsWith('http://') || viewHref.startsWith('https://') ? (
+                  <a href={viewHref} className="text-xl font-bold text-gray-900 block min-w-0">
+                    {event.name}
+                  </a>
+                ) : (
+                  <Link to={viewHref} className="text-xl font-bold text-gray-900 block min-w-0">
+                    {event.name}
+                  </Link>
+                )
               ) : (
                 <h3 className="text-xl font-bold text-gray-900 min-w-0">
                   {event.name}
@@ -1168,7 +1175,7 @@ export default function EventCard({
                         backgroundColor: tagColors?.countdown_bg_color || '#fef3c7',
                         color: tagColors?.countdown_text_color || '#92400e'
                       }}
-                      aria-label={countdownOpenUrl ? `Open countdown link for ${event.name}` : undefined}
+                      aria-label={countdownOpenUrl ? `Open official ticket link for ${event.name}` : undefined}
                       title={countdownOpenUrl ? countdownOpenUrl : undefined}
                       onClick={(e) => handlePillClick(e, () => {
                         if (countdownOpenUrl) window.open(countdownOpenUrl, '_blank', 'noopener,noreferrer');
@@ -1222,11 +1229,6 @@ export default function EventCard({
               <div className="flex items-center text-gray-500 text-sm">
                 <MapPin size={16} className="mr-2 flex-shrink-0" />
                 <span>{event.location}</span>
-              </div>
-            )}
-            {event.address && (
-              <div className="flex items-start text-gray-400 text-xs leading-tight ml-6">
-                <span className="whitespace-pre-line">{event.address}</span>
               </div>
             )}
           </div>

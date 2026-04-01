@@ -6,6 +6,7 @@ import { normalizeExternalUrl } from '../lib/externalUrl';
 import { useAuth } from '../contexts/AuthContext';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
+import VenueAutocompleteInput from './VenueAutocompleteInput';
 
 interface AddEventModalProps {
   isOpen: boolean;
@@ -20,6 +21,8 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
   const [city, setCity] = useState<string[]>([]);
   const [location, setLocation] = useState('');
   const [address, setAddress] = useState('');
+  const [formattedAddress, setFormattedAddress] = useState('');
+  const [googlePlaceId, setGooglePlaceId] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [countdownLink, setCountdownLink] = useState('');
   const [producers, setProducers] = useState<string[]>([]);
@@ -61,7 +64,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
     try {
       normalizedCountdownLink = normalizeExternalUrl(countdownLink);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid countdown link');
+      setError(err instanceof Error ? err.message : 'Invalid official ticket link');
       setLoading(false);
       return;
     }
@@ -75,6 +78,8 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
         season: date ? getSeasonFromDate(date) : null,
         location: location || null,
         address: address || null,
+        formatted_address: formattedAddress || null,
+        google_place_id: googlePlaceId || null,
         image_url: imageUrl || null,
         countdown_link: normalizedCountdownLink,
         producers: producers.length ? producers : null,
@@ -98,6 +103,8 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       setCity([]);
       setLocation('');
       setAddress('');
+      setFormattedAddress('');
+      setGooglePlaceId('');
       setImageUrl('');
       setCountdownLink('');
       setProducers([]);
@@ -195,19 +202,27 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
               Venue
             </label>
-            <input
+            <VenueAutocompleteInput
               id="location"
-              type="text"
               value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              onChange={setLocation}
+              onPlaceSelected={(p) => {
+                setAddress(p.address);
+                setFormattedAddress(p.formatted_address);
+                setGooglePlaceId(p.google_place_id);
+                if (p.city) setCity([p.city]);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g., Grand Palais, Fashion Week"
+              placeholder="Search for a venue (Google Places when API key is set)"
             />
+            <p className="text-xs text-gray-500 mt-0.5">
+              Selecting a place fills address data for search listings (not shown on event cards). You can edit below.
+            </p>
           </div>
 
           <div>
             <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-              Address
+              Street address (optional)
             </label>
             <textarea
               id="address"
@@ -215,7 +230,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
               onChange={(e) => setAddress(e.target.value)}
               rows={2}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-              placeholder="e.g., 123 Avenue Street, 75008 Paris, France"
+              placeholder="e.g., 123 Avenue Street, 75008 Paris — for structured search data only"
             />
           </div>
 
@@ -366,7 +381,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
 
           <div>
             <label htmlFor="countdownLink" className="block text-sm font-medium text-gray-700 mb-1">
-              Countdown link (optional)
+              Official ticket link (optional)
             </label>
             <input
               id="countdownLink"
@@ -374,9 +389,9 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
               value={countdownLink}
               onChange={(e) => setCountdownLink(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="https://… opens when the countdown is clicked"
+              placeholder="https://… public ticket or registration page"
             />
-            <p className="text-xs text-gray-500 mt-0.5">For upcoming shows only. http or https only.</p>
+            <p className="text-xs text-gray-500 mt-0.5">Opens when the countdown pill is tapped on upcoming shows. http or https only.</p>
           </div>
 
           {error && (

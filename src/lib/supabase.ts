@@ -27,8 +27,12 @@ export interface Event {
   season: string | null;
   location: string | null;
   address: string | null;
+  /** Full formatted address from Google Places (optional; used for Event JSON-LD). */
+  formatted_address?: string | null;
+  /** Google Place ID when venue was chosen via Places (optional). */
+  google_place_id?: string | null;
   image_url: string | null;
-  /** Optional URL opened when the countdown pill is clicked (upcoming events). */
+  /** Official ticket / registration URL (countdown pill on upcoming events). */
   countdown_link?: string | null;
   producers: string[] | null;
   featured_designers: string[] | null;

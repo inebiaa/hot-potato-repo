@@ -32,6 +32,8 @@ jobs:
           VITE_BASE: './'
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Canonical URLs in Event JSON-LD and sitemap.xml (override if needed).
+          VITE_PUBLIC_SITE_URL: https://www.secretblogger.app
 
       - uses: actions/upload-pages-artifact@v3
         with:
