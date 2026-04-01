@@ -1,11 +1,27 @@
-import type { Event } from './supabase';
-import { canonicalEventUrl, publicSiteOrigin } from './siteBase';
+import type { Event } from './eventTypes';
+import { canonicalEventUrl, canonicalEventUrlFromParts, publicSiteOrigin } from './siteBase';
 
-function absoluteImageUrl(url: string | null | undefined): string | undefined {
+/**
+ * Rich Results / Search: validate the deployed event URL (not a JSON paste). Prerendered HTML from
+ * vite `staticSitePlugin` includes this markup in the first response. Prefer future event dates when
+ * testing eligibility in Google’s tool.
+ *
+ * `EventJsonLdPrerender`: when set at build time, canonical/image URLs use explicit origin/base
+ * instead of `import.meta` / `window`.
+ *
+ * @see https://schema.org/Event
+ */
+export type EventJsonLdPrerender = { siteOrigin: string; viteBase: string };
+
+function absoluteImageUrl(
+  url: string | null | undefined,
+  prerender?: EventJsonLdPrerender
+): string | undefined {
   if (!url?.trim()) return undefined;
   const u = url.trim();
   if (u.startsWith('http://') || u.startsWith('https://')) return u;
-  return `${publicSiteOrigin()}${u.startsWith('/') ? u : `/${u}`}`;
+  const origin = prerender ? prerender.siteOrigin.replace(/\/$/, '') : publicSiteOrigin();
+  return `${origin}${u.startsWith('/') ? u : `/${u}`}`;
 }
 
 /** ISO-8601 date/datetime from stored event date (YYYY-MM-DD or full ISO). */
@@ -97,10 +113,12 @@ function addOrganizerAndPerformers(event: Event, obj: Record<string, unknown>): 
 
 /**
  * Schema.org Event as JSON-LD object (Google Event rich results).
- * @see https://developers.google.com/search/docs/appearance/structured-data/event
+ * @see https://schema.org/Event
  */
-export function buildEventJsonLd(event: Event): Record<string, unknown> {
-  const canonical = canonicalEventUrl(event.id);
+export function buildEventJsonLd(event: Event, prerender?: EventJsonLdPrerender): Record<string, unknown> {
+  const canonical = prerender
+    ? canonicalEventUrlFromParts(event.id, prerender.siteOrigin, prerender.viteBase)
+    : canonicalEventUrl(event.id);
   const obj: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Event',
@@ -117,7 +135,7 @@ export function buildEventJsonLd(event: Event): Record<string, unknown> {
     obj.description = event.description.trim();
   }
 
-  const img = absoluteImageUrl(event.image_url);
+  const img = absoluteImageUrl(event.image_url, prerender);
   if (img) {
     obj.image = [img];
   }
@@ -138,4 +156,8 @@ export function buildEventJsonLd(event: Event): Record<string, unknown> {
 
 export function eventJsonLdScriptContent(event: Event): string {
   return JSON.stringify(buildEventJsonLd(event));
+}
+
+export function eventJsonLdScriptContentPrerender(event: Event, prerender: EventJsonLdPrerender): string {
+  return JSON.stringify(buildEventJsonLd(event, prerender));
 }
