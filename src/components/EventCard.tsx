@@ -1225,12 +1225,26 @@ export default function EventCard({
               <Calendar size={16} className="mr-2 flex-shrink-0" />
               {formatDate(event.date)}
             </div>
-            {event.location && (
-              <div className="flex items-center text-gray-500 text-sm">
-                <MapPin size={16} className="mr-2 flex-shrink-0" />
-                <span>{event.location}</span>
-              </div>
-            )}
+            {(() => {
+              const addressLine =
+                (event.formatted_address && event.formatted_address.trim()) ||
+                (event.address && event.address.trim()) ||
+                '';
+              if (!event.location && !addressLine) return null;
+              return (
+                <div className="flex items-start text-gray-500 text-sm">
+                  <MapPin size={16} className="mr-2 flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    {event.location && <span className="block">{event.location}</span>}
+                    {addressLine && (
+                      <span className={`block whitespace-pre-line ${event.location ? 'text-xs mt-0.5' : ''}`}>
+                        {addressLine}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="space-y-3 mb-4 pt-4 border-t">

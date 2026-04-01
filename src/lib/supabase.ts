@@ -27,9 +27,9 @@ export interface Event {
   season: string | null;
   location: string | null;
   address: string | null;
-  /** Full formatted address from Google Places (optional; used for Event JSON-LD). */
+  /** Full formatted address line when available; used for cards and Event JSON-LD. */
   formatted_address?: string | null;
-  /** Google Place ID when venue was chosen via Places (optional). */
+  /** Google Place ID when set from a place picker; unused if venues are free-text. */
   google_place_id?: string | null;
   image_url: string | null;
   /** Official ticket / registration URL (countdown pill on upcoming events). */

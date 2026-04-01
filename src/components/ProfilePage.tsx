@@ -655,7 +655,7 @@ export default function ProfilePage({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-stone-700 mb-1">Description (optional)</label>
+                <label className="block text-sm font-medium text-stone-700 mb-1">Description</label>
                 <input
                   type="text"
                   value={newListDescription}
