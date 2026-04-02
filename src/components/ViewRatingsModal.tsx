@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Star, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase, Event } from '../lib/supabase';
 import RatingModal from './RatingModal';
@@ -118,9 +119,9 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="relative max-w-2xl w-full my-8" onClick={(e) => e.stopPropagation()}>
@@ -291,6 +292,7 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
           customPerformerTags={customPerformerTags}
         />
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

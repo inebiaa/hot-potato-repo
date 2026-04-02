@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Star } from 'lucide-react';
 import { supabase, Event, Rating } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -139,9 +140,10 @@ export default function RatingModal({
     }
   };
 
-  return (
+  /** Portal avoids ancestor stacking (e.g. upcoming stack `relative z-10`) painting above the overlay. */
+  return createPortal(
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="relative max-w-md w-full my-8" onClick={(e) => e.stopPropagation()}>
@@ -235,6 +237,7 @@ export default function RatingModal({
         </form>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
