@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Calendar, Clock, MapPin, Star, Edit, Trash2, Share2, MoreVertical, Plus, Check, X } from 'lucide-react';
+import { Calendar, MapPin, Star, Edit, Trash2, Share2, MoreVertical, Plus, Check, X } from 'lucide-react';
 import { Event, Rating, supabase } from '../lib/supabase';
 import { getIcon } from '../lib/eventCardIcons';
 import { getSeasonFromDate } from '../lib/season';
@@ -13,6 +13,8 @@ import { useTagDisplayMap } from '../contexts/TagDisplayContext';
 import { tagResolutionKey } from '../lib/tagDisplayResolution';
 import { ensureAlias, ensureIdentity, findIdentityByName, normalizeTagName, type TagType } from '../lib/tagIdentity';
 import { tryNormalizeExternalUrl } from '../lib/externalUrl';
+import { isEventUpcoming } from '../lib/eventDates';
+import EventCountdownPill from './EventCountdownPill';
 import { canonicalEventUrl } from '../lib/siteBase';
 
 interface EventCardProps {
@@ -116,7 +118,6 @@ export default function EventCard({
   const [shareCopied, setShareCopied] = useState<'link' | 'embed' | 'embedcode' | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [expandedTagSections, setExpandedTagSections] = useState<Record<string, boolean>>({});
-  const [countdown, setCountdown] = useState<string>('');
   const [orderedTags, setOrderedTags] = useState({
     producers: event.producers || [],
     featured_designers: event.featured_designers || [],
@@ -297,37 +298,6 @@ export default function EventCard({
       setPendingSuggestions([]);
     }
   }, [event.id, user, isApprover]);
-
-  useEffect(() => {
-    if (!event.date) {
-      setCountdown('');
-      return;
-    }
-    const eventDate = new Date(event.date.includes('T') ? event.date : `${event.date}T00:00:00`);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (eventDate < today) {
-      setCountdown('');
-      return;
-    }
-    const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
-    const update = () => {
-      const now = new Date();
-      const diff = eventDate.getTime() - now.getTime();
-      if (diff <= 0) {
-        setCountdown('');
-        return;
-      }
-      const totalSecs = Math.floor(diff / 1000);
-      const hours = Math.floor(totalSecs / 3600);
-      const mins = Math.floor((totalSecs % 3600) / 60);
-      const secs = totalSecs % 60;
-      setCountdown(`${pad(hours)}:${pad(mins)}:${pad(secs)}`);
-    };
-    update();
-    const id = setInterval(update, 1000);
-    return () => clearInterval(id);
-  }, [event.date]);
 
   const countdownOpenUrl = useMemo(
     () => tryNormalizeExternalUrl(event.countdown_link),
@@ -1123,7 +1093,11 @@ export default function EventCard({
 
           {(() => {
             const tags = orderedTags.header_tags || [];
-            const hasHeader = tags.length > 0 || pendingForSection('header_tags').length > 0 || isAnyReorderMode || !!countdown;
+            const hasHeader =
+              tags.length > 0 ||
+              pendingForSection('header_tags').length > 0 ||
+              isAnyReorderMode ||
+              !!(event.date && isEventUpcoming(event.date));
             if (!hasHeader) return null;
             const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['header_tags'];
             const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
@@ -1166,29 +1140,26 @@ export default function EventCard({
                       {renderSuggestionActions(suggestion, isOwn, canRemove)}
                     </span>
                   );})}
-                  {countdown && (
-                    <button
-                      type="button"
-                      data-tag-pill
-                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 tabular-nums whitespace-nowrap ${countdownOpenUrl ? 'cursor-pointer' : ''} ${showWiggle ? 'pill-wiggle' : ''}`}
-                      style={{
-                        backgroundColor: tagColors?.countdown_bg_color || '#fef3c7',
-                        color: tagColors?.countdown_text_color || '#92400e'
-                      }}
-                      aria-label={countdownOpenUrl ? `Open official ticket link for ${event.name}` : undefined}
-                      title={countdownOpenUrl ? countdownOpenUrl : undefined}
-                      onClick={(e) => handlePillClick(e, () => {
-                        if (countdownOpenUrl) window.open(countdownOpenUrl, '_blank', 'noopener,noreferrer');
-                      })}
+                  {event.date && isEventUpcoming(event.date) && (
+                    <EventCountdownPill
+                      eventDate={event.date}
+                      eventName={event.name}
+                      countdownOpenUrl={countdownOpenUrl}
+                      countdownBg={tagColors?.countdown_bg_color}
+                      countdownText={tagColors?.countdown_text_color}
+                      showWiggle={showWiggle}
+                      onExpired={onEventUpdated}
+                      onButtonClick={(e) =>
+                        handlePillClick(e, () => {
+                          if (countdownOpenUrl) window.open(countdownOpenUrl, '_blank', 'noopener,noreferrer');
+                        })
+                      }
                       onMouseDown={() => startLongPress('header_tags')}
                       onMouseUp={(e: React.MouseEvent) => clearLongPress(e)}
                       onMouseLeave={(e: React.MouseEvent) => clearLongPress(e)}
                       onTouchStart={() => startLongPress('header_tags')}
                       onTouchEnd={(e: React.TouchEvent) => clearLongPress(e)}
-                    >
-                      <Clock size={12} className="shrink-0" />
-                      {countdown}
-                    </button>
+                    />
                   )}
                   {suggestPill('header_tags')}
                   {isAnyReorderMode && addingFor?.section !== 'header_tags' && (

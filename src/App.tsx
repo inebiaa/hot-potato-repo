@@ -5,6 +5,7 @@ import AppHeader from './components/AppHeader';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
 import { getSeasonFromDate, getYearFromDate } from './lib/season';
+import { eventSortKey, isEventUpcoming } from './lib/eventDates';
 import { normalizeForSearch } from './lib/normalize';
 import { readableTextForBg } from './lib/colorUtils';
 import EventCard from './components/EventCard';
@@ -571,13 +572,10 @@ function App() {
   useEffect(() => {
     let filtered = [...events];
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     if (dateFilter === 'past') {
-      filtered = filtered.filter((event) => new Date(event.date) < today);
+      filtered = filtered.filter((event) => !isEventUpcoming(event.date));
     } else if (dateFilter === 'future') {
-      filtered = filtered.filter((event) => new Date(event.date) >= today);
+      filtered = filtered.filter((event) => isEventUpcoming(event.date));
     }
 
     if (searchQuery.trim()) {
@@ -1245,12 +1243,12 @@ function App() {
             </div>
           </div>
         ) : (() => {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const byDateDesc = (a: EventWithStats, b: EventWithStats) => new Date(b.date).getTime() - new Date(a.date).getTime();
+          const byDateDesc = (a: EventWithStats, b: EventWithStats) => eventSortKey(b.date) - eventSortKey(a.date);
           const sortedByDate = [...filteredEvents].sort(byDateDesc);
-          const pastEvents = sortedByDate.filter((e) => new Date(e.date) < today);
-          const upcoming = sortedByDate.filter((e) => new Date(e.date) >= today).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          const pastEvents = sortedByDate.filter((e) => !isEventUpcoming(e.date));
+          const upcoming = sortedByDate
+            .filter((e) => isEventUpcoming(e.date))
+            .sort((a, b) => eventSortKey(a.date) - eventSortKey(b.date));
           const nextUpcoming = upcoming[0] ?? null;
           const otherUpcoming = upcoming.slice(1);
 
