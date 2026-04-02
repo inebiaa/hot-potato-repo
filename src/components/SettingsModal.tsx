@@ -9,6 +9,7 @@ import { CUSTOM_COLORS_STORAGE_KEY, PRELOADED_HEX } from './ColorPicker';
 import {
   ensureIdentity,
   findIdentityByName,
+  isNormalizedAliasTakenByOtherIdentity,
   normalizeTagName,
   searchTagIdentities,
   searchEventTags,
@@ -667,6 +668,11 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     const normalized = normalizeTagName(alias);
     const { data: existing } = await supabase.from('tag_aliases').select('id').eq('identity_id', credit.identity_id).eq('normalized_alias', normalized).maybeSingle();
     if (!existing) {
+      const taken = await isNormalizedAliasTakenByOtherIdentity(credit.tag_type as TagType, credit.identity_id, normalized);
+      if (taken) {
+        setCreditsError('That spelling is already used by another tag in this category.');
+        return;
+      }
       const { error } = await supabase.from('tag_aliases').insert({ identity_id: credit.identity_id, alias, normalized_alias: normalized, created_by: userId });
       if (error) {
         setCreditsError(error.message || 'Could not add alias');
@@ -702,6 +708,11 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       .eq('normalized_alias', normalized)
       .maybeSingle();
     if (!existing) {
+      const taken = await isNormalizedAliasTakenByOtherIdentity(credit.tag_type as TagType, credit.identity_id, normalized);
+      if (taken) {
+        setCreditsError('That spelling is already used by another tag in this category.');
+        return;
+      }
       const { error } = await supabase
         .from('tag_aliases')
         .insert({ identity_id: credit.identity_id, alias: name, normalized_alias: normalized, created_by: userId });
@@ -1023,6 +1034,15 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     const text = newAdminAliasText.trim();
     if (!text) return;
     const norm = normalizeTagName(text);
+    const taken = await isNormalizedAliasTakenByOtherIdentity(
+      adminManagedIdentity.tag_type as TagType,
+      adminManagedIdentity.id,
+      norm
+    );
+    if (taken) {
+      setAdminAliasError('That spelling is already used by another tag in this category.');
+      return;
+    }
     const { error } = await supabase.from('tag_aliases').insert({
       identity_id: adminManagedIdentity.id,
       alias: text,

@@ -50,17 +50,23 @@ export async function findIdentityByName(tagType: TagType, name: string): Promis
     .from('tag_aliases')
     .select('identity_id')
     .eq('normalized_alias', normalized)
-    .limit(20);
-  const identityIds = (aliasRows || []).map((r: { identity_id: string }) => r.identity_id);
+    .limit(50);
+  const identityIds = [...new Set((aliasRows || []).map((r: { identity_id: string }) => r.identity_id))];
   if (identityIds.length === 0) return null;
 
   const { data: identities } = await supabase
     .from('tag_identities')
-    .select('id, tag_type, canonical_name')
+    .select('id, tag_type, canonical_name, normalized_name')
     .in('id', identityIds)
-    .eq('tag_type', tagType)
-    .limit(1);
-  return identities && identities.length > 0 ? (identities[0] as TagIdentityRecord) : null;
+    .eq('tag_type', tagType);
+  if (!identities?.length) return null;
+  if (identities.length === 1) return identities[0] as TagIdentityRecord;
+
+  const exactCanonical = identities.find((row: { normalized_name: string }) => row.normalized_name === normalized);
+  if (exactCanonical) return exactCanonical as TagIdentityRecord;
+
+  const sorted = [...identities].sort((a, b) => a.id.localeCompare(b.id));
+  return sorted[0] as TagIdentityRecord;
 }
 
 /**
@@ -127,9 +133,39 @@ export async function ensureIdentity(tagType: TagType, name: string, createdBy?:
   return inserted as TagIdentityRecord;
 }
 
+/** True if another identity of this tag type already has this normalized spelling as an alias. */
+export async function isNormalizedAliasTakenByOtherIdentity(
+  tagType: TagType,
+  identityId: string,
+  normalized: string
+): Promise<boolean> {
+  if (!normalized) return false;
+  const { data: rows } = await supabase
+    .from('tag_aliases')
+    .select('identity_id')
+    .eq('normalized_alias', normalized)
+    .neq('identity_id', identityId);
+  if (!rows?.length) return false;
+  const otherIds = [...new Set(rows.map((r: { identity_id: string }) => r.identity_id))];
+  const { data: hit } = await supabase
+    .from('tag_identities')
+    .select('id')
+    .in('id', otherIds)
+    .eq('tag_type', tagType)
+    .limit(1);
+  return (hit?.length ?? 0) > 0;
+}
+
 export async function ensureAlias(identityId: string, alias: string, createdBy?: string): Promise<void> {
   const normalized = normalizeTagName(alias);
   if (!normalized) return;
+
+  const { data: self } = await supabase
+    .from('tag_identities')
+    .select('tag_type')
+    .eq('id', identityId)
+    .maybeSingle();
+  if (!self?.tag_type) return;
 
   const { data: existing } = await supabase
     .from('tag_aliases')
@@ -138,6 +174,8 @@ export async function ensureAlias(identityId: string, alias: string, createdBy?:
     .eq('normalized_alias', normalized)
     .limit(1);
   if (existing && existing.length > 0) return;
+
+  if (await isNormalizedAliasTakenByOtherIdentity(self.tag_type as TagType, identityId, normalized)) return;
 
   await supabase.from('tag_aliases').insert({
     identity_id: identityId,

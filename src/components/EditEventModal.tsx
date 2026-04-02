@@ -127,13 +127,21 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             const oldTag = oldTags[i];
             if (normalizeTagName(oldTag) !== normalizeTagName(tag)) {
               const existing = await findIdentityByName(tagType, oldTag);
-              if (!existing || existing.id === identity.id) {
+              if (existing && existing.id === identity.id) {
                 await ensureAlias(identity.id, oldTag.trim(), user.id);
               }
             }
           }
         }
-        return resolved;
+        const seenNorm = new Set<string>();
+        const deduped: string[] = [];
+        for (const t of resolved) {
+          const n = normalizeTagName(t);
+          if (seenNorm.has(n)) continue;
+          seenNorm.add(n);
+          deduped.push(t);
+        }
+        return deduped;
       };
 
       const oldProducers = toArray(event.producers);
