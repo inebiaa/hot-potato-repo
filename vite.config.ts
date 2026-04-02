@@ -60,16 +60,21 @@ function staticSitePlugin(): Plugin {
       )
       const distDir = resolve(process.cwd(), 'dist')
       const rootIndex = resolve(distDir, 'index.html')
+      const isCi = Boolean(process.env.GITHUB_ACTIONS || process.env.CI)
 
       if (!url || !key) {
-        console.warn(
-          '[static-site] Skipping sitemap + event pages: set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY at build time'
-        )
+        const msg =
+          '[static-site] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY — cannot write sitemap.xml or event/*/index.html (GitHub Pages needs these files for /event/:id).'
+        if (isCi) {
+          throw new Error(
+            `${msg} Add both as repository Secrets and re-run the workflow.`
+          )
+        }
+        console.warn(`${msg} Skipping (local build without .env is OK).`)
         return
       }
       if (!existsSync(rootIndex)) {
-        console.warn('[static-site] dist/index.html missing')
-        return
+        throw new Error('[static-site] dist/index.html missing after bundle')
       }
 
       try {
@@ -107,6 +112,9 @@ ${urls.map((loc) => `  <url><loc>${escapeXml(loc)}</loc><changefreq>weekly</chan
         writeFileSync(resolve(distDir, '.nojekyll'), '')
         console.log('[static-site] Wrote .nojekyll (disable Jekyll on any hosts that still run it)')
       } catch (e) {
+        if (isCi) {
+          throw e
+        }
         console.warn('[static-site] Failed:', e)
       }
     },
