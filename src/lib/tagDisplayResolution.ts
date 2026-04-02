@@ -138,15 +138,20 @@ export async function fetchTagResolutionForEvents(events: Event[]): Promise<TagR
     for (const k of unmatchedKeys) {
       const { type, raw } = pairKeys.get(k)!;
       const norm = normalizeTagName(raw);
+      const candidates: IdentityRow[] = [];
       for (const hit of (aliasHits || []) as Hit[]) {
         const ti = hit.tag_identities;
         const identity = Array.isArray(ti) ? ti[0] : ti;
         if (!identity || identity.tag_type !== type) continue;
         if (hit.normalized_alias !== norm) continue;
-        pairToIdentity.set(k, identity.id);
-        identityRows.set(identity.id, identity);
-        break;
+        candidates.push(identity);
       }
+      if (candidates.length === 0) continue;
+      const preferred =
+        candidates.find((id) => id.normalized_name === norm) ??
+        [...candidates].sort((a, b) => a.id.localeCompare(b.id))[0];
+      pairToIdentity.set(k, preferred.id);
+      identityRows.set(preferred.id, preferred);
     }
   }
 
