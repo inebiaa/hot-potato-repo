@@ -125,6 +125,82 @@ export function tagMatchesNameSubsequence(tag: string, name: string): boolean {
   return true;
 }
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * If the first whitespace-separated token of `tail` equals the footer tag (case-insensitive),
+ * drop it — titles often spell an acronym in words and repeat the stylized token once.
+ */
+function stripLeadingDuplicateTagToken(tail: string, tag: string): string {
+  const t = tag.trim();
+  if (!t) return tail;
+  const trimmed = tail.trim();
+  if (!trimmed) return tail;
+  const m = /^(\S+)/.exec(trimmed);
+  if (!m || m[1].toLowerCase() !== t.toLowerCase()) return tail;
+  return trimmed.slice(m[0].length).trim();
+}
+
+/** Exclusive index after the whitespace-delimited word containing `name[idx]`. */
+function exclusiveEndAfterWordContaining(name: string, idx: number): number {
+  if (idx < 0 || idx >= name.length) return name.length;
+  let end = idx;
+  while (end < name.length && !/\s/.test(name[end])) end++;
+  return end;
+}
+
+/**
+ * If `tag` appears as a whole token (word boundaries), return text after its **last**
+ * occurrence so the acronym token is fully “finished” before any following words.
+ */
+function suffixAfterWholeTagToken(tag: string, name: string): string | null {
+  const t = tag.trim();
+  if (t.length < 2) return null;
+  const re = new RegExp(`\\b${escapeRegex(t)}\\b`, 'gi');
+  let lastEnd = -1;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(name)) !== null) {
+    lastEnd = m.index + m[0].length;
+  }
+  if (lastEnd < 0) return null;
+  return name.slice(lastEnd).trim();
+}
+
+/**
+ * Rightmost subsequence embedding of `tag` in `name` (same chars as
+ * {@link tagMatchesNameSubsequence}, but prefers the latest match so an early letter
+ * does not steal from a later real acronym token), then cut after the word that holds
+ * the last matched character.
+ */
+function suffixAfterLatestSubsequenceMatch(tag: string, name: string): string | null {
+  const normTag = tag.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+  if (normTag.length < 2) return null;
+  const chars: { idx: number; ch: string }[] = [];
+  for (let i = 0; i < name.length; i++) {
+    const c = name[i];
+    if (/[A-Za-z0-9]/.test(c)) {
+      chars.push({ idx: i, ch: c.toLowerCase() });
+    }
+  }
+  let ti = normTag.length - 1;
+  /** Forward last index of the embedding (the tag’s last letter in the title). */
+  let lastCharIdx = -1;
+  for (let ci = chars.length - 1; ci >= 0 && ti >= 0; ci--) {
+    if (chars[ci].ch === normTag[ti]) {
+      if (ti === normTag.length - 1) {
+        lastCharIdx = chars[ci].idx;
+      }
+      ti--;
+    }
+  }
+  if (ti >= 0) return null;
+  if (lastCharIdx < 0) return null;
+  const end = exclusiveEndAfterWordContaining(name, lastCharIdx);
+  return name.slice(end).trim();
+}
+
 /** Match footer seasoned tags to collection words before first season+year in name. */
 function trySeasonedSpan(name: string, tags: string[]): string | null {
   const sy = findFirstSeasonYearInName(name);
@@ -156,6 +232,25 @@ function trySeasonedSpan(name: string, tags: string[]): string | null {
 }
 
 /**
+ * “Creative” footer tags (mixed case, digits, or long tokens) — matched by ordered
+ * subsequence in the title, not by the initials-of-words shortcut, so every letter
+ * in the tag (including new ones like iF in iW2BiF) maps onto characters in {@link name}.
+ *
+ * This is a property of the tag string alone; it does not depend on footer list order.
+ */
+function allowSubsequenceHeuristic(tag: string): boolean {
+  const t = tag.trim();
+  if (t.length < 3) return false;
+  if (/[a-z]/.test(t) || /\d/.test(t)) return true;
+  return t.length >= 5;
+}
+
+/** True if the footer tag should use subsequence-style matching (vs initials-of-words). */
+export function isCreativeFooterTag(tag: string): boolean {
+  return allowSubsequenceHeuristic(tag.trim());
+}
+
+/**
  * Single-token footer tags (DFW, MW): replace longest matching word-prefix with tag.
  * If a season+year exists in the name, only the words *before* it are used for initials;
  * tail is kept from the season token onward (so DFW + Spring '26 … without requiring ':').
@@ -178,7 +273,8 @@ function tryInitialsPrefix(name: string, tags: string[]): string | null {
         (t) => t.toLowerCase() === u.toLowerCase() || t.toLowerCase() === c.toLowerCase()
       );
       if (hits.length === 1) {
-        const tail = name.slice(sy.index).trim();
+        if (allowSubsequenceHeuristic(hits[0])) continue;
+        const tail = stripLeadingDuplicateTagToken(name.slice(sy.index).trim(), hits[0]);
         return tail ? `${hits[0]} ${tail}` : hits[0];
       }
     }
@@ -195,22 +291,15 @@ function tryInitialsPrefix(name: string, tags: string[]): string | null {
       (t) => t.toLowerCase() === u.toLowerCase() || t.toLowerCase() === c.toLowerCase()
     );
     if (hits.length === 1) {
-      const tail = words.slice(k).join(' ').trim();
+      if (allowSubsequenceHeuristic(hits[0])) continue;
+      const tail = stripLeadingDuplicateTagToken(words.slice(k).join(' ').trim(), hits[0]);
       return tail ? `${hits[0]} ${tail}` : hits[0];
     }
   }
   return null;
 }
 
-/** Tags that look “creative” (mixed case / digits / long) — avoids DFW matching random titles via subsequence. */
-function allowSubsequenceHeuristic(tag: string): boolean {
-  const t = tag.trim();
-  if (t.length < 3) return false;
-  if (/[a-z]/.test(t) || /\d/.test(t)) return true;
-  return t.length >= 5;
-}
-
-/** Whole-name replacement when exactly one tag matches subsequence and name is clearly longer. */
+/** When exactly one creative tag matches as subsequence, show tag + remainder of title (like initials + tail). */
 function trySubsequenceWholeName(name: string, tags: string[]): string | null {
   if (name.length < 12) return null;
 
@@ -222,7 +311,164 @@ function trySubsequenceWholeName(name: string, tags: string[]): string | null {
   });
 
   if (hits.length !== 1) return null;
-  return hits[0].trim();
+  const tag = hits[0].trim();
+  const suffix =
+    suffixAfterWholeTagToken(tag, name) ?? suffixAfterLatestSubsequenceMatch(tag, name);
+  if (suffix === null) return tag;
+  return suffix ? `${tag} ${suffix}` : tag;
+}
+
+/**
+ * Tail after matching {@link tag} to the start of {@link name} via initials / CoF-style
+ * (same rules as {@link tryInitialsPrefix}, but only for this tag).
+ */
+function consumeInitialsPrefixForTag(name: string, tag: string): string | null {
+  const t = tag.trim();
+  if (!t || allowSubsequenceHeuristic(t)) return null;
+
+  const sy = findFirstSeasonYearInName(name);
+  if (sy) {
+    const before = name.slice(0, sy.index).trimEnd();
+    const words = tokenizeClause(before);
+    if (words.length < 2) return null;
+    for (let k = words.length; k >= 2; k--) {
+      const wk = words.slice(0, k);
+      const u = upperInitials(wk);
+      const c = cofStyleAcronym(wk);
+      if (t.toLowerCase() !== u.toLowerCase() && t.toLowerCase() !== c.toLowerCase()) continue;
+      return stripLeadingDuplicateTagToken(name.slice(sy.index).trim(), t);
+    }
+    return null;
+  }
+
+  const words = tokenizeClause(name);
+  if (words.length < 2) return null;
+  for (let k = words.length; k >= 2; k--) {
+    const wk = words.slice(0, k);
+    const u = upperInitials(wk);
+    const c = cofStyleAcronym(wk);
+    if (t.toLowerCase() !== u.toLowerCase() && t.toLowerCase() !== c.toLowerCase()) continue;
+    return stripLeadingDuplicateTagToken(words.slice(k).join(' ').trim(), t);
+  }
+  return null;
+}
+
+/** Remaining text after a creative footer tag match in {@link name} (whole token or latest subsequence + word end). */
+function consumeCreativeTagForTag(name: string, tag: string): string | null {
+  const t = tag.trim();
+  if (!allowSubsequenceHeuristic(t)) return null;
+  if (t.length < 2 || t.length + 8 >= name.length) return null;
+  if (!tagMatchesNameSubsequence(t, name)) return null;
+  return suffixAfterWholeTagToken(t, name) ?? suffixAfterLatestSubsequenceMatch(t, name);
+}
+
+/**
+ * Creative acronym must **start** at the current segment: first alphanumeric of the remainder
+ * matches the tag’s first alphanumeric. Otherwise a creative tag could match too late in the string.
+ * Order of tags in the footer list does not matter; this only gates whether we may consume here.
+ */
+function creativeMatchesAtCurrentSegmentStart(remaining: string, tag: string): boolean {
+  const t = tag.trim();
+  if (!allowSubsequenceHeuristic(t)) return false;
+  const normTag = t.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+  if (normTag.length < 1) return false;
+  const trimmed = remaining.trimStart();
+  let fc: string | null = null;
+  for (let i = 0; i < trimmed.length; i++) {
+    const c = trimmed[i];
+    if (/[A-Za-z0-9]/.test(c)) {
+      fc = c.toLowerCase();
+      break;
+    }
+  }
+  if (fc === null) return false;
+  if (fc !== normTag[0]) return false;
+  return tagMatchesNameSubsequence(t, trimmed);
+}
+
+/** First index of each tag in the footer list (for tie-breaks only). */
+function footerTagOrderIndex(tagsOrdered: string[]): Map<string, number> {
+  const m = new Map<string, number>();
+  tagsOrdered.forEach((raw, i) => {
+    const k = raw.trim().toLowerCase();
+    if (k && !m.has(k)) m.set(k, i);
+  });
+  return m;
+}
+
+/**
+ * Multiple footer tags: walk the title **left to right**. At each step, every unused tag is
+ * tried on the current remainder — basic tags via initials, creative tags via subsequence only
+ * if they match at the segment start. Among matches, the **earliest-listed** tag in the footer
+ * wins (tie-break). Output order follows **title order**, not footer order.
+ *
+ * Tags that never match a segment (extra/noise footers like ABQSF) are **omitted** — we stop
+ * when nothing matches, not when every footer tag has been consumed.
+ */
+function shortenMultiFooterTagsGreedy(eventName: string, tagsOrdered: string[]): string | null {
+  if (tagsOrdered.length < 2) return null;
+
+  const orderIdx = footerTagOrderIndex(tagsOrdered);
+  const tagKey = (s: string) => s.trim().toLowerCase();
+  const used = new Set<string>();
+
+  let remaining = eventName.trim();
+  const out: string[] = [];
+
+  while (true) {
+    remaining = remaining.trimStart();
+    if (!remaining) break;
+
+    type Cand = { tag: string; next: string; idx: number };
+    let best: Cand | null = null;
+
+    for (const raw of tagsOrdered) {
+      const tag = raw.trim();
+      if (!tag) continue;
+      const k = tagKey(tag);
+      if (used.has(k)) continue;
+
+      const idx = orderIdx.get(k) ?? 9999;
+      let next: string | null = null;
+
+      if (allowSubsequenceHeuristic(tag)) {
+        if (!creativeMatchesAtCurrentSegmentStart(remaining, tag)) continue;
+        next = consumeCreativeTagForTag(remaining, tag);
+      } else {
+        next = consumeInitialsPrefixForTag(remaining, tag);
+      }
+
+      if (next === null) continue;
+      if (!best || idx < best.idx) {
+        best = { tag, next, idx };
+      }
+    }
+
+    if (!best) break;
+
+    used.add(tagKey(best.tag));
+    out.push(best.tag);
+    remaining = best.next;
+  }
+
+  if (out.length === 0) return null;
+  remaining = remaining.trim();
+  return remaining ? `${out.join(' ')} ${remaining}` : out.join(' ');
+}
+
+/** Unique tags in first-seen order (matches typical footer tag list order). */
+function uniqueTagsInOrder(footerTags: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of footerTags) {
+    const t = raw.trim();
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
 }
 
 export function shortenEventNameUsingFooterTags(
@@ -231,11 +477,17 @@ export function shortenEventNameUsingFooterTags(
 ): string {
   if (!eventName?.trim() || !footerTags?.length) return eventName;
 
-  const tags = [...new Set(footerTags.map((t) => t.trim()).filter(Boolean))];
+  const tags = uniqueTagsInOrder(footerTags.map((t) => t.trim()).filter(Boolean));
   if (tags.length === 0) return eventName;
 
   const a = trySeasonedSpan(eventName, tags);
   if (a) return a;
+
+  if (tags.length >= 2) {
+    const multi = shortenMultiFooterTagsGreedy(eventName, tags);
+    if (multi !== null) return multi;
+    return eventName;
+  }
 
   const c = tryInitialsPrefix(eventName, tags);
   if (c) return c;
