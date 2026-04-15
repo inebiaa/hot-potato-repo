@@ -8,11 +8,13 @@ export function tagResolutionKey(tagType: string, rawFromEvent: string): string 
 }
 
 export interface TagDisplayEntry {
+  /** Resolved identity id when this tag maps to `tag_identities`; otherwise null */
+  identityId: string | null;
   /** Label for pills (public display alias or canonical) */
   display: string;
   /** Value for filters / onTagClick — matches stored event strings (canonical) */
   canonical: string;
-  /** All strings that should match search (canonical + aliases) */
+  /** Strings that match search: canonical, raw values on events for this identity, and display when it differs */
   searchable: string[];
 }
 
@@ -155,6 +157,19 @@ export async function fetchTagResolutionForEvents(events: Event[]): Promise<TagR
     }
   }
 
+  /** Raw strings from events that resolved to each identity (for searchable, not every DB alias) */
+  const rawsByIdentity = new Map<string, Set<string>>();
+  for (const [k, identityId] of pairToIdentity) {
+    const p = pairKeys.get(k);
+    if (!p) continue;
+    let set = rawsByIdentity.get(identityId);
+    if (!set) {
+      set = new Set<string>();
+      rawsByIdentity.set(identityId, set);
+    }
+    set.add(p.raw);
+  }
+
   const identityIds = [...new Set(pairToIdentity.values())];
   const aliasesByIdentity = new Map<string, { id: string; alias: string }[]>();
   const aliasTextById = new Map<string, string>();
@@ -176,17 +191,21 @@ export async function fetchTagResolutionForEvents(events: Event[]): Promise<TagR
   const buildEntry = (identityId: string): TagDisplayEntry => {
     const row = identityRows.get(identityId);
     if (!row) {
-      return { display: '', canonical: '', searchable: [] };
+      return { identityId: null, display: '', canonical: '', searchable: [] };
     }
     const canonical = row.canonical_name;
-    const aliases = aliasesByIdentity.get(identityId) || [];
-    const searchable = new Set<string>([canonical, ...aliases.map((x) => x.alias)]);
     let display = canonical;
     if (row.public_display_alias_id) {
       const t = aliasTextById.get(row.public_display_alias_id);
       if (t) display = t;
     }
+    const raws = rawsByIdentity.get(identityId);
+    const searchable = new Set<string>([canonical, ...(raws ?? [])]);
+    if (display && normalizeTagName(display) !== normalizeTagName(canonical)) {
+      searchable.add(display);
+    }
     return {
+      identityId,
       display,
       canonical,
       searchable: [...searchable],
@@ -197,6 +216,7 @@ export async function fetchTagResolutionForEvents(events: Event[]): Promise<TagR
     const id = pairToIdentity.get(k);
     if (!id) {
       result.set(k, {
+        identityId: null,
         display: raw,
         canonical: raw,
         searchable: [raw],

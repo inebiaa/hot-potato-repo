@@ -289,6 +289,14 @@ function App() {
     }
   }, [appSettings?.app_favicon_url]);
 
+  const identityIdsInUse = useMemo(() => {
+    const s = new Set<string>();
+    tagResolutionMap?.forEach((entry) => {
+      if (entry.identityId) s.add(entry.identityId);
+    });
+    return s;
+  }, [tagResolutionMap]);
+
   const searchableTags = useMemo(() => {
     const seen = new Set<string>();
     const tags: { type: string; value: string; label: string }[] = [];
@@ -366,6 +374,7 @@ function App() {
     const seen = new Set(fromEvents.map((t) => `${t.type}:${t.value}`));
     const out: { type: string; value: string; label: string }[] = [...fromEvents];
     for (const id of identitySearchHits) {
+      if (!identityIdsInUse.has(id.id)) continue;
       const sug =
         id.tag_type.startsWith('custom:')
           ? {
@@ -381,7 +390,7 @@ function App() {
       }
     }
     return out.slice(0, 8);
-  }, [searchQuery, searchableTags, identitySearchHits]);
+  }, [searchQuery, searchableTags, identitySearchHits, identityIdsInUse]);
 
   const openTagModal = (type: string, value: string) => {
     setTagRatingsData({ type, value });
