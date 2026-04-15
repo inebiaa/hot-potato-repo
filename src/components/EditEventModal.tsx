@@ -4,7 +4,7 @@ import { Trash2 } from 'lucide-react';
 import { supabase, Event } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 import { useAuth } from '../contexts/AuthContext';
-import { ensureAlias, ensureIdentity, findIdentityByName, normalizeTagName, type TagType } from '../lib/tagIdentity';
+import { ensureIdentity, normalizeTagName, type TagType } from '../lib/tagIdentity';
 import { normalizeExternalUrl } from '../lib/externalUrl';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
@@ -112,26 +112,12 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
     }
 
     try {
-      const resolveTags = async (
-        tagType: TagType,
-        newTags: string[],
-        oldTags: string[]
-      ): Promise<string[]> => {
+      const resolveTags = async (tagType: TagType, newTags: string[]): Promise<string[]> => {
         const resolved: string[] = [];
-        for (let i = 0; i < newTags.length; i++) {
-          const tag = newTags[i];
+        for (const tag of newTags) {
           const identity = await ensureIdentity(tagType, tag, user.id);
           const canon = identity?.canonical_name ?? tag.trim();
           resolved.push(canon);
-          if (identity && oldTags.length === newTags.length && i < oldTags.length) {
-            const oldTag = oldTags[i];
-            if (normalizeTagName(oldTag) !== normalizeTagName(tag)) {
-              const existing = await findIdentityByName(tagType, oldTag);
-              if (existing && existing.id === identity.id) {
-                await ensureAlias(identity.id, oldTag.trim(), user.id);
-              }
-            }
-          }
         }
         const seenNorm = new Set<string>();
         const deduped: string[] = [];
@@ -144,34 +130,20 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
         return deduped;
       };
 
-      const oldProducers = toArray(event.producers);
-      const oldDesigners = toArray(event.featured_designers);
-      const oldModels = toArray(event.models || []);
-      const oldHairMakeup = toArray(event.hair_makeup || []);
-      const oldHeaderTags = toArray(event.header_tags || event.genre || []);
-      const oldFooterTags = toArray(event.footer_tags || []);
-
       const [resolvedProducers, resolvedDesigners, resolvedModels, resolvedHairMakeup, resolvedHeaderTags, resolvedFooterTags] = await Promise.all([
-        resolveTags('producer', cleanProducers, oldProducers),
-        resolveTags('designer', cleanDesigners, oldDesigners),
-        resolveTags('model', clean(models), oldModels),
-        resolveTags('hair_makeup', clean(hairMakeup), oldHairMakeup),
-        resolveTags('header_tags', clean(headerTags), oldHeaderTags),
-        resolveTags('footer_tags', clean(footerTags), oldFooterTags),
+        resolveTags('producer', cleanProducers),
+        resolveTags('designer', cleanDesigners),
+        resolveTags('model', clean(models)),
+        resolveTags('hair_makeup', clean(hairMakeup)),
+        resolveTags('header_tags', clean(headerTags)),
+        resolveTags('footer_tags', clean(footerTags)),
       ]);
 
       const resolvedCustomTags: Record<string, string[]> = {};
       for (const [slug, tags] of Object.entries(customTags)) {
         const cleaned = (Array.isArray(tags) ? tags : []).map((s) => String(s).trim()).filter(Boolean);
-        const oldCustom = (event.custom_tags && typeof event.custom_tags === 'object'
-          ? (event.custom_tags as Record<string, string[]>)
-          : {})[slug] || [];
         if (cleaned.length > 0) {
-          resolvedCustomTags[slug] = await resolveTags(
-            `custom:${slug}` as TagType,
-            cleaned,
-            Array.isArray(oldCustom) ? oldCustom : []
-          );
+          resolvedCustomTags[slug] = await resolveTags(`custom:${slug}` as TagType, cleaned);
         }
       }
 
