@@ -1190,18 +1190,21 @@ export default function EventCard({
                         if (!isAnyReorderMode) onTagClick('header_tags', resolveTag('header_tags', tag).canonical);
                       })}
                       data-tag-pill
-                      className={`${HEADER_ICON_INSIDE_PILL_CLASS} ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                      className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                       {...tagInteractionProps('header_tags', idx, 'header_tags', tag)}
-                      style={{
-                        backgroundColor: tagColors?.header_tags_bg_color || '#ccfbf1',
-                        color: tagColors?.header_tags_text_color || '#0f766e',
-                        ...(isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : {}),
-                      }}
+                      style={
+                        isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
+                      }
                     >
-                      <HeaderTagsIcon size={12} className="shrink-0" />
-                      <span className="min-w-0 max-w-full text-left">
-                        <TagPillSplitLabel fitToContainer text={resolveTag('header_tags', tag).display} />
-                      </span>
+                      <TagPillSplitLabel
+                        fitToContainer
+                        leadingSlot={<HeaderTagsIcon size={12} className="shrink-0" aria-hidden />}
+                        text={resolveTag('header_tags', tag).display}
+                        segmentColors={{
+                          backgroundColor: tagColors?.header_tags_bg_color || '#ccfbf1',
+                          color: tagColors?.header_tags_text_color || '#0f766e',
+                        }}
+                      />
                     </button>
                   ))}
                     {pendingForSection('header_tags').map((suggestion) => {
@@ -1217,7 +1220,12 @@ export default function EventCard({
                       onTouchStart={() => startLongPress('header_tags')}
                       onTouchEnd={(e) => clearLongPress(e)}
                     >
-                      <TagPillSplitLabel fitToContainer text={suggestion.proposed_name} segmentColors={PENDING_TAG_PILL_COLORS} />
+                      <TagPillSplitLabel
+                        fitToContainer
+                        leadingSlot={<HeaderTagsIcon size={12} className="shrink-0" aria-hidden />}
+                        text={suggestion.proposed_name}
+                        segmentColors={PENDING_TAG_PILL_COLORS}
+                      />
                       {renderSuggestionActions(suggestion, isOwn, canRemove)}
                     </span>
                   );})}

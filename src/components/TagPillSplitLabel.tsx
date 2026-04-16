@@ -1,4 +1,4 @@
-import type { RefObject } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { splitTagPillLabel } from '../lib/commentTagParsing';
 import { splitTagLabelByWidth } from '../lib/splitTagLabelByWidth';
@@ -48,6 +48,11 @@ type TagPillSplitLabelProps = {
   text: string;
   chunkClassName?: string;
   /**
+   * When `segmentColors` is set, renders inside the **first** segment pill only (same shell as
+   * the first word chunk) so there is no extra gap pill before split text — e.g. genre icon.
+   */
+  leadingSlot?: ReactNode;
+  /**
    * When set, each chunk is its own filled rounded pill so long tags read as separate boxes
    * instead of one large rectangle.
    */
@@ -65,9 +70,13 @@ type TagPillSplitLabelProps = {
   layoutWidthRef?: RefObject<HTMLElement | null>;
 };
 
+/** Reserve width so first-line word-wrap leaves room for `leadingSlot` inside the first pill. */
+const LEADING_SLOT_WIDTH_FUDGE_PX = 22;
+
 export default function TagPillSplitLabel({
   text,
   chunkClassName = '',
+  leadingSlot,
   segmentColors,
   fitToContainer = false,
   layoutWidthRef,
@@ -76,6 +85,7 @@ export default function TagPillSplitLabel({
   const fontProbeRef = useRef<HTMLSpanElement>(null);
   const useLayoutWidth = Boolean(layoutWidthRef);
   const useWidthSplit = fitToContainer || useLayoutWidth;
+  const reserveFirstLineForLeadingSlot = Boolean(leadingSlot && segmentColors);
   const [chunks, setChunks] = useState<string[]>(() => splitTagPillLabel(text));
 
   const segmentShell =
@@ -104,7 +114,10 @@ export default function TagPillSplitLabel({
       const font = fontProbeRef.current
         ? getComputedStyle(fontProbeRef.current).font
         : '400 12px ui-sans-serif, system-ui, sans-serif';
-      setChunks(splitTagLabelByWidth(text, rowWidth, font));
+      const splitBudget = reserveFirstLineForLeadingSlot
+        ? Math.max(32, rowWidth - LEADING_SLOT_WIDTH_FUDGE_PX)
+        : rowWidth;
+      setChunks(splitTagLabelByWidth(text, splitBudget, font));
     };
 
     compute();
@@ -131,26 +144,32 @@ export default function TagPillSplitLabel({
     else ro.observe(wrap);
 
     return () => ro.disconnect();
-  }, [text, useWidthSplit, layoutWidthRef]);
+  }, [text, useWidthSplit, layoutWidthRef, reserveFirstLineForLeadingSlot]);
 
-  const inner = chunks.map((chunk, j) =>
-    segmentColors ? (
+  const inner = chunks.map((chunk, j) => {
+    const leadInFirstSegment = Boolean(leadingSlot) && j === 0 && segmentColors;
+    return segmentColors ? (
       <span
         key={j}
         style={{
           backgroundColor: segmentColors.backgroundColor,
           color: segmentColors.color,
         }}
-        className={[segmentShell, chunkClassName].filter(Boolean).join(' ')}
+        className={
+          [segmentShell, leadInFirstSegment ? 'items-center gap-x-1' : '', chunkClassName].filter(Boolean).join(' ')
+        }
       >
+        {leadInFirstSegment ? (
+          <span className="inline-flex shrink-0 items-center self-center">{leadingSlot}</span>
+        ) : null}
         {chunk}
       </span>
     ) : (
       <span key={j} className={['inline-flex whitespace-nowrap', chunkClassName].filter(Boolean).join(' ')}>
         {chunk}
       </span>
-    )
-  );
+    );
+  });
 
   if (!useWidthSplit) {
     return <>{inner}</>;
