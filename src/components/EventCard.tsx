@@ -8,6 +8,14 @@ import RatingModal from './RatingModal';
 import EditEventModal from './EditEventModal';
 import ViewRatingsModal from './ViewRatingsModal';
 import CommentWithTags from './CommentWithTags';
+import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
+
+/** Pending suggestion pills (neutral gray) — per-chunk mini-pills use this fill. */
+const PENDING_TAG_PILL_COLORS = { backgroundColor: '#d1d5db', color: '#4b5563' } as const;
+
+/** City / season / genre: one rounded shell with icon + label inside (same idea as EventCountdownPill). */
+const HEADER_ICON_INSIDE_PILL_CLASS =
+  'inline-flex max-w-full min-w-0 items-center gap-1 rounded-md px-2 py-1 max-sm:px-2.5 max-sm:py-2 text-xs transition-colors hover:opacity-80';
 import { useAuth } from '../contexts/AuthContext';
 import { useTagDisplayMap } from '../contexts/TagDisplayContext';
 import { tagResolutionKey } from '../lib/tagDisplayResolution';
@@ -988,21 +996,23 @@ export default function EventCard({
     <>
       <div
         ref={cardRootRef}
-        className={`${imageOpacity !== undefined ? 'bg-transparent' : 'bg-white'} rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all relative ${onViewClick ? 'cursor-pointer' : ''}`}
+        className={`${imageOpacity !== undefined ? 'bg-transparent' : 'bg-white'} rounded-lg shadow-md hover:shadow-xl transition-all relative ${onViewClick ? 'cursor-pointer' : ''}`}
         onClick={handleCardClick}
         role={onViewClick ? 'button' : undefined}
         tabIndex={onViewClick ? 0 : undefined}
         onKeyDown={onViewClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (isAnyReorderMode) { clearReorderMode(); if (onViewClick) { const section = customReorderSlug ? undefined : (reorderSection ?? undefined); onViewClick(event.id, true, section, customReorderSlug ?? undefined); } } else { onViewClick(event.id); } } } : undefined}
       >
         {event.image_url && (
-          <img
-            src={event.image_url}
-            alt={event.name}
-            className="w-full h-48 object-cover flex-shrink-0 rounded-t-lg"
-            style={imageOpacity !== undefined ? { opacity: imageOpacity } : undefined}
-          />
+          <div className="overflow-hidden rounded-t-lg shrink-0">
+            <img
+              src={event.image_url}
+              alt={event.name}
+              className="w-full h-48 object-cover flex-shrink-0 rounded-t-lg"
+              style={imageOpacity !== undefined ? { opacity: imageOpacity } : undefined}
+            />
+          </div>
         )}
-        <div className={`p-6 ${imageOpacity !== undefined ? 'bg-white' : ''}`}>
+        <div className={`p-6 min-w-0 ${imageOpacity !== undefined ? 'bg-white' : ''}`}>
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="flex-1 min-w-0">
               {viewHref && !onViewClick ? (
@@ -1115,14 +1125,16 @@ export default function EventCard({
                     e.dataTransfer.effectAllowed = 'copy';
                   }
                 }}
-                className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md text-xs transition-all hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''}`}
+                className={`${HEADER_ICON_INSIDE_PILL_CLASS} ${showWiggle ? 'pill-wiggle' : ''}`}
                 style={{
                   backgroundColor: tagColors?.city_bg_color || '#dbeafe',
-                  color: tagColors?.city_text_color || '#1e40af'
+                  color: tagColors?.city_text_color || '#1e40af',
                 }}
               >
                 <CityIcon size={12} className="shrink-0" />
-                {event.city}
+                <span className="min-w-0 max-w-full text-left">
+                  <TagPillSplitLabel fitToContainer text={event.city} />
+                </span>
               </button>
             )}
             {(() => {
@@ -1143,14 +1155,16 @@ export default function EventCard({
                       e.dataTransfer.effectAllowed = 'copy';
                     }
                   }}
-                  className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md text-xs transition-all hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''}`}
+                  className={`${HEADER_ICON_INSIDE_PILL_CLASS} ${showWiggle ? 'pill-wiggle' : ''}`}
                   style={{
                     backgroundColor: tagColors?.season_bg_color || '#ffedd5',
-                    color: tagColors?.season_text_color || '#c2410c'
+                    color: tagColors?.season_text_color || '#c2410c',
                   }}
                 >
                   <SeasonIcon size={12} className="shrink-0" />
-                  {season}
+                  <span className="min-w-0 max-w-full text-left">
+                    <TagPillSplitLabel fitToContainer text={season} />
+                  </span>
                 </button>
               );
             })()}
@@ -1176,16 +1190,18 @@ export default function EventCard({
                         if (!isAnyReorderMode) onTagClick('header_tags', resolveTag('header_tags', tag).canonical);
                       })}
                       data-tag-pill
-                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 whitespace-nowrap ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                      className={`${HEADER_ICON_INSIDE_PILL_CLASS} ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                       {...tagInteractionProps('header_tags', idx, 'header_tags', tag)}
                       style={{
                         backgroundColor: tagColors?.header_tags_bg_color || '#ccfbf1',
                         color: tagColors?.header_tags_text_color || '#0f766e',
-                        ...(isAnyReorderMode && dropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
+                        ...(isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : {}),
                       }}
                     >
                       <HeaderTagsIcon size={12} className="shrink-0" />
-                      {resolveTag('header_tags', tag).display}
+                      <span className="min-w-0 max-w-full text-left">
+                        <TagPillSplitLabel fitToContainer text={resolveTag('header_tags', tag).display} />
+                      </span>
                     </button>
                   ))}
                     {pendingForSection('header_tags').map((suggestion) => {
@@ -1195,13 +1211,13 @@ export default function EventCard({
                     <span
                       key={suggestion.id}
                       data-tag-pill
-                      className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
+                      className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
                       onMouseDown={() => startLongPress('header_tags')}
                       onMouseUp={(e) => clearLongPress(e)}
                       onTouchStart={() => startLongPress('header_tags')}
                       onTouchEnd={(e) => clearLongPress(e)}
                     >
-                      <span>{suggestion.proposed_name}</span>
+                      <TagPillSplitLabel fitToContainer text={suggestion.proposed_name} segmentColors={PENDING_TAG_PILL_COLORS} />
                       {renderSuggestionActions(suggestion, isOwn, canRemove)}
                     </span>
                   );})}
@@ -1309,15 +1325,19 @@ export default function EventCard({
                           if (!isAnyReorderMode) onTagClick('producer', resolveTag('producer', producer).canonical);
                         })}
                         data-tag-pill
-                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                         {...tagInteractionProps('producers', idx, 'producer', producer)}
-                        style={{
-                          backgroundColor: tagColors?.producer_bg_color || '#f3f4f6',
-                          ...(isAnyReorderMode && dropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
-                          color: tagColors?.producer_text_color || '#374151'
-                        }}
+                        style={
+                          isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
+                        }
                       >
-                        {resolveTag('producer', producer).display}
+                        <TagPillSplitLabel fitToContainer
+                          text={resolveTag('producer', producer).display}
+                          segmentColors={{
+                            backgroundColor: tagColors?.producer_bg_color || '#f3f4f6',
+                            color: tagColors?.producer_text_color || '#374151',
+                          }}
+                        />
                       </button>
                     ))}
                     {pendingForSection('producers').map((suggestion) => {
@@ -1327,13 +1347,13 @@ export default function EventCard({
                       <span
                         key={suggestion.id}
                         data-tag-pill
-                        className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
+                        className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
                         onMouseDown={() => startLongPress('producers')}
                         onMouseUp={(e) => clearLongPress(e)}
                         onTouchStart={() => startLongPress('producers')}
                         onTouchEnd={(e) => clearLongPress(e)}
                       >
-                        <span>{suggestion.proposed_name}</span>
+                        <TagPillSplitLabel fitToContainer text={suggestion.proposed_name} segmentColors={PENDING_TAG_PILL_COLORS} />
                         {renderSuggestionActions(suggestion, isOwn, canRemove)}
                       </span>
                     );})}
@@ -1378,23 +1398,27 @@ export default function EventCard({
                           if (!isAnyReorderMode) onTagClick('designer', resolveTag('designer', designer).canonical);
                         })}
                         data-tag-pill
-                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                         {...tagInteractionProps('featured_designers', idx, 'designer', designer)}
-                        style={{
-                          backgroundColor: tagColors?.designer_bg_color || '#fef3c7',
-                          ...(isAnyReorderMode && dropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
-                          color: tagColors?.designer_text_color || '#b45309'
-                        }}
+                        style={
+                          isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
+                        }
                       >
-                        {resolveTag('designer', designer).display}
+                        <TagPillSplitLabel fitToContainer
+                          text={resolveTag('designer', designer).display}
+                          segmentColors={{
+                            backgroundColor: tagColors?.designer_bg_color || '#fef3c7',
+                            color: tagColors?.designer_text_color || '#b45309',
+                          }}
+                        />
                       </button>
                     ))}
                     {pendingForSection('featured_designers').map((suggestion) => {
                       const isOwn = !!user && suggestion.suggested_by === user.id;
                       const canRemove = isApprover || isOwn;
                       return (
-                      <span key={suggestion.id} data-tag-pill className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`} onMouseDown={() => startLongPress('featured_designers')} onMouseUp={(e) => clearLongPress(e)} onTouchStart={() => startLongPress('featured_designers')} onTouchEnd={(e) => clearLongPress(e)}>
-                        <span>{suggestion.proposed_name}</span>
+                      <span key={suggestion.id} data-tag-pill className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`} onMouseDown={() => startLongPress('featured_designers')} onMouseUp={(e) => clearLongPress(e)} onTouchStart={() => startLongPress('featured_designers')} onTouchEnd={(e) => clearLongPress(e)}>
+                        <TagPillSplitLabel fitToContainer text={suggestion.proposed_name} segmentColors={PENDING_TAG_PILL_COLORS} />
                         {renderSuggestionActions(suggestion, isOwn, canRemove)}
                       </span>
                     );})}
@@ -1434,23 +1458,27 @@ export default function EventCard({
                           if (!isAnyReorderMode) onTagClick('model', resolveTag('model', model).canonical);
                         })}
                         data-tag-pill
-                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                         {...tagInteractionProps('models', idx, 'model', model)}
-                        style={{
-                          backgroundColor: tagColors?.model_bg_color || '#fce7f3',
-                          ...(isAnyReorderMode && dropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
-                          color: tagColors?.model_text_color || '#be185d'
-                        }}
+                        style={
+                          isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
+                        }
                       >
-                        {resolveTag('model', model).display}
+                        <TagPillSplitLabel fitToContainer
+                          text={resolveTag('model', model).display}
+                          segmentColors={{
+                            backgroundColor: tagColors?.model_bg_color || '#fce7f3',
+                            color: tagColors?.model_text_color || '#be185d',
+                          }}
+                        />
                       </button>
                     ))}
                     {pendingForSection('models').map((suggestion) => {
                       const isOwn = !!user && suggestion.suggested_by === user.id;
                       const canRemove = isApprover || isOwn;
                       return (
-                      <span key={suggestion.id} data-tag-pill className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`} onMouseDown={() => startLongPress('models')} onMouseUp={(e) => clearLongPress(e)} onTouchStart={() => startLongPress('models')} onTouchEnd={(e) => clearLongPress(e)}>
-                        <span>{suggestion.proposed_name}</span>
+                      <span key={suggestion.id} data-tag-pill className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`} onMouseDown={() => startLongPress('models')} onMouseUp={(e) => clearLongPress(e)} onTouchStart={() => startLongPress('models')} onTouchEnd={(e) => clearLongPress(e)}>
+                        <TagPillSplitLabel fitToContainer text={suggestion.proposed_name} segmentColors={PENDING_TAG_PILL_COLORS} />
                         {renderSuggestionActions(suggestion, isOwn, canRemove)}
                       </span>
                     );})}
@@ -1490,15 +1518,19 @@ export default function EventCard({
                           if (!isAnyReorderMode) onTagClick('hair_makeup', resolveTag('hair_makeup', artist).canonical);
                         })}
                         data-tag-pill
-                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                         {...tagInteractionProps('hair_makeup', idx, 'hair_makeup', artist)}
-                        style={{
-                          backgroundColor: tagColors?.hair_makeup_bg_color || '#f3e8ff',
-                          ...(isAnyReorderMode && dropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
-                          color: tagColors?.hair_makeup_text_color || '#7e22ce'
-                        }}
+                        style={
+                          isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
+                        }
                       >
-                        {resolveTag('hair_makeup', artist).display}
+                        <TagPillSplitLabel fitToContainer
+                          text={resolveTag('hair_makeup', artist).display}
+                          segmentColors={{
+                            backgroundColor: tagColors?.hair_makeup_bg_color || '#f3e8ff',
+                            color: tagColors?.hair_makeup_text_color || '#7e22ce',
+                          }}
+                        />
                       </button>
                     ))}
                     {pendingForSection('hair_makeup').map((suggestion) => {
@@ -1508,13 +1540,13 @@ export default function EventCard({
                       <span
                         key={suggestion.id}
                         data-tag-pill
-                        className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
+                        className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
                         onMouseDown={() => startLongPress('hair_makeup')}
                         onMouseUp={(e) => clearLongPress(e)}
                         onTouchStart={() => startLongPress('hair_makeup')}
                         onTouchEnd={(e) => clearLongPress(e)}
                       >
-                        <span>{suggestion.proposed_name}</span>
+                        <TagPillSplitLabel fitToContainer text={suggestion.proposed_name} segmentColors={PENDING_TAG_PILL_COLORS} />
                         {renderSuggestionActions(suggestion, isOwn, canRemove)}
                       </span>
                     );})}
@@ -1575,15 +1607,19 @@ export default function EventCard({
                               }
                             })}
                             data-tag-pill
-                            className={`inline-flex items-center text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && customDropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                            className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && customDropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                             {...customTagInteractionProps(tagDef.slug, idx, val)}
-                            style={{
-                              backgroundColor: tagDef.bg_color || '#e0e7ff',
-                              ...(isAnyReorderMode && customDropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
-                              color: tagDef.text_color || '#3730a3',
-                            }}
+                            style={
+                              isAnyReorderMode && customDropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
+                            }
                           >
-                            {resolveTag(`custom:${tagDef.slug}`, val).display}
+                            <TagPillSplitLabel fitToContainer
+                              text={resolveTag(`custom:${tagDef.slug}`, val).display}
+                              segmentColors={{
+                                backgroundColor: tagDef.bg_color || '#e0e7ff',
+                                color: tagDef.text_color || '#3730a3',
+                              }}
+                            />
                           </button>
                         ))}
                         {pendingForSection('custom', tagDef.slug).map((suggestion) => {
@@ -1593,13 +1629,13 @@ export default function EventCard({
                           <span
                             key={suggestion.id}
                             data-tag-pill
-                            className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
+                            className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
                             onMouseDown={() => startCustomLongPress(tagDef.slug)}
                             onMouseUp={(e) => clearLongPress(e)}
                             onTouchStart={() => startCustomLongPress(tagDef.slug)}
                             onTouchEnd={(e) => clearLongPress(e)}
                           >
-                            <span>{suggestion.proposed_name}</span>
+                            <TagPillSplitLabel fitToContainer text={suggestion.proposed_name} segmentColors={PENDING_TAG_PILL_COLORS} />
                             {renderSuggestionActions(suggestion, isOwn, canRemove)}
                           </span>
                         );})}
@@ -1631,7 +1667,7 @@ export default function EventCard({
             </div>
 
           {ratingAllowed && (
-          <div className="flex items-center justify-between pt-4 border-t">
+          <div className="flex items-center pt-4 border-t">
             <button
               type="button"
               onClick={() => openEventPanel('view-ratings')}
@@ -1651,20 +1687,6 @@ export default function EventCard({
                 {averageRating > 0 ? averageRating.toFixed(1) : 'No ratings'} ({ratingCount})
               </span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (user) {
-                  openEventPanel('rate');
-                  return;
-                }
-                onRequireAuth?.();
-              }}
-              className="min-h-[44px] px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium"
-            >
-              {user && userRating ? 'Update' : 'Rate Show'}
-            </button>
           </div>
           )}
 
@@ -1675,13 +1697,15 @@ export default function EventCard({
               </p>
               {userRating.comment && (
                 <p className="text-sm text-gray-500 mt-1 italic">
-                  "<CommentWithTags
+                  <CommentWithTags
                     comment={userRating.comment}
                     event={event}
                     tagColors={tagColors}
                     customPerformerTags={customPerformerTags}
                     wiggle={showWiggle}
-                  />"
+                    fitTagPillsToContainer
+                    onTagClick={onTagClick}
+                  />
                 </p>
               )}
             </div>
@@ -1701,15 +1725,19 @@ export default function EventCard({
                         if (!isAnyReorderMode) onTagClick('footer_tags', resolveTag('footer_tags', tag).canonical);
                       })}
                       data-tag-pill
-                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                      className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                       {...tagInteractionProps('footer_tags', idx, 'footer_tags', tag)}
-                      style={{
-                        backgroundColor: tagColors?.footer_tags_bg_color || '#d1fae5',
-                        ...(isAnyReorderMode && dropIndex === idx ? { '--pill-scale': 1.05 } as React.CSSProperties : {}),
-                        color: tagColors?.footer_tags_text_color || '#065f46'
-                      }}
+                      style={
+                        isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
+                      }
                     >
-                      {resolveTag('footer_tags', tag).display}
+                      <TagPillSplitLabel fitToContainer
+                        text={resolveTag('footer_tags', tag).display}
+                        segmentColors={{
+                          backgroundColor: tagColors?.footer_tags_bg_color || '#d1fae5',
+                          color: tagColors?.footer_tags_text_color || '#065f46',
+                        }}
+                      />
                     </button>
                   ))}
                     {pendingForSection('footer_tags').map((suggestion) => {
@@ -1719,13 +1747,13 @@ export default function EventCard({
                     <span
                       key={suggestion.id}
                       data-tag-pill
-                      className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
+                      className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
                       onMouseDown={() => startLongPress('footer_tags')}
                       onMouseUp={(e) => clearLongPress(e)}
                       onTouchStart={() => startLongPress('footer_tags')}
                       onTouchEnd={(e) => clearLongPress(e)}
                     >
-                      <span>{suggestion.proposed_name}</span>
+                      <TagPillSplitLabel fitToContainer text={suggestion.proposed_name} segmentColors={PENDING_TAG_PILL_COLORS} />
                       {renderSuggestionActions(suggestion, isOwn, canRemove)}
                     </span>
                   );})}
@@ -1773,6 +1801,7 @@ export default function EventCard({
         tagColors={tagColors}
         customPerformerTags={customPerformerTags}
         allowRatingEdits={ratingAllowed}
+        onTagClick={onTagClick}
       />
 
       <EditEventModal

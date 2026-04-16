@@ -4,6 +4,7 @@ import { Star } from 'lucide-react';
 import { supabase, Event, Rating } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import CommentEditor from './CommentEditor';
+import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 import { getEventTagStyles } from '../lib/commentTagParsing';
 import ModalShell from './ModalShell';
 
@@ -190,9 +191,12 @@ export default function RatingModal({
                     key={tag}
                     type="button"
                     onClick={() => insertTag(tag)}
-                    className="min-h-[44px] max-sm:min-h-[40px] inline-flex items-center rounded-md bg-gray-100 px-2.5 py-2 text-xs text-gray-700 hover:bg-gray-200 sm:min-h-0 sm:py-1"
+                    className={`min-h-[44px] max-sm:min-h-[40px] ${tagPillSplitSegmentGroupClass} p-0 text-xs hover:opacity-90 sm:min-h-0 sm:py-1`}
                   >
-                    {tag}
+                    <TagPillSplitLabel
+                      text={tag}
+                      segmentColors={{ backgroundColor: '#f3f4f6', color: '#374151' }}
+                    />
                   </button>
                 ))}
               </div>

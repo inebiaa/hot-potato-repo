@@ -62,11 +62,13 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
       if (!el || !event?.id) return;
       const segments = parseCommentToSegments(newValue, event, tagColors, customPerformerTags);
       const html = segments
-        .map((seg) =>
-          seg.type === 'tag' && seg.tag
-            ? `<span contenteditable="false" data-tag-pill class="inline-flex items-center justify-center text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md not-italic font-normal mx-0.5 select-none transition-colors" style="background-color:${seg.tag.bg};color:${seg.tag.text}">${escapeHtml(seg.value)}</span>`
-            : escapeHtml(seg.value)
-        )
+        .map((seg) => {
+          if (seg.type === 'tag' && seg.tag) {
+            const inner = `<span class="inline-flex max-w-full whitespace-normal break-words rounded-md px-2 py-1 max-sm:px-2.5 max-sm:py-2 text-xs text-left" style="background-color:${escapeHtml(seg.tag.bg)};color:${escapeHtml(seg.tag.text)}">${escapeHtml(seg.value)}</span>`;
+            return `<span contenteditable="false" data-tag-pill class="inline-flex max-w-full min-w-0 flex-wrap items-center gap-1 p-0 text-left text-xs not-italic font-normal mx-0.5 select-none transition-colors hover:opacity-80">${inner}</span>`;
+          }
+          return escapeHtml(seg.value);
+        })
         .join('');
       el.innerHTML = html || '';
       if (cursorPos !== undefined && newValue.length > 0) {

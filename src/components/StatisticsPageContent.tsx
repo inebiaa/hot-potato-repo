@@ -1,5 +1,6 @@
 import { BarChart3 } from 'lucide-react';
 import type { TagStats } from './StatisticsPage';
+import TagPillSplitLabel, { tagPillSplitContainerWithIconClass, tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 
 interface StatisticsPageContentProps {
   asPage: boolean;
@@ -158,29 +159,33 @@ export default function StatisticsPageContent({
             <div className="mt-3 flex items-center gap-2">
               <span className="text-sm text-gray-600">Filtered by:</span>
               {selectedCity && (
-                <span
-                  className="inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs"
-                  style={{
-                    backgroundColor: getTagColors('city').bg,
-                    color: getTagColors('city').text,
-                  }}
-                >
-                  {selectedCity}
-                  <button onClick={() => setSelectedCity('')} className="text-xs opacity-80 hover:opacity-100">
+                <span className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                  <span className={`${tagPillSplitSegmentGroupClass} p-0`}>
+                    <TagPillSplitLabel
+                      text={selectedCity}
+                      segmentColors={{
+                        backgroundColor: getTagColors('city').bg,
+                        color: getTagColors('city').text,
+                      }}
+                    />
+                  </span>
+                  <button onClick={() => setSelectedCity('')} className="text-xs opacity-80 hover:opacity-100 shrink-0">
                     Clear
                   </button>
                 </span>
               )}
               {selectedSeason && (
-                <span
-                  className="inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs"
-                  style={{
-                    backgroundColor: getTagColors('season').bg,
-                    color: getTagColors('season').text,
-                  }}
-                >
-                  {selectedSeason}
-                  <button onClick={() => setSelectedSeason('')} className="text-xs opacity-80 hover:opacity-100">
+                <span className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                  <span className={`${tagPillSplitSegmentGroupClass} p-0`}>
+                    <TagPillSplitLabel
+                      text={selectedSeason}
+                      segmentColors={{
+                        backgroundColor: getTagColors('season').bg,
+                        color: getTagColors('season').text,
+                      }}
+                    />
+                  </span>
+                  <button onClick={() => setSelectedSeason('')} className="text-xs opacity-80 hover:opacity-100 shrink-0">
                     Clear
                   </button>
                 </span>
@@ -208,14 +213,18 @@ export default function StatisticsPageContent({
                   <button
                     key={idx}
                     onClick={() => handleTagClick(stat)}
-                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
-                    style={{
-                      backgroundColor: colors.bg,
-                      color: colors.text,
-                    }}
+                    className={`${tagPillSplitContainerWithIconClass} p-0 text-xs transition-colors hover:opacity-80`}
                   >
-                    <span>{stat.name}</span>
-                    <span className="font-semibold">{stat.count}</span>
+                    <TagPillSplitLabel
+                      text={stat.name}
+                      segmentColors={{ backgroundColor: colors.bg, color: colors.text }}
+                    />
+                    <span
+                      className="font-semibold whitespace-nowrap shrink-0 rounded-md px-2 py-1 max-sm:px-2.5 max-sm:py-2 text-xs"
+                      style={{ backgroundColor: colors.bg, color: colors.text }}
+                    >
+                      {stat.count}
+                    </span>
                   </button>
                 );
               })}

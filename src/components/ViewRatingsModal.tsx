@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Star, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase, Event } from '../lib/supabase';
@@ -50,6 +50,7 @@ interface ViewRatingsModalProps {
   onViewEvent?: (eventId: string) => void;
   /** When false, ratings are read-only (e.g. show has not occurred yet). Defaults to true. */
   allowRatingEdits?: boolean;
+  onTagClick?: (type: string, value: string) => void;
 }
 
 export default function ViewRatingsModal({
@@ -65,11 +66,13 @@ export default function ViewRatingsModal({
   onViewEvent,
   singleUserId,
   allowRatingEdits = true,
+  onTagClick,
 }: ViewRatingsModalProps) {
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedRatingId, setExpandedRatingId] = useState<string | null>(null);
   const [editingRating, setEditingRating] = useState<Rating | null>(null);
+  const [isCreatingRating, setIsCreatingRating] = useState(false);
 
   const fetchRatings = useCallback(async () => {
     setLoading(true);
@@ -132,6 +135,10 @@ export default function ViewRatingsModal({
   const seasonLabel = Array.isArray(event?.season)
     ? event.season.join(', ')
     : (event?.season || 'Season TBD');
+  const currentUserRating = useMemo(
+    () => (currentUserId ? ratings.find((rating) => rating.user_id === currentUserId) : undefined),
+    [ratings, currentUserId]
+  );
 
   if (!isOpen) return null;
 
@@ -279,6 +286,7 @@ export default function ViewRatingsModal({
                             event={event}
                             tagColors={tagColors}
                             customPerformerTags={customPerformerTags}
+                            onTagClick={onTagClick}
                           />"</>
                         ) : (
                           <>"{rating.comment}"</>
@@ -292,8 +300,24 @@ export default function ViewRatingsModal({
           </div>
         )}
 
-        {onViewEvent && !singleUserId ? (
+        {(onViewEvent || (allowRatingEdits && currentUserId && event)) && !singleUserId ? (
           <div className="p-4 border-t bg-gray-50 flex gap-2 shrink-0">
+            {allowRatingEdits && currentUserId && event ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (currentUserRating) {
+                    setEditingRating(currentUserRating);
+                    return;
+                  }
+                  setIsCreatingRating(true);
+                }}
+                className="min-h-[44px] flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-base sm:text-sm"
+              >
+                {currentUserRating ? 'Update' : 'Rate Show'}
+              </button>
+            ) : null}
+            {onViewEvent ? (
             <button
               type="button"
               onClick={() => onViewEvent(eventId)}
@@ -301,6 +325,7 @@ export default function ViewRatingsModal({
             >
               View full event
             </button>
+            ) : null}
           </div>
         ) : null}
       </ModalShell>
@@ -312,6 +337,17 @@ export default function ViewRatingsModal({
           event={event}
           existingRating={editingRating}
           onRatingSubmitted={() => { setEditingRating(null); void fetchRatings(); onRatingSubmitted?.(); }}
+          tagColors={tagColors}
+          customPerformerTags={customPerformerTags}
+          zClass="z-[110]"
+        />
+      )}
+      {isCreatingRating && event && allowRatingEdits && (
+        <RatingModal
+          isOpen={true}
+          onClose={() => setIsCreatingRating(false)}
+          event={event}
+          onRatingSubmitted={() => { setIsCreatingRating(false); void fetchRatings(); onRatingSubmitted?.(); }}
           tagColors={tagColors}
           customPerformerTags={customPerformerTags}
           zClass="z-[110]"

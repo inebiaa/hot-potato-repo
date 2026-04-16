@@ -2,6 +2,26 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, GripVertical } from 'lucide-react';
 import { fetchExistingTags, fetchCustomTagSuggestions, fetchExistingCities, fetchExistingVenues, TagColumn } from '../lib/tags';
 import { tagMatchesQuery } from '../lib/normalize';
+import TagPillSplitLabel, {
+  tagPillSplitContainerWithIconClass,
+  tagPillSplitSegmentGroupClass,
+} from './TagPillSplitLabel';
+
+const TAG_INPUT_CHIP_COLORS = { backgroundColor: '#f3f4f6', color: '#1f2937' } as const;
+
+/** Long tag chips: width-aware splits use the flex slot between grip and remove, not a 48-char cap. */
+function TagInputPillLabel({ text }: { text: string }) {
+  const slotRef = useRef<HTMLSpanElement>(null);
+  return (
+    <span ref={slotRef} className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col justify-center self-stretch">
+      <TagPillSplitLabel
+        layoutWidthRef={slotRef}
+        text={text}
+        segmentColors={TAG_INPUT_CHIP_COLORS}
+      />
+    </span>
+  );
+}
 
 interface TagInputProps {
   value: string[];
@@ -215,12 +235,12 @@ export default function TagInput({
             onDragOver={maxTags !== 1 ? (e) => handleDragOver(e, idx) : undefined}
             onDragLeave={handleDragLeave}
             onDrop={maxTags !== 1 ? (e) => handleDrop(e, idx) : undefined}
-            className={`inline-flex items-center gap-1 px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded bg-gray-100 text-gray-800 text-sm select-none ${
+            className={`${maxTags !== 1 ? tagPillSplitContainerWithIconClass : tagPillSplitSegmentGroupClass} p-0 rounded text-sm select-none ${
               maxTags === 1 ? '' : dragIndex === idx ? 'opacity-60 cursor-grabbing' : 'cursor-grab'
             } ${dropTargetIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
           >
             {maxTags !== 1 && <GripVertical size={14} className="text-gray-400 shrink-0" aria-hidden />}
-            {tag}
+            <TagInputPillLabel text={tag} />
             <button
               type="button"
               onClick={(e) => {

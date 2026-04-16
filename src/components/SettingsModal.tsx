@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import ModalShell from './ModalShell';
+import TagPillSplitLabel, {
+  tagPillSplitSegmentGroupClass,
+  type TagPillSegmentColors,
+} from './TagPillSplitLabel';
 import { Save, Trash2, Image, Users, Tags, FolderPlus, User, Plus, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getIcon, DEFAULT_ICONS } from '../lib/eventCardIcons';
@@ -61,12 +65,22 @@ const CONNECT_CREATE_TYPE_PILLS: { value: TagType; label: string }[] = [
   { value: 'footer_tags', label: 'Collection' },
 ];
 
-/** EventCard-aligned: neutral pills use bg-gray-300 text-gray-600 rounded-md; selected adds reorder-style ring */
+const CREDIT_PILL_SEGMENT_ACTIVE: TagPillSegmentColors = { backgroundColor: '#d1d5db', color: '#4b5563' };
+const CREDIT_PILL_SEGMENT_IDLE: TagPillSegmentColors = { backgroundColor: '#e5e7eb', color: '#4b5563' };
+const ALIAS_NEUTRAL_PILL_COLORS: TagPillSegmentColors = { backgroundColor: '#d1d5db', color: '#4b5563' };
+
+/** EventCard-aligned: selected adds ring; fill is on each text chunk via segmentColors. */
 function creditPillClass(active: boolean) {
   return [
-    'inline-flex items-center justify-center max-w-[220px] truncate whitespace-nowrap text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80',
-    active ? 'bg-gray-300 text-gray-600 ring-2 ring-blue-400 ring-offset-1' : 'bg-gray-200 text-gray-600 hover:bg-gray-300',
-  ].join(' ');
+    `${tagPillSplitSegmentGroupClass} p-0 max-w-full text-xs transition-colors hover:opacity-80`,
+    active ? 'ring-2 ring-blue-400 ring-offset-1' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function creditPillSegmentColors(active: boolean): TagPillSegmentColors {
+  return active ? CREDIT_PILL_SEGMENT_ACTIVE : CREDIT_PILL_SEGMENT_IDLE;
 }
 
 const PALETTE_STORAGE_KEY = 'tag_settings_palette_v1';
@@ -1380,9 +1394,9 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                               <span
                                 key={al.id}
                                 data-tag-pill
-                                className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 ${adminAliasDeleteMode ? 'pill-wiggle' : ''}`}
+                                className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs ${adminAliasDeleteMode ? 'pill-wiggle' : ''}`}
                               >
-                                {al.alias}
+                                <TagPillSplitLabel text={al.alias} segmentColors={ALIAS_NEUTRAL_PILL_COLORS} />
                                 {!adminAliasDeleteMode && (
                                   <button
                                     type="button"
@@ -1910,7 +1924,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                                 onClick={() => setConnectType(p.value)}
                                 className={creditPillClass(connectType === p.value)}
                               >
-                                {p.label}
+                                <TagPillSplitLabel text={p.label} segmentColors={creditPillSegmentColors(connectType === p.value)} />
                               </button>
                             ))}
                           </div>
@@ -1979,7 +1993,10 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                                   className={creditPillClass(!credit.public_display_alias_id)}
                                   title={`Default · ${credit.canonical_name}`}
                                 >
-                                  Default · {credit.canonical_name}
+                                  <TagPillSplitLabel
+                                    text={`Default · ${credit.canonical_name}`}
+                                    segmentColors={creditPillSegmentColors(!credit.public_display_alias_id)}
+                                  />
                                 </button>
                                 {credit.aliases.map((a) => (
                                   <button
@@ -1989,7 +2006,10 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                                     onClick={() => setPublicDisplayAlias(credit.identity_id, a.id)}
                                     className={creditPillClass(credit.public_display_alias_id === a.id)}
                                   >
-                                    {a.alias}
+                                    <TagPillSplitLabel
+                                      text={a.alias}
+                                      segmentColors={creditPillSegmentColors(credit.public_display_alias_id === a.id)}
+                                    />
                                   </button>
                                 ))}
                               </div>
@@ -2022,9 +2042,9 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                                     <span
                                       key={alias.id}
                                       data-tag-pill
-                                      className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 ${inDeleteMode && removable ? 'pill-wiggle' : ''}`}
+                                      className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs ${inDeleteMode && removable ? 'pill-wiggle' : ''}`}
                                     >
-                                      {alias.alias}
+                                      <TagPillSplitLabel text={alias.alias} segmentColors={ALIAS_NEUTRAL_PILL_COLORS} />
                                       {inDeleteMode && removable && (
                                         <button
                                           type="button"
