@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tsconfigPaths from "vite-tsconfig-paths";
+import { VitePWA } from 'vite-plugin-pwa'
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createClient } from '@supabase/supabase-js'
@@ -126,12 +127,63 @@ ${urls.map((loc) => `  <url><loc>${escapeXml(loc)}</loc><changefreq>weekly</chan
 // https://vite.dev/config/
 // Production (custom domain at site root): use VITE_BASE=/ so /assets/* resolves from nested /event/<id>/.
 // For github.io/<repo>/ only, set VITE_BASE=/<repo>/ in the deploy workflow.
+const viteBase = process.env.VITE_BASE ?? '/'
+/** PWA manifest start_url / scope: must align with Vite `base` for subpath deploys. */
+function pwaStartUrlAndScope(): { start_url: string; scope: string } {
+  if (viteBase === '/' || viteBase === './') {
+    return { start_url: '/', scope: '/' }
+  }
+  const withSlash = viteBase.endsWith('/') ? viteBase : `${viteBase}/`
+  return { start_url: withSlash, scope: withSlash }
+}
+
+const { start_url: pwaStartUrl, scope: pwaScope } = pwaStartUrlAndScope()
+
 export default defineConfig({
-  base: process.env.VITE_BASE ?? '/',
+  base: viteBase,
   plugins: [
     react(),
     tsconfigPaths(),
     staticSitePlugin(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['og-default.png', 'robots.txt', 'CNAME'],
+      manifest: {
+        name: 'Secret Blogger',
+        short_name: 'Secret Blogger',
+        description: 'Discover, rate, and review fashion shows from around the world.',
+        theme_color: '#f8fafc',
+        background_color: '#f8fafc',
+        display: 'standalone',
+        start_url: pwaStartUrl,
+        scope: pwaScope,
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api/],
+      },
+    }),
   ],
   server: {
     proxy: {

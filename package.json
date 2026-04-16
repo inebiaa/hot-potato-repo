@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "check": "tsc --noEmit",
     "verify:jsonld": "node scripts/verify-event-jsonld.mjs",
+    "generate:pwa-icons": "node scripts/create-pwa-icons.mjs",
     "server:dev": "nodemon",
     "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\""
   },
@@ -48,6 +49,7 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.30.1",
     "vite": "^6.3.5",
+    "vite-plugin-pwa": "^1.2.0",
     "vite-tsconfig-paths": "^5.1.4"
   }
 }
