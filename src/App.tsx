@@ -1139,8 +1139,11 @@ function App() {
     );
   }
 
+  /** Main feed only: search tag chips are React state, so Home must reset them when already on `/`. */
   const goToHome = () => {
-    navigate('/');
+    setSelectedTags([]);
+    navigate({ pathname: '/', search: '' });
+    window.scrollTo(0, 0);
   };
 
   if (!appSettings) {
