@@ -1,6 +1,6 @@
 import { BarChart3 } from 'lucide-react';
 import type { TagStats } from './StatisticsPage';
-import TagPillSplitLabel, { tagPillSplitContainerWithIconClass, tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
+import TagPillSplitLabel, { tagPillSplitContainerClass, tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 
 interface StatisticsPageContentProps {
   asPage: boolean;
@@ -213,18 +213,13 @@ export default function StatisticsPageContent({
                   <button
                     key={idx}
                     onClick={() => handleTagClick(stat)}
-                    className={`${tagPillSplitContainerWithIconClass} p-0 text-xs transition-colors hover:opacity-80`}
+                    className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md px-2 py-1 max-sm:px-2.5 max-sm:py-2 text-xs text-left transition-colors hover:opacity-80"
+                    style={{ backgroundColor: colors.bg, color: colors.text }}
                   >
-                    <TagPillSplitLabel
-                      text={stat.name}
-                      segmentColors={{ backgroundColor: colors.bg, color: colors.text }}
-                    />
-                    <span
-                      className="font-semibold whitespace-nowrap shrink-0 rounded-md px-2 py-1 max-sm:px-2.5 max-sm:py-2 text-xs"
-                      style={{ backgroundColor: colors.bg, color: colors.text }}
-                    >
-                      {stat.count}
+                    <span className={`${tagPillSplitContainerClass} min-w-0`}>
+                      <TagPillSplitLabel text={stat.name} />
                     </span>
+                    <span className="font-semibold tabular-nums whitespace-nowrap shrink-0">{stat.count}</span>
                   </button>
                 );
               })}

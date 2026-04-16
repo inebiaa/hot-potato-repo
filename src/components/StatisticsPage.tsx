@@ -52,7 +52,7 @@ export default function StatisticsPage({
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedCity, setSelectedCity] = useState<string>('');
   const [selectedSeason, setSelectedSeason] = useState<string>('');
-  const [sortBy, setSortBy] = useState<'count' | 'name'>('count');
+  const [sortBy, setSortBy] = useState<'count' | 'name'>('name');
   const [loading, setLoading] = useState(true);
   const [localTagModal, setLocalTagModal] = useState<{ type: string; value: string } | null>(null);
 
@@ -125,9 +125,6 @@ export default function StatisticsPage({
       }
       if (selectedType === 'all' || selectedType === 'city') {
         if (event.city) addTag(event.city, 'city');
-      }
-      if (selectedType === 'all' || selectedType === 'season') {
-        addTag(getSeasonFromDate(event.date), 'season');
       }
     });
 
