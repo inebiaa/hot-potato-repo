@@ -96,6 +96,48 @@ export interface ParsedSegment {
   tag?: TagStyleResult;
 }
 
+/**
+ * Split tag labels only when a single line would be too long (character budget as a
+ * simple stand-in for “doesn’t fit”). Uses greedy line-filling: each segment is as
+ * long as possible up to `maxLineChars`, breaking at the last space in that window;
+ * only hard-splits when there is no space (one very long word/token).
+ */
+export function splitTagPillLabel(label: string, maxLineChars = 48): string[] {
+  const t = label.trim();
+  if (!t) return [];
+  if (t.length <= maxLineChars) return [t];
+
+  const out: string[] = [];
+  let rest = t;
+  while (rest.length > 0) {
+    if (rest.length <= maxLineChars) {
+      out.push(rest);
+      break;
+    }
+
+    let splitAt = -1;
+    const scanEnd = Math.min(maxLineChars, rest.length - 1);
+    for (let i = scanEnd; i >= 1; i--) {
+      if (rest[i] === ' ') {
+        splitAt = i;
+        break;
+      }
+    }
+
+    if (splitAt > 0) {
+      const head = rest.slice(0, splitAt).trimEnd();
+      const tail = rest.slice(splitAt + 1).trimStart();
+      if (head) out.push(head);
+      rest = tail;
+      if (!rest) break;
+    } else {
+      out.push(rest.slice(0, maxLineChars));
+      rest = rest.slice(maxLineChars).trimStart();
+    }
+  }
+  return out.filter(Boolean);
+}
+
 /** Parse comment into segments for display/editing. Uses same logic as CommentWithTags. */
 export function parseCommentToSegments(
   comment: string,

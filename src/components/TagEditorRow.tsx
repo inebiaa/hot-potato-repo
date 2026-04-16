@@ -1,6 +1,7 @@
 import IconPicker from './IconPicker';
 import ColorPicker from './ColorPicker';
 import { getIcon } from '../lib/eventCardIcons';
+import TagPillSplitLabel, { tagPillSplitContainerWithIconClass } from './TagPillSplitLabel';
 
 interface TagEditorRowProps {
   label: string;
@@ -53,12 +54,12 @@ export default function TagEditorRow({
               compact
             />
           </div>
-          <span
-            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md"
-            style={{ backgroundColor: bgValue, color: textValue }}
-          >
-            <PreviewIcon size={12} />
-            Sample tag
+          <span className={`${tagPillSplitContainerWithIconClass} p-0 text-xs`}>
+            <PreviewIcon size={12} className="shrink-0" />
+            <TagPillSplitLabel
+              text="Sample tag"
+              segmentColors={{ backgroundColor: bgValue, color: textValue }}
+            />
           </span>
         </div>
       </div>

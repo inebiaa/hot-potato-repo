@@ -3,11 +3,14 @@ import { findAccentInsensitiveMatch, normalizeTagNameKey } from '../lib/normaliz
 import { Event } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 import type { CommentTagColors } from '../lib/commentTagParsing';
+import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 
 interface TagStyle {
   value: string;
   bg: string;
   text: string;
+  type: string;
+  slug?: string;
 }
 
 interface CommentWithTagsProps {
@@ -18,6 +21,9 @@ interface CommentWithTagsProps {
   className?: string;
   /** When true, tag pills get the wiggle animation (e.g. when card is in reorder mode) */
   wiggle?: boolean;
+  /** When true, tag pill splits follow the card/tag row width (event card). */
+  fitTagPillsToContainer?: boolean;
+  onTagClick?: (type: string, value: string) => void;
 }
 
 export default function CommentWithTags({
@@ -26,7 +32,9 @@ export default function CommentWithTags({
   tagColors,
   customPerformerTags = [],
   className = '',
-  wiggle = false
+  wiggle = false,
+  fitTagPillsToContainer = false,
+  onTagClick
 }: CommentWithTagsProps) {
   if (!comment || typeof comment !== 'string') return <span className={className}>{comment ?? ''}</span>;
   if (!event || !event.id) return <span className={className}>"{comment}"</span>;
@@ -67,7 +75,7 @@ export default function CommentWithTags({
       bg = (cp?.bg_color && cp.bg_color) ? cp.bg_color : fallbackBg;
       text = (cp?.text_color && cp.text_color) ? cp.text_color : fallbackText;
     }
-    tags.push({ value, bg, text });
+    tags.push({ value, bg, text, type, slug });
   };
 
   (event.producers || []).forEach((v) => add(v, 'producer'));
@@ -123,14 +131,27 @@ export default function CommentWithTags({
     <span className={className}>
       {segments.map((seg, i) =>
         seg.type === 'tag' && seg.tag ? (
-          <span
+          <button
+            type="button"
             key={i}
             data-tag-pill
-            className={`inline-flex items-center justify-center text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md not-italic font-normal mx-0.5 transition-colors hover:opacity-80 ${wiggle ? 'pill-wiggle' : ''}`}
-            style={{ backgroundColor: seg.tag.bg, color: seg.tag.text }}
+            className={`${tagPillSplitSegmentGroupClass} p-0 text-xs not-italic font-normal mx-0.5 transition-colors hover:opacity-80 ${onTagClick ? 'cursor-pointer' : ''} ${wiggle ? 'pill-wiggle' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!onTagClick) return;
+              if (seg.tag.type === 'custom' && seg.tag.slug) {
+                onTagClick('custom_performer', `${seg.tag.slug}\x00${seg.tag.value}`);
+                return;
+              }
+              onTagClick(seg.tag.type, seg.tag.value);
+            }}
           >
-            {seg.value}
-          </span>
+            <TagPillSplitLabel
+              fitToContainer={fitTagPillsToContainer}
+              text={seg.value}
+              segmentColors={{ backgroundColor: seg.tag.bg, color: seg.tag.text }}
+            />
+          </button>
         ) : (
           <React.Fragment key={i}>{seg.value}</React.Fragment>
         )

@@ -1,6 +1,25 @@
 import { Filter, MapPin, Search } from 'lucide-react';
-import type { DragEvent } from 'react';
+import { useRef, type DragEvent } from 'react';
 import type { AppSettings } from '../types/appSettings';
+import TagPillSplitLabel, {
+  tagPillSplitContainerWithIconClass,
+  type TagPillSegmentColors,
+} from './TagPillSplitLabel';
+
+function SearchBarTagValueSlot({
+  text,
+  segmentColors,
+}: {
+  text: string;
+  segmentColors: TagPillSegmentColors;
+}) {
+  const slotRef = useRef<HTMLSpanElement>(null);
+  return (
+    <span ref={slotRef} className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col justify-center self-stretch">
+      <TagPillSplitLabel layoutWidthRef={slotRef} text={text} segmentColors={segmentColors} />
+    </span>
+  );
+}
 
 interface TagFilter {
   type: string;
@@ -130,14 +149,19 @@ export default function PrimarySearchBar({
               return (
                 <span
                   key={`${type}:${selectedTag.value}`}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs shrink-0"
-                  style={{ backgroundColor: bg, color: text }}
+                  className={`${tagPillSplitContainerWithIconClass} p-0 max-w-[min(100%,24rem)] min-w-0 text-xs shrink-0`}
                 >
-                  {tagLabel(type)}{val}
+                  <span
+                    className="inline-flex shrink-0 whitespace-nowrap rounded-md px-2 py-1 max-sm:py-1 text-xs"
+                    style={{ backgroundColor: bg, color: text }}
+                  >
+                    {tagLabel(type)}
+                  </span>
+                  <SearchBarTagValueSlot text={val} segmentColors={{ backgroundColor: bg, color: text }} />
                   <button
                     type="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemoveTagFilter(type, selectedTag.value); }}
-                    className="opacity-80 hover:opacity-100 -mr-0.5"
+                    className="shrink-0 opacity-80 hover:opacity-100 -mr-0.5"
                     aria-label={`Remove ${val} filter`}
                   >
                     <span className="sr-only">Remove</span>
@@ -147,18 +171,27 @@ export default function PrimarySearchBar({
               );
             })}
             {selectedCity && (
-              <span
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs shrink-0"
-                style={{
-                  backgroundColor: isHex(appSettings.city_bg_color) ? appSettings.city_bg_color! : '#dbeafe',
-                  color: isHex(appSettings.city_text_color) ? appSettings.city_text_color! : '#1e40af',
-                }}
-              >
-                City: {selectedCity}
+              <span className={`${tagPillSplitContainerWithIconClass} p-0 max-w-[min(100%,24rem)] min-w-0 text-xs shrink-0`}>
+                <span
+                  className="inline-flex shrink-0 whitespace-nowrap rounded-md px-2 py-1 max-sm:py-1 text-xs"
+                  style={{
+                    backgroundColor: isHex(appSettings.city_bg_color) ? appSettings.city_bg_color! : '#dbeafe',
+                    color: isHex(appSettings.city_text_color) ? appSettings.city_text_color! : '#1e40af',
+                  }}
+                >
+                  City:{' '}
+                </span>
+                <SearchBarTagValueSlot
+                  text={selectedCity}
+                  segmentColors={{
+                    backgroundColor: isHex(appSettings.city_bg_color) ? appSettings.city_bg_color! : '#dbeafe',
+                    color: isHex(appSettings.city_text_color) ? appSettings.city_text_color! : '#1e40af',
+                  }}
+                />
                 <button
                   type="button"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSelectedCityChange(''); }}
-                  className="opacity-80 hover:opacity-100 -mr-0.5"
+                  className="shrink-0 opacity-80 hover:opacity-100 -mr-0.5"
                   aria-label={`Remove city filter`}
                 >
                   <span className="sr-only">Remove</span>
@@ -167,12 +200,15 @@ export default function PrimarySearchBar({
               </span>
             )}
             {dateFilter !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs shrink-0 bg-stone-200 text-stone-800">
-                {dateFilter === 'future' ? 'Upcoming' : 'Past'}
+              <span className={`${tagPillSplitContainerWithIconClass} p-0 min-w-0 text-xs shrink-0`}>
+                <SearchBarTagValueSlot
+                  text={dateFilter === 'future' ? 'Upcoming' : 'Past'}
+                  segmentColors={{ backgroundColor: '#e7e5e4', color: '#292524' }}
+                />
                 <button
                   type="button"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDateFilterChange('all'); }}
-                  className="opacity-80 hover:opacity-100 -mr-0.5"
+                  className="shrink-0 opacity-80 hover:opacity-100 -mr-0.5"
                   aria-label="Remove date filter"
                 >
                   <span className="sr-only">Remove</span>
@@ -198,12 +234,14 @@ export default function PrimarySearchBar({
                   key={`${t.type}:${t.value}:${t.label}`}
                   type="button"
                   onMouseDown={(e) => { e.preventDefault(); onSelectTagFilter(t.type, t.value); }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0"
                 >
-                  <span className="text-gray-400 text-xs capitalize">
+                  <span className="text-gray-400 text-xs capitalize shrink-0">
                     {suggestionTypeLabel(t.type)}:
                   </span>
-                  <span className="text-gray-900">{t.label}</span>
+                  <span className="text-gray-900 min-w-0 flex-1">
+                    <TagPillSplitLabel fitToContainer text={t.label} />
+                  </span>
                 </button>
               ))}
             </div>

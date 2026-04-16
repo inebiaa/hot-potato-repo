@@ -4,6 +4,7 @@ import { shortenEventNameUsingFooterTags } from '../../lib/collectionTagDisplay'
 import { fetchAliasStringsForTag } from '../../lib/tagIdentity';
 import { getPillColors } from './getPillColors';
 import { getTagSectionIcon } from './tagSectionIcon';
+import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from '../TagPillSplitLabel';
 import type { TagEntityCardSharedProps } from './types';
 
 export interface TagCardContentProps extends TagEntityCardSharedProps {
@@ -63,11 +64,9 @@ export default function TagCardContent({
       ? shortenEventNameUsingFooterTags(row.event_name, row.event.footer_tags)
       : row.event_name;
 
-  const pillClass =
-    'inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 break-words max-w-full text-left';
+  const pillClass = `${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80`;
 
-  const aliasPillClass =
-    'inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md break-words max-w-full text-left';
+  const aliasPillClass = `${tagPillSplitSegmentGroupClass} p-0 text-xs`;
 
   const visiblePills =
     !pillsExpanded && sortedEventRatings.length > TAG_LIMIT
@@ -88,12 +87,11 @@ export default function TagCardContent({
           <div className="text-xs font-semibold text-gray-700 mb-1">Also known as</div>
           <div className="flex flex-wrap gap-1 items-center">
             {aliasPills.map((alias) => (
-              <span
-                key={alias}
-                className={aliasPillClass}
-                style={{ backgroundColor: pillColors.bg, color: pillColors.text }}
-              >
-                {alias}
+              <span key={alias} className={aliasPillClass}>
+                <TagPillSplitLabel
+                  text={alias}
+                  segmentColors={{ backgroundColor: pillColors.bg, color: pillColors.text }}
+                />
               </span>
             ))}
           </div>
@@ -116,17 +114,18 @@ export default function TagCardContent({
                   type="button"
                   onClick={() => handleEventClick(row.event_id)}
                   className={`${pillClass} cursor-pointer`}
-                  style={{ backgroundColor: pillColors.bg, color: pillColors.text }}
                 >
-                  {showPillLabel(row)}
+                  <TagPillSplitLabel
+                    text={showPillLabel(row)}
+                    segmentColors={{ backgroundColor: pillColors.bg, color: pillColors.text }}
+                  />
                 </button>
               ) : (
-                <span
-                  key={row.event_id}
-                  className={pillClass}
-                  style={{ backgroundColor: pillColors.bg, color: pillColors.text }}
-                >
-                  {showPillLabel(row)}
+                <span key={row.event_id} className={pillClass}>
+                  <TagPillSplitLabel
+                    text={showPillLabel(row)}
+                    segmentColors={{ backgroundColor: pillColors.bg, color: pillColors.text }}
+                  />
                 </span>
               )
             )}
