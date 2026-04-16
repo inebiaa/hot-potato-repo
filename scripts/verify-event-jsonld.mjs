@@ -22,6 +22,7 @@ const SITE = (process.env.SITE_URL || process.env.VITE_PUBLIC_SITE_URL || 'https
   /\/$/,
   ''
 );
+const DIST_DIR = resolve(repoRoot, 'dist');
 
 function extractJsonLd(html) {
   const re =
@@ -65,6 +66,15 @@ async function discoverEventUrl() {
     return process.env.EVENT_URL.trim();
   }
 
+  // Prefer freshly built local artifacts in CI / post-build checks.
+  const localSitemapPath = resolve(DIST_DIR, 'sitemap.xml');
+  if (existsSync(localSitemapPath)) {
+    const sm = readFileSync(localSitemapPath, 'utf8');
+    const locs = [...sm.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1].trim());
+    const eventUrl = locs.find((u) => u.includes('/event/'));
+    if (eventUrl) return eventUrl;
+  }
+
   const smRes = await fetch(`${SITE}/sitemap.xml`);
   if (smRes.ok) {
     const sm = await smRes.text();
@@ -96,23 +106,23 @@ async function main() {
   }
 
   let html;
-  const pageRes = await fetch(eventUrl, { redirect: 'follow' });
-  if (pageRes.ok) {
-    html = await pageRes.text();
-  } else if (pageRes.status === 404) {
-    const id = eventUrl.split('/event/')[1]?.replace(/\/$/, '');
-    const localPath = id ? resolve(repoRoot, 'dist', 'event', id, 'index.html') : '';
-    if (localPath && existsSync(localPath)) {
-      console.warn(`WARN: live URL returned 404 (not deployed yet?). Verifying local build: ${localPath}`);
-      html = readFileSync(localPath, 'utf8');
+  const id = eventUrl.split('/event/')[1]?.replace(/\/$/, '');
+  const localPath = id ? resolve(DIST_DIR, 'event', id, 'index.html') : '';
+  if (localPath && existsSync(localPath)) {
+    html = readFileSync(localPath, 'utf8');
+    console.log(`INFO: verifying local dist artifact: ${localPath}`);
+  } else {
+    const pageRes = await fetch(eventUrl, { redirect: 'follow' });
+    if (pageRes.ok) {
+      html = await pageRes.text();
+    } else if (pageRes.status === 404) {
+      console.error(`FAIL: event page HTTP ${pageRes.status} ${eventUrl}`);
+      console.error('      Build local static event pages first (`npm run build`) or deploy dist/.');
+      process.exit(1);
     } else {
       console.error(`FAIL: event page HTTP ${pageRes.status} ${eventUrl}`);
-      console.error('      Run `npm run build` with Supabase env, deploy dist/, or set VERIFY_LOCAL after build.');
       process.exit(1);
     }
-  } else {
-    console.error(`FAIL: event page HTTP ${pageRes.status} ${eventUrl}`);
-    process.exit(1);
   }
   const raw = extractJsonLd(html);
   if (!raw) {
