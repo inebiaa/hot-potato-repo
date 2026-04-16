@@ -41,6 +41,8 @@ export function buildEventSocialMetaTagsHtml(event: Event, prerender?: EventJson
 
   const sb = 'data-secret-blogger-event-social=""';
   const lines: string[] = [
+    `<meta property="og:site_name" content="Secret Blogger" ${sb} />`,
+    `<meta property="og:locale" content="en_US" ${sb} />`,
     `<meta property="og:type" content="website" ${sb} />`,
     `<meta property="og:title" content="${titleEsc}" ${sb} />`,
     `<meta property="og:description" content="${descEsc}" ${sb} />`,
@@ -52,10 +54,13 @@ export function buildEventSocialMetaTagsHtml(event: Event, prerender?: EventJson
   }
   const twitterCard = image ? 'summary_large_image' : 'summary';
   lines.push(`<meta name="twitter:card" content="${twitterCard}" ${sb} />`);
+  lines.push(`<meta name="twitter:site" content="@SecretBloggerTW" ${sb} />`);
+  lines.push(`<meta name="twitter:creator" content="@SecretBloggerTW" ${sb} />`);
   lines.push(`<meta name="twitter:title" content="${titleEsc}" ${sb} />`);
   lines.push(`<meta name="twitter:description" content="${descEsc}" ${sb} />`);
   if (image) {
     lines.push(`<meta name="twitter:image" content="${escapeHtmlAttr(image)}" ${sb} />`);
+    lines.push(`<meta name="twitter:image:alt" content="${titleEsc}" ${sb} />`);
   }
   return lines.map((l) => `  ${l}`).join('\n');
 }
@@ -73,6 +78,8 @@ export function buildEventSocialMetaTagSpecs(event: Event, prerender?: EventJson
   const description = buildEventOgDescription(event);
   const image = eventAbsoluteImageUrl(event.image_url, prerender);
   const specs: SocialMetaTagSpec[] = [
+    { kind: 'property', key: 'og:site_name', content: 'Secret Blogger' },
+    { kind: 'property', key: 'og:locale', content: 'en_US' },
     { kind: 'property', key: 'og:type', content: 'website' },
     { kind: 'property', key: 'og:title', content: title },
     { kind: 'property', key: 'og:description', content: description },
@@ -84,10 +91,13 @@ export function buildEventSocialMetaTagSpecs(event: Event, prerender?: EventJson
   }
   const twitterCard = image ? 'summary_large_image' : 'summary';
   specs.push({ kind: 'name', key: 'twitter:card', content: twitterCard });
+  specs.push({ kind: 'name', key: 'twitter:site', content: '@SecretBloggerTW' });
+  specs.push({ kind: 'name', key: 'twitter:creator', content: '@SecretBloggerTW' });
   specs.push({ kind: 'name', key: 'twitter:title', content: title });
   specs.push({ kind: 'name', key: 'twitter:description', content: description });
   if (image) {
     specs.push({ kind: 'name', key: 'twitter:image', content: image });
+    specs.push({ kind: 'name', key: 'twitter:image:alt', content: title });
   }
   return specs;
 }
