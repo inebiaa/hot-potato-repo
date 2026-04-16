@@ -123,6 +123,7 @@ export default function EventCard({
   const isRatingModalOpen = parsedModal.modal === 'rate' && panelEventId === event.id;
   const isViewRatingsModalOpen = parsedModal.modal === 'view-ratings' && panelEventId === event.id;
   const isEditModalOpen = parsedModal.modal === 'edit-event' && panelEventId === event.id;
+  const ratingAllowed = !isEventUpcoming(event.date);
 
   const closeEventPanels = () => {
     navigate({ pathname: location.pathname, search: clearAppModalParams(searchParams) });
@@ -1629,6 +1630,7 @@ export default function EventCard({
             })()}
             </div>
 
+          {ratingAllowed && (
           <div className="flex items-center justify-between pt-4 border-t">
             <button
               type="button"
@@ -1664,8 +1666,9 @@ export default function EventCard({
               {user && userRating ? 'Update' : 'Rate Show'}
             </button>
           </div>
+          )}
 
-          {userRating && (
+          {ratingAllowed && userRating && (
             <div className="mt-3 pt-3 border-t">
               <p className="text-sm text-gray-600 font-medium">
                 Your rating: {userRating.rating} stars
@@ -1750,7 +1753,7 @@ export default function EventCard({
       </div>
 
       <RatingModal
-        isOpen={isRatingModalOpen}
+        isOpen={isRatingModalOpen && ratingAllowed}
         onClose={closeEventPanels}
         event={event}
         existingRating={userRating}
@@ -1760,7 +1763,7 @@ export default function EventCard({
       />
 
       <ViewRatingsModal
-        isOpen={isViewRatingsModalOpen}
+        isOpen={isViewRatingsModalOpen && ratingAllowed}
         onClose={closeEventPanels}
         eventId={event.id}
         eventName={event.name}
@@ -1769,6 +1772,7 @@ export default function EventCard({
         onRatingSubmitted={onRatingSubmitted}
         tagColors={tagColors}
         customPerformerTags={customPerformerTags}
+        allowRatingEdits={ratingAllowed}
       />
 
       <EditEventModal
