@@ -48,9 +48,24 @@ interface ViewRatingsModalProps {
   singleUserId?: string;
   /** When set, shows a "View full event" button that opens the event card */
   onViewEvent?: (eventId: string) => void;
+  /** When false, ratings are read-only (e.g. show has not occurred yet). Defaults to true. */
+  allowRatingEdits?: boolean;
 }
 
-export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, event, currentUserId, onRatingSubmitted, tagColors, customPerformerTags = [], onViewEvent, singleUserId }: ViewRatingsModalProps) {
+export default function ViewRatingsModal({
+  isOpen,
+  onClose,
+  eventId,
+  eventName,
+  event,
+  currentUserId,
+  onRatingSubmitted,
+  tagColors,
+  customPerformerTags = [],
+  onViewEvent,
+  singleUserId,
+  allowRatingEdits = true,
+}: ViewRatingsModalProps) {
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedRatingId, setExpandedRatingId] = useState<string | null>(null);
@@ -154,6 +169,7 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
             <div className="flex items-end justify-between gap-3">
               <div className="flex items-center gap-2">
               {[1, 2, 3, 4, 5].map((s) => (
+                allowRatingEdits ? (
                 <button
                   key={s}
                   type="button"
@@ -166,6 +182,14 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
                     className={s <= ratings[0].rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}
                   />
                 </button>
+                ) : (
+                <span key={s} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center" aria-hidden>
+                  <Star
+                    size={92}
+                    className={s <= ratings[0].rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}
+                  />
+                </span>
+                )
               ))}
               </div>
               <span className="text-xs text-gray-500">{eventName}</span>
@@ -190,10 +214,10 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
                   className={singleUserId ? 'rounded-2xl bg-white/90 px-5 py-4 border border-stone-200 shadow-sm overflow-hidden' : 'bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors overflow-hidden'}
                 >
                   <div
-                    className={`p-4 ${!singleUserId && (rating.comment || (currentUserId && rating.user_id === currentUserId)) ? 'cursor-pointer' : ''}`}
+                    className={`p-4 ${!singleUserId && (rating.comment || (allowRatingEdits && currentUserId && rating.user_id === currentUserId)) ? 'cursor-pointer' : ''}`}
                     onClick={() => {
                       if (singleUserId) return;
-                      if (currentUserId && rating.user_id === currentUserId) {
+                      if (allowRatingEdits && currentUserId && rating.user_id === currentUserId) {
                         setEditingRating(rating);
                         return;
                       }
@@ -241,9 +265,9 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
                   </div>
                   {rating.comment && (singleUserId || expandedRatingId === rating.id) && (
                     <div
-                      className={`px-4 pb-4 pt-0 border-t border-gray-200 ${singleUserId && currentUserId && rating.user_id === currentUserId ? 'cursor-pointer' : ''}`}
+                      className={`px-4 pb-4 pt-0 border-t border-gray-200 ${allowRatingEdits && singleUserId && currentUserId && rating.user_id === currentUserId ? 'cursor-pointer' : ''}`}
                       onClick={() => {
-                        if (singleUserId && currentUserId && rating.user_id === currentUserId) {
+                        if (allowRatingEdits && singleUserId && currentUserId && rating.user_id === currentUserId) {
                           setEditingRating(rating);
                         }
                       }}
@@ -281,7 +305,7 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
         ) : null}
       </ModalShell>
 
-      {editingRating && event && (
+      {editingRating && event && allowRatingEdits && (
         <RatingModal
           isOpen={true}
           onClose={() => setEditingRating(null)}

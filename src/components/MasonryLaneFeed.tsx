@@ -13,6 +13,8 @@ type MasonryLaneFeedProps = {
   items: MasonryLaneItem[];
   /** Desired minimum width per lane; actual count = floor((container + gap) / (min + gap)). */
   columnMinWidthPx?: number;
+  /** Max width per lane so cards do not stretch on wide screens when few columns fit. */
+  columnMaxWidthPx?: number;
   gapPx?: number;
   /** Fallback height per item before first measure (px). */
   defaultItemHeightPx?: number;
@@ -82,9 +84,13 @@ function ItemMeasure({
  * Items are still taken in source order; each step picks the lane with the least
  * accumulated height so the wall grows in a left-to-right waterfall.
  */
+/** Ignore sub-pixel / tiny layout noise so we do not reflow the whole masonry wall. */
+const HEIGHT_EPSILON_PX = 2;
+
 export default function MasonryLaneFeed({
   items,
   columnMinWidthPx = 220,
+  columnMaxWidthPx = 448,
   gapPx = 24,
   defaultItemHeightPx = 420,
   className = '',
@@ -93,6 +99,7 @@ export default function MasonryLaneFeed({
   const [laneCount, setLaneCount] = useState(1);
   const [measureTick, setMeasureTick] = useState(0);
   const heightsRef = useRef<Map<string, number>>(new Map());
+  const measureFlushRafRef = useRef<number | null>(null);
 
   const idsFingerprint = useMemo(
     () => items.map((i) => i.id).join('\u0001'),
@@ -115,27 +122,61 @@ export default function MasonryLaneFeed({
     const root = containerRef.current;
     if (!root) return;
 
+    const laneRafRef = { current: null as number | null };
+
     const updateLanes = () => {
       const w = root.clientWidth;
       const next = Math.max(1, Math.floor((w + gapPx) / (columnMinWidthPx + gapPx)));
       setLaneCount((prev) => (prev !== next ? next : prev));
     };
 
+    const scheduleLaneUpdate = () => {
+      if (laneRafRef.current !== null) return;
+      laneRafRef.current = requestAnimationFrame(() => {
+        laneRafRef.current = null;
+        updateLanes();
+      });
+    };
+
     updateLanes();
-    const ro = new ResizeObserver(updateLanes);
+    const ro = new ResizeObserver(scheduleLaneUpdate);
     ro.observe(root);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (laneRafRef.current !== null) {
+        cancelAnimationFrame(laneRafRef.current);
+        laneRafRef.current = null;
+      }
+    };
   }, [columnMinWidthPx, gapPx]);
 
-  const bumpRef = useRef<() => void>(() => {});
-  bumpRef.current = () => setMeasureTick((t) => t + 1);
+  useLayoutEffect(
+    () => () => {
+      if (measureFlushRafRef.current !== null) {
+        cancelAnimationFrame(measureFlushRafRef.current);
+        measureFlushRafRef.current = null;
+      }
+    },
+    [],
+  );
 
-  const onHeight = useCallback((id: string, height: number) => {
-    const prev = heightsRef.current.get(id);
-    if (prev !== undefined && Math.abs(prev - height) < 1) return;
-    heightsRef.current.set(id, height);
-    bumpRef.current();
+  const scheduleMeasureFlush = useCallback(() => {
+    if (measureFlushRafRef.current !== null) return;
+    measureFlushRafRef.current = requestAnimationFrame(() => {
+      measureFlushRafRef.current = null;
+      setMeasureTick((t) => t + 1);
+    });
   }, []);
+
+  const onHeight = useCallback(
+    (id: string, height: number) => {
+      const prev = heightsRef.current.get(id);
+      if (prev !== undefined && Math.abs(prev - height) < HEIGHT_EPSILON_PX) return;
+      heightsRef.current.set(id, height);
+      scheduleMeasureFlush();
+    },
+    [scheduleMeasureFlush],
+  );
 
   const effectiveLaneCount = Math.min(
     Math.max(1, laneCount),
@@ -169,16 +210,19 @@ export default function MasonryLaneFeed({
   return (
     <div
       ref={containerRef}
-      className={`flex w-full min-w-0 flex-row items-start ${className}`}
+      className={`flex w-full min-w-0 flex-row items-start justify-center ${className}`}
       style={{ gap: gapPx }}
     >
       {lanes
         .filter((laneIds) => laneIds.length > 0)
-        .map((laneIds) => (
+        .map((laneIds, colIndex) => (
         <div
-          key={laneIds.join('\u0001')}
+          key={`masonry-col-${colIndex}`}
           className="flex min-w-0 flex-1 flex-col"
-          style={{ gap: gapPx }}
+          style={{
+            gap: gapPx,
+            maxWidth: columnMaxWidthPx > 0 ? `${columnMaxWidthPx}px` : undefined,
+          }}
         >
           {laneIds.map((id) => (
             <ItemMeasure key={id} id={id} onHeight={onHeight}>
