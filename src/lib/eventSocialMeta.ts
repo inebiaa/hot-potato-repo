@@ -50,12 +50,18 @@ export function buildEventSocialMetaTagsHtml(event: Event, prerender?: EventJson
   ];
   if (image) {
     lines.push(`<meta property="og:image" content="${escapeHtmlAttr(image)}" ${sb} />`);
+    lines.push(`<meta property="og:image:secure_url" content="${escapeHtmlAttr(image)}" ${sb} />`);
+    lines.push(`<meta property="og:image:type" content="image/png" ${sb} />`);
+    lines.push(`<meta property="og:image:width" content="1200" ${sb} />`);
+    lines.push(`<meta property="og:image:height" content="630" ${sb} />`);
     lines.push(`<meta property="og:image:alt" content="${titleEsc}" ${sb} />`);
   }
   const twitterCard = image ? 'summary_large_image' : 'summary';
   lines.push(`<meta name="twitter:card" content="${twitterCard}" ${sb} />`);
   lines.push(`<meta name="twitter:site" content="@SecretBloggerTW" ${sb} />`);
   lines.push(`<meta name="twitter:creator" content="@SecretBloggerTW" ${sb} />`);
+  lines.push(`<meta name="twitter:domain" content="secretblogger.app" ${sb} />`);
+  lines.push(`<meta name="twitter:url" content="${urlEsc}" ${sb} />`);
   lines.push(`<meta name="twitter:title" content="${titleEsc}" ${sb} />`);
   lines.push(`<meta name="twitter:description" content="${descEsc}" ${sb} />`);
   if (image) {
@@ -87,12 +93,18 @@ export function buildEventSocialMetaTagSpecs(event: Event, prerender?: EventJson
   ];
   if (image) {
     specs.push({ kind: 'property', key: 'og:image', content: image });
+    specs.push({ kind: 'property', key: 'og:image:secure_url', content: image });
+    specs.push({ kind: 'property', key: 'og:image:type', content: 'image/png' });
+    specs.push({ kind: 'property', key: 'og:image:width', content: '1200' });
+    specs.push({ kind: 'property', key: 'og:image:height', content: '630' });
     specs.push({ kind: 'property', key: 'og:image:alt', content: title });
   }
   const twitterCard = image ? 'summary_large_image' : 'summary';
   specs.push({ kind: 'name', key: 'twitter:card', content: twitterCard });
   specs.push({ kind: 'name', key: 'twitter:site', content: '@SecretBloggerTW' });
   specs.push({ kind: 'name', key: 'twitter:creator', content: '@SecretBloggerTW' });
+  specs.push({ kind: 'name', key: 'twitter:domain', content: 'secretblogger.app' });
+  specs.push({ kind: 'name', key: 'twitter:url', content: canonical });
   specs.push({ kind: 'name', key: 'twitter:title', content: title });
   specs.push({ kind: 'name', key: 'twitter:description', content: description });
   if (image) {
