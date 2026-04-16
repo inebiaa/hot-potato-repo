@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import ModalShell from './ModalShell';
 import { Save, Trash2, Image, Users, Tags, FolderPlus, User, Plus, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getIcon, DEFAULT_ICONS } from '../lib/eventCardIcons';
 import { useAuth } from '../contexts/AuthContext';
 import { readableTextForBg } from '../lib/colorUtils';
 import IconPicker from './IconPicker';
-import { CUSTOM_COLORS_STORAGE_KEY, PRELOADED_HEX } from './ColorPicker';
+import { CUSTOM_COLORS_STORAGE_KEY, PRELOADED_HEX } from '../lib/tagColorPickerData';
 import {
   ensureIdentity,
   findIdentityByName,
@@ -63,7 +64,7 @@ const CONNECT_CREATE_TYPE_PILLS: { value: TagType; label: string }[] = [
 /** EventCard-aligned: neutral pills use bg-gray-300 text-gray-600 rounded-md; selected adds reorder-style ring */
 function creditPillClass(active: boolean) {
   return [
-    'inline-flex items-center justify-center max-w-[220px] truncate whitespace-nowrap text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80',
+    'inline-flex items-center justify-center max-w-[220px] truncate whitespace-nowrap text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80',
     active ? 'bg-gray-300 text-gray-600 ring-2 ring-blue-400 ring-offset-1' : 'bg-gray-200 text-gray-600 hover:bg-gray-300',
   ].join(' ');
 }
@@ -813,7 +814,9 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       setEditingAdminAliasId(null);
       setEditAdminAliasDraft('');
     }
-  }, [isOpen, user?.id]);
+    // One-shot when modal opens; fetch* helpers are intentionally not deps (unstable identities)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, user?.id, isAdmin]);
 
   useEffect(() => {
     if (!isOpen || !settingsLoaded || !onSettingsPreview) return;
@@ -1133,17 +1136,13 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     { id: 'account', label: 'Account', icon: <User size={18} /> },
   ];
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+    <ModalShell
+      onClose={onClose}
+      title="Settings"
+      panelClassName="max-w-2xl sm:rounded-xl"
+      bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden p-0"
     >
-      <div className="relative max-w-2xl w-full my-8" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-white rounded-xl shadow-xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-        <div className="p-4 border-b shrink-0">
-          <h2 className="text-xl font-bold">Settings</h2>
-        </div>
-
-        <div className="flex border-b shrink-0">
+        <div className="flex shrink-0 border-b">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -1160,7 +1159,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
           <div className="p-5 space-y-5">
             {activeTab === 'branding' && (
               <>
@@ -1381,7 +1380,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                               <span
                                 key={al.id}
                                 data-tag-pill
-                                className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 ${adminAliasDeleteMode ? 'pill-wiggle' : ''}`}
+                                className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 ${adminAliasDeleteMode ? 'pill-wiggle' : ''}`}
                               >
                                 {al.alias}
                                 {!adminAliasDeleteMode && (
@@ -1399,7 +1398,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                                 {adminAliasDeleteMode && (
                                   <button
                                     type="button"
-                                    className="absolute -top-1.5 -right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white border border-stone-300 text-stone-600 shadow-sm hover:bg-stone-50"
+                                    className="absolute -top-2 -right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white border border-stone-300 text-stone-600 shadow-sm hover:bg-stone-50"
                                     title="Remove alias"
                                     onMouseDown={(e) => e.stopPropagation()}
                                     onClick={(e) => {
@@ -1410,7 +1409,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                                     }}
                                     aria-label={`Remove alias ${al.alias}`}
                                   >
-                                    <X size={10} />
+                                    <X size={16} strokeWidth={2} />
                                   </button>
                                 )}
                               </span>
@@ -1627,24 +1626,25 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                             <button
                               type="button"
                               onClick={() => deleteCollection(col.id)}
-                              className="text-red-500 hover:text-red-700"
+                              className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-md text-red-500 hover:text-red-700 hover:bg-red-50"
                               aria-label="Delete collection"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={18} />
                             </button>
                           </div>
                           <div className="flex flex-wrap gap-1.5 items-center min-h-[28px]">
                             {col.colors.map((c) => (
                               <span key={c} className="relative group">
                                 <span
-                                  className="inline-block w-6 h-6 rounded border border-gray-200"
+                                  className="inline-block w-9 h-9 sm:w-6 sm:h-6 rounded border border-gray-200"
                                   style={{ backgroundColor: c, color: readableTextForBg(c) }}
                                   title={c}
                                 />
                                 <button
                                   type="button"
                                   onClick={() => removeColorFromCollection(col.id, c)}
-                                  className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 text-white text-[8px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100"
+                                  className="absolute -top-1.5 -right-1.5 h-11 w-11 rounded-full bg-red-500 text-white text-sm font-semibold leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 max-sm:opacity-100"
+                                  aria-label="Remove color from collection"
                                 >
                                   ×
                                 </button>
@@ -1682,7 +1682,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                                 <div className="fixed inset-0 z-10" onClick={() => setAssigningTag(null)} aria-hidden="true" />
                                 <div className="absolute left-0 top-full z-20 mt-1 p-3 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[220px]">
                                   <div className="text-xs font-medium text-gray-700 mb-2">{label}</div>
-                                  <div className="grid grid-cols-6 gap-2 mb-3">
+                                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mb-3">
                                     {(() => {
                                       const inPalette = new Set(paletteColors.map((h) => h.toLowerCase()));
                                       const options = inPalette.has(bg.toLowerCase()) ? paletteColors : [bg, ...paletteColors];
@@ -1692,13 +1692,13 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                                         key={hex}
                                         type="button"
                                         onClick={() => assignColorToTag(key, hex)}
-                                        className={`w-8 h-8 rounded-lg border-2 shrink-0 ${hex.toLowerCase() === bg.toLowerCase() ? 'border-gray-800 ring-1 ring-gray-800' : 'border-gray-200 hover:border-gray-400'}`}
+                                        className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 w-11 h-11 sm:w-8 sm:h-8 rounded-lg border-2 shrink-0 flex items-center justify-center ${hex.toLowerCase() === bg.toLowerCase() ? 'border-gray-800 ring-1 ring-gray-800' : 'border-gray-200 hover:border-gray-400'}`}
                                         style={{ backgroundColor: hex }}
                                         title={hex}
                                       />
                                     ))}
                                   </div>
-                                  <label className="inline-flex items-center gap-2 px-2 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 cursor-pointer text-xs font-medium text-gray-700">
+                                  <label className="inline-flex items-center min-h-11 gap-2 px-2 rounded-md border border-gray-200 hover:bg-gray-50 cursor-pointer text-xs font-medium text-gray-700">
                                     <input
                                       type="color"
                                       value={bg}
@@ -1707,7 +1707,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                                         assignColorToTag(key, v, false);
                                         addToPalette(v);
                                       }}
-                                      className="w-6 h-6 rounded border border-gray-200 cursor-pointer"
+                                      className="h-11 w-16 min-w-[3rem] sm:h-8 sm:w-10 rounded border border-gray-200 cursor-pointer shrink-0"
                                     />
                                     <span>Custom</span>
                                   </label>
@@ -2022,13 +2022,13 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                                     <span
                                       key={alias.id}
                                       data-tag-pill
-                                      className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 ${inDeleteMode && removable ? 'pill-wiggle' : ''}`}
+                                      className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 ${inDeleteMode && removable ? 'pill-wiggle' : ''}`}
                                     >
                                       {alias.alias}
                                       {inDeleteMode && removable && (
                                         <button
                                           type="button"
-                                          className="absolute -top-1.5 -right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white border border-stone-300 text-stone-600 shadow-sm hover:bg-stone-50"
+                                          className="absolute -top-2 -right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white border border-stone-300 text-stone-600 shadow-sm hover:bg-stone-50"
                                           title="Remove alias"
                                           onMouseDown={(e) => e.stopPropagation()}
                                           onClick={(e) => {
@@ -2039,7 +2039,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                                           }}
                                           aria-label={`Remove alias ${alias.alias}`}
                                         >
-                                          <X size={10} />
+                                          <X size={16} strokeWidth={2} />
                                         </button>
                                       )}
                                     </span>
@@ -2116,9 +2116,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
             </button>
           </div>
         </form>
-        </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 

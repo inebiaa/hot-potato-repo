@@ -16,10 +16,10 @@ interface AppHeaderProps {
 }
 
 export default function AppHeader({
-  pathname,
+  pathname: _pathname,
   appSettings,
   user,
-  isAdmin,
+  isAdmin: _isAdmin,
   onGoHome,
   onOpenStats,
   onOpenProfile,
@@ -32,8 +32,8 @@ export default function AppHeader({
   return (
     <header className="shrink-0 bg-white shadow-sm border-b sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
             {appSettings.app_logo_url ? (
               <button type="button" onClick={onGoHome} className="p-0 border-0 bg-transparent cursor-pointer">
                 <img src={appSettings.app_logo_url} alt={appSettings.app_name} className="h-10 object-contain" />
@@ -57,7 +57,7 @@ export default function AppHeader({
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end sm:gap-3">
             <button
               onClick={onGoHome}
               className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"

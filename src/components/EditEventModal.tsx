@@ -8,6 +8,7 @@ import { ensureIdentity, normalizeTagName, type TagType } from '../lib/tagIdenti
 import { normalizeExternalUrl } from '../lib/externalUrl';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
+import ModalShell from './ModalShell';
 
 interface EditEventModalProps {
   isOpen: boolean;
@@ -176,7 +177,12 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       onClose();
     } catch (err) {
       console.error('Failed to update event:', err);
-      const msg = err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err ? String((err as any).message) : 'Failed to update event');
+      const msg =
+        err instanceof Error
+          ? err.message
+          : err && typeof err === 'object' && 'message' in err
+            ? String((err as Record<string, unknown>).message ?? '')
+            : 'Failed to update event';
       setError(msg);
     } finally {
       setLoading(false);
@@ -184,12 +190,8 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
   };
 
   return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="relative max-w-2xl w-full my-8" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-white rounded-lg shadow-xl w-full p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-bold mb-6">Edit Fashion Show</h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <ModalShell onClose={onClose} title="Edit Fashion Show" zClass="z-[100]">
+        <form onSubmit={handleSubmit} className="space-y-4 p-4 sm:p-6">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
               Show Name *
@@ -218,7 +220,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
                 Date *
@@ -326,8 +328,8 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           />
 
           {inlineCustomTypes.map(({ slug, label, icon }) => (
-            <div key={slug} className="flex items-start gap-3">
-              <div className="shrink-0 w-28">
+            <div key={slug} className="flex flex-col sm:flex-row items-stretch sm:items-start gap-3">
+              <div className="w-full shrink-0 sm:w-28">
                 <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
                 <IconPicker label="" value={icon} onChange={(v) => setInlineCustomTypes((prev) => prev.map((t) => (t.slug === slug ? { ...t, icon: v } : t)))} />
               </div>
@@ -447,9 +449,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             {loading ? 'Updating...' : 'Update Show'}
           </button>
         </form>
-        </div>
-      </div>
-    </div>,
+    </ModalShell>,
     document.body
   );
 }

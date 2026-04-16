@@ -50,6 +50,16 @@ function validateJsonLd(data) {
   }
 }
 
+/** Link previews (email, Slack): prerendered head should include Open Graph basics. */
+function validateOgMeta(html) {
+  if (!/<meta\s[^>]*property=["']og:title["'][^>]*>/i.test(html)) {
+    throw new Error('missing og:title meta');
+  }
+  if (!/<meta\s[^>]*property=["']og:url["'][^>]*>/i.test(html)) {
+    throw new Error('missing og:url meta');
+  }
+}
+
 async function discoverEventUrl() {
   if (process.env.EVENT_URL?.trim()) {
     return process.env.EVENT_URL.trim();
@@ -124,7 +134,14 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('OK: Event JSON-LD present in first HTML response (Google-fetchable).');
+  try {
+    validateOgMeta(html);
+  } catch (e) {
+    console.error('FAIL:', e.message);
+    process.exit(1);
+  }
+
+  console.log('OK: Event JSON-LD + Open Graph (og:title, og:url) present in first HTML response.');
   console.log('    URL:', eventUrl);
   console.log('    name:', data.name);
   console.log('    startDate:', data.startDate);

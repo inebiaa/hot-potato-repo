@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MessageCircle, Send, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,7 +24,7 @@ export default function EventComments({ eventId, isExpanded }: EventCommentsProp
   const [submitting, setSubmitting] = useState(false);
   const { user } = useAuth();
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     if (!isExpanded) return;
 
     setLoading(true);
@@ -57,11 +57,11 @@ export default function EventComments({ eventId, isExpanded }: EventCommentsProp
     } finally {
       setLoading(false);
     }
-  };
+  }, [eventId, isExpanded]);
 
   useEffect(() => {
-    fetchComments();
-  }, [eventId, isExpanded]);
+    void fetchComments();
+  }, [fetchComments]);
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();

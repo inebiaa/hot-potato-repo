@@ -22,7 +22,7 @@ export default function IconPicker({ label, value, onChange }: IconPickerProps) 
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex items-center justify-center gap-1 px-3 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
           title={hasSelection ? value : 'None'}
           aria-label={label || `Icon: ${hasSelection ? value : 'None'}`}
         >
@@ -36,14 +36,14 @@ export default function IconPicker({ label, value, onChange }: IconPickerProps) 
         {isOpen && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} aria-hidden="true" />
-            <div className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,320px)] max-h-64 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-2 grid grid-cols-6 gap-1">
+            <div className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,320px)] max-h-64 overflow-y-auto overscroll-y-contain bg-white border border-gray-200 rounded-lg shadow-lg p-2 grid grid-cols-4 sm:grid-cols-6 gap-1">
               <button
                 type="button"
                 onClick={() => {
                   onChange('');
                   setIsOpen(false);
                 }}
-                className={`col-span-6 px-2 py-1.5 text-xs rounded-md border text-left ${!hasSelection ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                className={`col-span-full min-h-11 px-3 text-sm sm:text-xs rounded-md border text-left ${!hasSelection ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                 title="No icon"
               >
                 No icon
@@ -58,7 +58,7 @@ export default function IconPicker({ label, value, onChange }: IconPickerProps) 
                       onChange(name);
                       setIsOpen(false);
                     }}
-                    className={`p-2 rounded-md hover:bg-gray-100 flex items-center justify-center ${value === name ? 'bg-blue-50 ring-1 ring-blue-200' : ''}`}
+                    className={`min-h-11 min-w-11 rounded-md hover:bg-gray-100 flex items-center justify-center ${value === name ? 'bg-blue-50 ring-1 ring-blue-200' : ''}`}
                     title={name}
                   >
                     <Icon size={20} className="text-gray-700" />

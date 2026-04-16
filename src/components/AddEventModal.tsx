@@ -6,6 +6,7 @@ import { normalizeExternalUrl } from '../lib/externalUrl';
 import { useAuth } from '../contexts/AuthContext';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
+import ModalShell from './ModalShell';
 
 interface AddEventModalProps {
   isOpen: boolean;
@@ -113,8 +114,9 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       console.error('Failed to create event', err);
       if (err instanceof Error) {
         setError(err.message || 'Failed to create event');
-      } else if (err && typeof err === 'object' && 'message' in (err as any)) {
-        setError((err as any).message || 'Failed to create event');
+      } else if (err && typeof err === 'object' && 'message' in err) {
+        const msg = (err as Record<string, unknown>).message;
+        setError(typeof msg === 'string' ? msg : 'Failed to create event');
       } else {
         setError(String(err) || 'Failed to create event');
       }
@@ -124,15 +126,8 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="relative max-w-2xl w-full my-8" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-white rounded-lg shadow-xl w-full p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-bold mb-6">Create New Fashion Show</h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <ModalShell onClose={onClose} title="Create New Fashion Show">
+        <form onSubmit={handleSubmit} className="space-y-4 p-4 sm:p-6">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
               Show Name *
@@ -143,7 +138,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
             />
           </div>
 
@@ -156,12 +151,12 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
               placeholder="Short description of the show"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
                 Date *
@@ -172,7 +167,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
               />
             </div>
 
@@ -269,8 +264,8 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
           />
 
           {inlineCustomTypes.map(({ slug, label, icon }) => (
-            <div key={slug} className="flex items-start gap-3">
-              <div className="shrink-0 w-28">
+            <div key={slug} className="flex flex-col sm:flex-row items-stretch sm:items-start gap-3">
+              <div className="shrink-0 w-full sm:w-28">
                 <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
                 <IconPicker label="" value={icon} onChange={(v) => setInlineCustomTypes((prev) => prev.map((t) => (t.slug === slug ? { ...t, icon: v } : t)))} />
               </div>
@@ -390,8 +385,6 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             {loading ? 'Creating...' : 'Create Show'}
           </button>
         </form>
-        </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

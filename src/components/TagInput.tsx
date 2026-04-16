@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, GripVertical } from 'lucide-react';
 import { fetchExistingTags, fetchCustomTagSuggestions, fetchExistingCities, fetchExistingVenues, TagColumn } from '../lib/tags';
 import { tagMatchesQuery } from '../lib/normalize';
@@ -35,7 +35,7 @@ export default function TagInput({
   label,
   hint,
 }: TagInputProps) {
-  const tags = Array.isArray(value) ? value : [];
+  const tags = useMemo(() => (Array.isArray(value) ? value : []), [value]);
   const [inputValue, setInputValue] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -203,7 +203,7 @@ export default function TagInput({
         </label>
       )}
       <div
-        className="flex flex-wrap gap-1.5 p-2 min-h-[42px] border border-gray-300 rounded-md focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white"
+        className="flex flex-wrap gap-1.5 p-2 min-h-[2.75rem] border border-gray-300 rounded-md focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white"
         onClick={() => inputRef.current?.focus()}
       >
         {tags.map((tag, idx) => (
@@ -215,11 +215,11 @@ export default function TagInput({
             onDragOver={maxTags !== 1 ? (e) => handleDragOver(e, idx) : undefined}
             onDragLeave={handleDragLeave}
             onDrop={maxTags !== 1 ? (e) => handleDrop(e, idx) : undefined}
-            className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-sm select-none ${
+            className={`inline-flex items-center gap-1 px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded bg-gray-100 text-gray-800 text-sm select-none ${
               maxTags === 1 ? '' : dragIndex === idx ? 'opacity-60 cursor-grabbing' : 'cursor-grab'
             } ${dropTargetIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
           >
-            {maxTags !== 1 && <GripVertical size={12} className="text-gray-400 shrink-0" aria-hidden />}
+            {maxTags !== 1 && <GripVertical size={14} className="text-gray-400 shrink-0" aria-hidden />}
             {tag}
             <button
               type="button"
@@ -228,10 +228,10 @@ export default function TagInput({
                 removeTag(idx);
               }}
               onPointerDown={(e) => e.stopPropagation()}
-              className="ml-0.5 p-0.5 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-700"
+              className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md hover:bg-gray-200 text-gray-500 hover:text-gray-700 sm:min-h-0 sm:min-w-0 sm:p-1"
               aria-label={`Remove ${tag}`}
             >
-              <X size={12} strokeWidth={2.5} />
+              <X size={16} strokeWidth={2.5} />
             </button>
           </span>
         ))}
@@ -246,7 +246,7 @@ export default function TagInput({
           onFocus={() => inputValue.trim() && setShowSuggestions(true)}
           placeholder={tags.length === 0 ? placeholder : ''}
           required={required && tags.length === 0}
-          className="flex-1 min-w-[120px] outline-none text-sm py-1"
+          className="flex-1 min-w-[120px] min-h-[2.5rem] outline-none text-base sm:text-sm py-1"
         />
       </div>
       {showSuggestions && suggestions.length > 0 && (
@@ -258,7 +258,7 @@ export default function TagInput({
             <button
               key={s}
               type="button"
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${
+              className={`min-h-[44px] w-full text-left px-3 py-3 text-base sm:min-h-0 sm:py-2 sm:text-sm hover:bg-blue-50 ${
                 i === highlightedIndex ? 'bg-blue-50' : ''
               }`}
               onMouseDown={(e) => {

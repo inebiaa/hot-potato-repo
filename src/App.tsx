@@ -26,8 +26,11 @@ import {
   type TagIdentityRecord,
 } from './lib/tagIdentity';
 import PrimarySearchBar from './components/PrimarySearchBar';
+import MasonryLaneFeed, { type MasonryLaneItem } from './components/MasonryLaneFeed';
 import EventJsonLd from './components/EventJsonLd';
 import { eventPagePath } from './lib/siteBase';
+import { clearAppModalParams, parseAppModal, setAppModalParams } from './lib/searchParamsModal';
+import { useBodyScrollLock } from './hooks/useBodyScrollLock';
 
 interface EventWithStats extends Event {
   average_rating: number;
@@ -45,13 +48,6 @@ function App() {
   const [filteredEvents, setFilteredEvents] = useState<EventWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
-  const [authModalPrompt, setAuthModalPrompt] = useState<string | undefined>(undefined);
-  const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [isTagRatingsModalOpen, setIsTagRatingsModalOpen] = useState(false);
-  const [tagRatingsData, setTagRatingsData] = useState<{ type: string; value: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedTags, setSelectedTags] = useState<{ type: string; value: string }[]>([]);
@@ -64,7 +60,6 @@ function App() {
   const [overlaySuggestCustomSlug, setOverlaySuggestCustomSlug] = useState<string | undefined>(undefined);
   const [tagModalRefreshTrigger, setTagModalRefreshTrigger] = useState(0);
   const [identitySearchHits, setIdentitySearchHits] = useState<TagIdentityRecord[]>([]);
-  const [upcomingExpanded, setUpcomingExpanded] = useState(false);
   const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasClearedFiltersForSharedLink = useRef(false);
   const overlayReorderEnteredAtRef = useRef<number>(0);
@@ -75,9 +70,45 @@ function App() {
   const [tagResolutionMap, setTagResolutionMap] = useState<TagResolutionMap | null>(null);
   const [profileReviewCounts, setProfileReviewCounts] = useState<{ visible: number; total: number } | null>(null);
 
+  const modalRoute = useMemo(() => parseAppModal(searchParams), [searchParams]);
+
+  const closeAppModal = useCallback(() => {
+    navigate({ pathname: location.pathname, search: clearAppModalParams(searchParams) });
+  }, [navigate, location.pathname, searchParams]);
+
   const openSettingsModal = useCallback(() => {
-    startTransition(() => setIsSettingsModalOpen(true));
-  }, []);
+    startTransition(() => {
+      navigate({ pathname: location.pathname, search: setAppModalParams(searchParams, 'settings') });
+    });
+  }, [navigate, location.pathname, searchParams]);
+
+  const openAddEventModal = useCallback(() => {
+    navigate({ pathname: location.pathname, search: setAppModalParams(searchParams, 'add-event') });
+  }, [navigate, location.pathname, searchParams]);
+
+  const openTagModal = useCallback(
+    (type: string, value: string) => {
+      navigate({
+        pathname: location.pathname,
+        search: setAppModalParams(searchParams, 'tag', { tagType: type, tagValue: value }),
+      });
+    },
+    [navigate, location.pathname, searchParams]
+  );
+
+  const openAuthModal = useCallback(
+    (mode: 'signin' | 'signup' = 'signin', prompt?: string) => {
+      navigate({
+        pathname: location.pathname,
+        search: setAppModalParams(searchParams, 'auth', { authMode: mode, authPrompt: prompt }),
+      });
+    },
+    [navigate, location.pathname, searchParams]
+  );
+
+  const closeAuthModal = useCallback(() => {
+    navigate({ pathname: location.pathname, search: clearAppModalParams(searchParams) });
+  }, [navigate, location.pathname, searchParams]);
 
   const handleSearchDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -107,7 +138,7 @@ function App() {
 
       if (error) throw error;
 
-      const settingsObj: any = {};
+      const settingsObj: Record<string, string> = {};
       data?.forEach((item) => {
         settingsObj[item.key] = item.value;
       });
@@ -264,6 +295,8 @@ function App() {
   useEffect(() => {
     fetchSettings();
     fetchEvents();
+    // Intentionally sync on auth user only; fetchSettings/fetchEvents close over latest setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   useEffect(() => {
@@ -392,17 +425,9 @@ function App() {
     return out.slice(0, 8);
   }, [searchQuery, searchableTags, identitySearchHits, identityIdsInUse]);
 
-  const openTagModal = (type: string, value: string) => {
-    setTagRatingsData({ type, value });
-    setIsTagRatingsModalOpen(true);
-  };
-
   const handleTagClick = (type: string, value: string) => {
     if (overlayEventId) closeEventOverlay();
-    else navigate('/');
-    setIsTagRatingsModalOpen(false);
-    setIsSettingsModalOpen(false);
-    setIsAddEventModalOpen(false);
+    else navigate({ pathname: '/', search: '' });
     setSelectedTags((prev) => {
       const key = `${type}:${value}`;
       const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
@@ -451,6 +476,20 @@ function App() {
   const showProfile = searchParams.get('profile') === '1';
   const showStats = searchParams.get('stats') === '1';
   const pathname = location.pathname;
+
+  const isAddEventModalOpen = modalRoute.modal === 'add-event';
+  const isSettingsModalOpen = modalRoute.modal === 'settings';
+  const isAuthModalOpen = modalRoute.modal === 'auth';
+  const isTagRatingsModalOpen =
+    !showStats && modalRoute.modal === 'tag' && !!modalRoute.tagType && !!modalRoute.tagValue;
+  const tagRatingsData = isTagRatingsModalOpen
+    ? { type: modalRoute.tagType, value: modalRoute.tagValue }
+    : null;
+
+  const isEventPanelModal =
+    modalRoute.modal === 'rate' ||
+    modalRoute.modal === 'view-ratings' ||
+    modalRoute.modal === 'edit-event';
 
   // Keep overlay state in sync with /event/:eventId (e.g. browser back)
   useEffect(() => {
@@ -511,63 +550,27 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
+    // closeEventOverlay is stable in behavior for Escape handling
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlayEventId]);
 
-  /* Focus overlay content when it opens so first tap isn't consumed by "activation" */
-  useEffect(() => {
-    if (overlayEventId && overlayCardWrapperRef.current) {
-      overlayCardWrapperRef.current.focus();
-    }
-  }, [overlayEventId]);
-
-  useEffect(() => {
-    if (overlayEventId && overlayCardWrapperRef.current) {
-      overlayCardWrapperRef.current.focus();
-    }
-  }, [overlayEventId]);
-
-  /* Focus overlay content so first tap works immediately (avoids browser "activation" delay) */
   useEffect(() => {
     if (overlayEventId && overlayCardWrapperRef.current) {
       overlayCardWrapperRef.current.focus({ preventScroll: true });
     }
   }, [overlayEventId]);
 
-  /* Focus overlay content when it opens so first tap isn't consumed by "activation" */
-  useEffect(() => {
-    if (overlayEventId && overlayCardWrapperRef.current) {
-      overlayCardWrapperRef.current.focus({ preventScroll: true });
-    }
-  }, [overlayEventId]);
-
-  useEffect(() => {
-    if (overlayEventId && overlayCardWrapperRef.current) {
-      overlayCardWrapperRef.current.focus();
-    }
-  }, [overlayEventId]);
-
-  useEffect(() => {
-    if (overlayEventId && overlayCardWrapperRef.current) {
-      overlayCardWrapperRef.current.focus();
-    }
-  }, [overlayEventId]);
-
-  // Lock background scroll when any popup/overlay or full-page view (stats/profile) is open
-  useEffect(() => {
-    const anyPopupOpen = !!(
-      overlayEventId ||
-      showStats ||
-      showProfile ||
-      isTagRatingsModalOpen ||
-      isSettingsModalOpen ||
-      isAddEventModalOpen ||
-      isAuthModalOpen
-    );
-    document.body.style.overflow = anyPopupOpen ? 'hidden' : '';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [overlayEventId, showStats, showProfile, isTagRatingsModalOpen, isSettingsModalOpen, isAddEventModalOpen, isAuthModalOpen]);
+  const anyPopupOpen = !!(
+    overlayEventId ||
+    showStats ||
+    showProfile ||
+    isTagRatingsModalOpen ||
+    isSettingsModalOpen ||
+    isAddEventModalOpen ||
+    isAuthModalOpen ||
+    isEventPanelModal
+  );
+  useBodyScrollLock(anyPopupOpen);
 
   useEffect(() => {
     if (!embedMode && eventIdFromUrl && !loading && filteredEvents.length > 0 && !overlayEventId) {
@@ -682,10 +685,6 @@ function App() {
     setFilteredEvents(filtered);
   }, [searchQuery, selectedCity, selectedTags, dateFilter, events, tagResolutionMap]);
 
-  useEffect(() => {
-    setUpcomingExpanded(false);
-  }, [searchQuery, selectedCity, selectedTags, dateFilter]);
-
   const overlayEventFromCache = overlayEventId ? (events.find((e) => e.id === overlayEventId) ?? filteredEvents.find((e) => e.id === overlayEventId)) : null;
   const [overlayEventFetched, setOverlayEventFetched] = useState<EventWithStats | null>(null);
 
@@ -718,6 +717,8 @@ function App() {
       }
     })();
     return () => { cancelled = true; };
+    // user referenced for user_rating; including full user would over-fetch on profile edits
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlayEventId, overlayEventFromCache, user?.id]);
 
   const overlayEvent = overlayEventFromCache ?? overlayEventFetched;
@@ -762,18 +763,6 @@ function App() {
     window.scrollTo(0, 0);
   };
 
-  const openAuthModal = (mode: 'signin' | 'signup' = 'signin', prompt?: string) => {
-    setAuthModalMode(mode);
-    setAuthModalPrompt(prompt);
-    setIsAuthModalOpen(true);
-  };
-
-  const closeAuthModal = () => {
-    setIsAuthModalOpen(false);
-    setAuthModalMode('signin');
-    setAuthModalPrompt(undefined);
-  };
-
   // Embed mode: show only the single event card, minimal layout
   if (embedMode && eventIdFromUrl) {
     const embedEvent = events.find((e) => e.id === eventIdFromUrl);
@@ -812,7 +801,7 @@ function App() {
         </div>
         <TagRatingsModal
           isOpen={isTagRatingsModalOpen}
-          onClose={() => setIsTagRatingsModalOpen(false)}
+          onClose={closeAppModal}
           tagType={tagRatingsData?.type || ''}
           tagValue={tagRatingsData?.value || ''}
           onEventClick={(eventId) => openEventOverlay(eventId, 'tagModal')}
@@ -821,6 +810,13 @@ function App() {
           onTagClick={openTagModal}
           tagResolutionMap={tagResolutionMap}
           cachedAllEvents={events}
+        />
+
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={closeAuthModal}
+          initialMode={modalRoute.authMode}
+          promptMessage={modalRoute.authPrompt}
         />
       </div>
       </TagDisplayProvider>
@@ -838,7 +834,7 @@ function App() {
   if (showStats) {
     return (
       <TagDisplayProvider map={tagResolutionMap}>
-      <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+      <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
         <AppHeader
           pathname={pathname}
           appSettings={appSettings}
@@ -848,7 +844,7 @@ function App() {
           onOpenStats={openStats}
           onOpenProfile={openProfile}
           onOpenSettings={openSettingsModal}
-          onAddEvent={() => setIsAddEventModalOpen(true)}
+          onAddEvent={openAddEventModal}
           onSignIn={() => openAuthModal('signin')}
           onSignOut={() => signOut()}
         />
@@ -938,14 +934,17 @@ function App() {
 
         <AddEventModal
           isOpen={isAddEventModalOpen}
-          onClose={() => setIsAddEventModalOpen(false)}
+          onClose={closeAppModal}
           onEventAdded={fetchEvents}
         />
 
         {isSettingsModalOpen && (
           <SettingsModal
             isOpen
-            onClose={() => { setIsSettingsModalOpen(false); fetchSettings(); }}
+            onClose={() => {
+              closeAppModal();
+              fetchSettings();
+            }}
             onSettingsUpdated={() => {
               fetchSettings();
               fetchTagResolutionForEvents(events).then(setTagResolutionMap);
@@ -954,6 +953,13 @@ function App() {
             onAccountUpdated={fetchEvents}
           />
         )}
+
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={closeAuthModal}
+          initialMode={modalRoute.authMode}
+          promptMessage={modalRoute.authPrompt}
+        />
       </div>
       </TagDisplayProvider>
     );
@@ -986,7 +992,7 @@ function App() {
     }
     return (
       <TagDisplayProvider map={tagResolutionMap}>
-      <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+      <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
         <AppHeader
           pathname={pathname}
           appSettings={appSettings}
@@ -996,7 +1002,7 @@ function App() {
           onOpenStats={openStats}
           onOpenProfile={openProfile}
           onOpenSettings={openSettingsModal}
-          onAddEvent={() => setIsAddEventModalOpen(true)}
+          onAddEvent={openAddEventModal}
           onSignIn={() => openAuthModal('signin')}
           onSignOut={() => signOut()}
         />
@@ -1050,7 +1056,7 @@ function App() {
 
         <TagRatingsModal
           isOpen={isTagRatingsModalOpen}
-          onClose={() => setIsTagRatingsModalOpen(false)}
+          onClose={closeAppModal}
           tagType={tagRatingsData?.type || ''}
           tagValue={tagRatingsData?.value || ''}
           onEventClick={(eventId) => openEventOverlay(eventId, 'tagModal')}
@@ -1102,14 +1108,17 @@ function App() {
 
         <AddEventModal
           isOpen={isAddEventModalOpen}
-          onClose={() => setIsAddEventModalOpen(false)}
+          onClose={closeAppModal}
           onEventAdded={fetchEvents}
         />
 
         {isSettingsModalOpen && (
           <SettingsModal
             isOpen
-            onClose={() => { setIsSettingsModalOpen(false); fetchSettings(); }}
+            onClose={() => {
+              closeAppModal();
+              fetchSettings();
+            }}
             onSettingsUpdated={() => {
               fetchSettings();
               fetchTagResolutionForEvents(events).then(setTagResolutionMap);
@@ -1118,6 +1127,13 @@ function App() {
             onAccountUpdated={fetchEvents}
           />
         )}
+
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={closeAuthModal}
+          initialMode={modalRoute.authMode}
+          promptMessage={modalRoute.authPrompt}
+        />
       </div>
       </TagDisplayProvider>
     );
@@ -1138,7 +1154,7 @@ function App() {
   return (
     <TagDisplayProvider map={tagResolutionMap}>
     {params.eventId && overlayEvent ? <EventJsonLd event={overlayEvent} /> : null}
-    <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+    <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
       <AppHeader
         pathname={pathname}
         appSettings={appSettings}
@@ -1148,7 +1164,7 @@ function App() {
         onOpenStats={openStats}
         onOpenProfile={openProfile}
         onOpenSettings={openSettingsModal}
-        onAddEvent={() => setIsAddEventModalOpen(true)}
+        onAddEvent={openAddEventModal}
         onSignIn={() => openAuthModal('signin')}
         onSignOut={() => signOut()}
       />
@@ -1227,7 +1243,7 @@ function App() {
               </p>
               {user && (
                 <button
-                  onClick={() => setIsAddEventModalOpen(true)}
+                  onClick={openAddEventModal}
                   className="px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                 >
                   Add Show
@@ -1258,18 +1274,14 @@ function App() {
           const upcoming = sortedByDate
             .filter((e) => isEventUpcoming(e.date))
             .sort((a, b) => eventSortKey(a.date) - eventSortKey(b.date));
-          const nextUpcoming = upcoming[0] ?? null;
-          const otherUpcoming = upcoming.slice(1);
-
           const ungroupedPast = [...pastEvents].sort(byDateDesc);
 
           const CARD_TOP_SPACER = 'h-6 shrink-0';
 
-          const renderCard = (event: EventWithStats, upcoming = false) => (
+          const renderCard = (event: EventWithStats) => (
             <div
               key={event.id}
               ref={(el) => { eventCardRefs.current[event.id] = el; }}
-              className={upcoming ? 'hover:opacity-90 transition-opacity' : ''}
             >
               <EventCard
                 event={event}
@@ -1284,157 +1296,33 @@ function App() {
                 customPerformerTags={[]}
                 viewHref={eventPagePath(event.id)}
                 onViewClick={(id, openWithWiggle, suggestSection, suggestCustomSlug) => openEventOverlay(id, undefined, openWithWiggle, suggestSection, suggestCustomSlug)}
-                imageOpacity={upcoming ? 0.6 : undefined}
               />
             </div>
           );
 
-          const upcomingBlock = upcoming.length > 1 && nextUpcoming ? (
-            <div className={`flex flex-col w-full min-w-0 ${!upcomingExpanded ? 'min-h-[520px] mb-16 md:mb-6 md:mr-6' : 'min-h-0 h-full'}`}>
-              <div className={`shrink-0 flex items-center ${CARD_TOP_SPACER}`} />
-              <div className={`relative flex-1 ${!upcomingExpanded ? 'min-h-[480px] pb-3' : 'overflow-visible'}`}>
-                {!upcomingExpanded && (() => {
-                  const stacked = [...otherUpcoming.slice(0, 3), nextUpcoming];
-                  const n = stacked.length;
-                  const offset = (n - 1) * 10;
-                  return (
-                    <div className="relative w-full">
-                      <button
-                        type="button"
-                        data-tag-pill
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setUpcomingExpanded((v) => !v); }}
-                        className="absolute top-2 right-2 z-50 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
-                        style={{
-                          backgroundColor: appSettings.footer_tags_bg_color || '#d1fae5',
-                          color: appSettings.footer_tags_text_color || '#065f46',
-                        }}
-                        aria-expanded={upcomingExpanded}
-                        aria-label={upcomingExpanded ? 'Collapse upcoming shows' : 'Expand upcoming shows'}
-                      >
-                        {upcomingExpanded ? `−${upcoming.length}` : `+${upcoming.length}`}
-                      </button>
-                      {stacked.slice(0, -1).map((event, i) => {
-                        const step = (n - 1 - i) * 10;
-                        return (
-                        <div
-                          key={event.id}
-                          className="absolute overflow-hidden pointer-events-none rounded-lg bg-white shadow-md flex flex-col"
-                          style={{
-                            left: i * 10,
-                            right: offset - i * 10,
-                            top: step,
-                            bottom: -step,
-                            zIndex: i,
-                            opacity: 0.6 + (i / Math.max(1, n - 1)) * 0.25,
-                          }}
-                        >
-                          {event.image_url ? (
-                            <img src={event.image_url} alt="" className="w-full h-48 object-cover rounded-t-lg" />
-                          ) : (
-                            <div className="w-full h-48 bg-gray-200 rounded-t-lg" />
-                          )}
-                          <div className="flex-1 min-h-[140px] bg-white rounded-b-lg" />
-                        </div>
-                        );
-                      })}
-                      <div
-                        ref={(el) => { if (nextUpcoming) eventCardRefs.current[nextUpcoming.id] = el; }}
-                        className="relative z-10"
-                        style={{ marginLeft: offset }}
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => {
-                          const target = e.target as HTMLElement;
-                          const isInteractive =
-                            target.closest('button') ||
-                            target.closest('a') ||
-                            target.closest('input') ||
-                            target.closest('[role="button"]') ||
-                            target.closest('[data-event-actions]') ||
-                            target.closest('[data-tag-pill]');
-                          if (isInteractive) return;
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setUpcomingExpanded((v) => !v);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setUpcomingExpanded((v) => !v);
-                          }
-                        }}
-                        aria-label="Expand upcoming shows"
-                      >
-                        <EventCard
-                          event={nextUpcoming!}
-                          averageRating={nextUpcoming!.average_rating}
-                          ratingCount={nextUpcoming!.rating_count}
-                          userRating={nextUpcoming!.user_rating}
-                          onRatingSubmitted={fetchEvents}
-                          onEventUpdated={fetchEvents}
-                          onTagClick={handleTagClick}
-                          onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
-                          tagColors={appSettings}
-                          customPerformerTags={[]}
-                          imageOpacity={0.6}
-                          onViewClick={() => setUpcomingExpanded((v) => !v)}
-                        />
-                      </div>
-                    </div>
-                  );
-                })()}
-                {upcomingExpanded && (
-                  <div className="relative flex h-full w-full min-h-[200px]">
-                    <button
-                      type="button"
-                      data-tag-pill
-                      onClick={() => setUpcomingExpanded((v) => !v)}
-                      className="absolute top-2 right-2 z-50 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
-                      style={{
-                        backgroundColor: appSettings.footer_tags_bg_color || '#d1fae5',
-                        color: appSettings.footer_tags_text_color || '#065f46',
-                      }}
-                      aria-expanded={upcomingExpanded}
-                      aria-label="Collapse upcoming shows"
-                    >
-                      −{upcoming.length}
-                    </button>
-                    <div className="flex-1 min-h-0 w-full">
-                      {renderCard(nextUpcoming, true)}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : null;
-
           const cardCell = (content: ReactNode, withSpacer = true) => (
-            <div className="flex flex-col h-full">
+            <div className="flex min-w-0 w-full flex-col self-start">
               {withSpacer && <div className={CARD_TOP_SPACER} />}
-              <div className="flex-1 min-h-0">{content}</div>
+              <div className="min-w-0">{content}</div>
             </div>
           );
 
+          const laneItems: MasonryLaneItem[] = [];
+
+          for (const event of upcoming) {
+            laneItems.push({
+              id: event.id,
+              children: cardCell(renderCard(event), false),
+            });
+          }
+          for (const event of ungroupedPast) {
+            laneItems.push({ id: event.id, children: cardCell(renderCard(event), false) });
+          }
+
+          // Shortest-column lanes: upcoming first (chronological), then past shows.
           return (
-              <div className="columns-[300px] gap-6">
-                {upcomingBlock && (
-                  <div key="upcoming" className="break-inside-avoid mb-6 w-full min-w-0">{upcomingBlock}</div>
-                )}
-                {upcomingExpanded && otherUpcoming.map((event) => (
-                  <div key={event.id} className="break-inside-avoid mb-6">
-                    {cardCell(renderCard(event, true))}
-                  </div>
-                ))}
-                {upcoming.length === 1 && nextUpcoming && (
-                  <div key={nextUpcoming.id} className="break-inside-avoid mb-6">
-                    {cardCell(renderCard(nextUpcoming, false))}
-                  </div>
-                )}
-                {ungroupedPast.map((event) => (
-                  <div key={event.id} className="break-inside-avoid mb-6">
-                    {cardCell(renderCard(event, false), true)}
-                  </div>
-                ))}
+              <div className="w-full">
+                <MasonryLaneFeed items={laneItems} columnMinWidthPx={220} gapPx={24} />
               </div>
             );
         })()}
@@ -1444,20 +1332,23 @@ function App() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={closeAuthModal}
-        initialMode={authModalMode}
-        promptMessage={authModalPrompt}
+        initialMode={modalRoute.authMode}
+        promptMessage={modalRoute.authPrompt}
       />
 
       <AddEventModal
         isOpen={isAddEventModalOpen}
-        onClose={() => setIsAddEventModalOpen(false)}
+        onClose={closeAppModal}
         onEventAdded={fetchEvents}
       />
 
       {isSettingsModalOpen && (
         <SettingsModal
           isOpen
-          onClose={() => { setIsSettingsModalOpen(false); fetchSettings(); }}
+          onClose={() => {
+            closeAppModal();
+            fetchSettings();
+          }}
           onSettingsUpdated={() => {
             fetchSettings();
             fetchTagResolutionForEvents(events).then(setTagResolutionMap);
@@ -1468,7 +1359,7 @@ function App() {
 
       <TagRatingsModal
         isOpen={isTagRatingsModalOpen}
-        onClose={() => setIsTagRatingsModalOpen(false)}
+        onClose={closeAppModal}
         tagType={tagRatingsData?.type || ''}
         tagValue={tagRatingsData?.value || ''}
         onEventClick={(eventId) => openEventOverlay(eventId, 'tagModal')}
