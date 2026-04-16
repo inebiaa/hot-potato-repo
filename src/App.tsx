@@ -431,7 +431,7 @@ function App() {
     setSelectedTags((prev) => {
       const key = `${type}:${value}`;
       const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
-      if (alreadySelected) return [];
+      if (alreadySelected) return prev;
       return [{ type, value }];
     });
     setSearchQuery('');
@@ -441,7 +441,7 @@ function App() {
     setSelectedTags((prev) => {
       const key = `${type}:${value}`;
       const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
-      if (alreadySelected) return [];
+      if (alreadySelected) return prev;
       return [{ type, value }];
     });
     setSearchQuery('');
