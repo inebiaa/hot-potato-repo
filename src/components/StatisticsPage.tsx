@@ -1,9 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { supabase, Event } from '../lib/supabase';
 import { getSeasonFromDate, sortSeasonsByDate } from '../lib/season';
 import { sameTagSpelling, tagArrayContainsNormalized } from '../lib/tagIdentity';
 import type { TagResolutionMap } from '../lib/tagDisplayResolution';
 import TagRatingsModal from './TagRatingsModal';
+import { clearAppModalParams, parseAppModal, setAppModalParams } from '../lib/searchParamsModal';
+import type { AppSettings } from '../types/appSettings';
 import StatisticsPageContent from './StatisticsPageContent';
 
 export interface TagStats {
@@ -15,7 +18,7 @@ export interface TagStats {
 interface StatisticsPageProps {
   isOpen: boolean;
   onClose: () => void;
-  tagColors: any;
+  tagColors: Partial<AppSettings>;
   /** Optional: open an event overlay from a tag (matches main page behavior). */
   onOpenEvent?: (eventId: string) => void;
   /** Optional: when this changes, refresh the tag ratings modal so counts stay in sync. */
@@ -42,14 +45,16 @@ export default function StatisticsPage({
   events: eventsProp,
   tagResolutionMap,
 }: StatisticsPageProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedCity, setSelectedCity] = useState<string>('');
   const [selectedSeason, setSelectedSeason] = useState<string>('');
   const [sortBy, setSortBy] = useState<'count' | 'name'>('count');
   const [loading, setLoading] = useState(true);
-  const [isTagRatingsModalOpen, setIsTagRatingsModalOpen] = useState(false);
-  const [selectedTag, setSelectedTag] = useState<{ type: string; value: string } | null>(null);
+  const [localTagModal, setLocalTagModal] = useState<{ type: string; value: string } | null>(null);
 
   useEffect(() => {
     if (!isOpen && !asPage) return;
@@ -186,9 +191,25 @@ export default function StatisticsPage({
   };
 
   const handleTagClick = (tag: TagStats) => {
-    setSelectedTag({ type: tag.type, value: tag.name });
-    setIsTagRatingsModalOpen(true);
+    if (asPage) {
+      navigate({
+        pathname: location.pathname,
+        search: setAppModalParams(searchParams, 'tag', { tagType: tag.type, tagValue: tag.name }),
+      });
+    } else {
+      setLocalTagModal({ type: tag.type, value: tag.name });
+    }
   };
+
+  const urlModal = useMemo(() => parseAppModal(searchParams), [searchParams]);
+  const selectedTag = useMemo(() => {
+    if (asPage && urlModal.modal === 'tag' && urlModal.tagType && urlModal.tagValue) {
+      return { type: urlModal.tagType, value: urlModal.tagValue };
+    }
+    if (!asPage) return localTagModal;
+    return null;
+  }, [asPage, urlModal.modal, urlModal.tagType, urlModal.tagValue, localTagModal]);
+  const isTagRatingsModalOpen = !!selectedTag;
 
   const allCities = Array.from(new Set(events.map(e => e.city).filter(Boolean))).sort();
   const allSeasons = sortSeasonsByDate(Array.from(new Set(events.map(e => getSeasonFromDate(e.date)))));
@@ -243,7 +264,13 @@ export default function StatisticsPage({
         <StatisticsPageContent {...contentProps} />
         <TagRatingsModal
           isOpen={isTagRatingsModalOpen}
-          onClose={() => setIsTagRatingsModalOpen(false)}
+          onClose={() => {
+            if (asPage) {
+              navigate({ pathname: location.pathname, search: clearAppModalParams(searchParams) });
+            } else {
+              setLocalTagModal(null);
+            }
+          }}
           tagType={selectedTag?.type || ''}
           tagValue={selectedTag?.value || ''}
           onEventClick={onOpenEvent}
@@ -269,7 +296,13 @@ export default function StatisticsPage({
 
       <TagRatingsModal
         isOpen={isTagRatingsModalOpen}
-        onClose={() => setIsTagRatingsModalOpen(false)}
+        onClose={() => {
+          if (asPage) {
+            navigate({ pathname: location.pathname, search: clearAppModalParams(searchParams) });
+          } else {
+            setLocalTagModal(null);
+          }
+        }}
         tagType={selectedTag?.type || ''}
         tagValue={selectedTag?.value || ''}
         onEventClick={onOpenEvent}

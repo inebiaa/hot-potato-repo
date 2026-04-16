@@ -1,37 +1,42 @@
-import React from 'react';
-import { findAccentInsensitiveMatch, normalizeTagNameKey } from '../lib/normalize';
-import { Event } from '../lib/supabase';
-import { getSeasonFromDate } from '../lib/season';
-import type { CommentTagColors } from '../lib/commentTagParsing';
+import { findAccentInsensitiveMatch, normalizeTagNameKey } from './normalize';
+import type { Event } from './supabase';
+import { getSeasonFromDate } from './season';
 
-interface TagStyle {
+/** Tag pill colors aligned with CommentWithTags / EventCard */
+export interface CommentTagColors {
+  producer_bg_color?: string;
+  producer_text_color?: string;
+  designer_bg_color?: string;
+  designer_text_color?: string;
+  model_bg_color?: string;
+  model_text_color?: string;
+  hair_makeup_bg_color?: string;
+  hair_makeup_text_color?: string;
+  city_bg_color?: string;
+  city_text_color?: string;
+  season_bg_color?: string;
+  season_text_color?: string;
+  header_tags_bg_color?: string;
+  header_tags_text_color?: string;
+  footer_tags_bg_color?: string;
+  footer_tags_text_color?: string;
+  optional_tags_bg_color?: string;
+  optional_tags_text_color?: string;
+}
+
+export interface TagStyleResult {
   value: string;
   bg: string;
   text: string;
 }
 
-interface CommentWithTagsProps {
-  comment: string;
-  event: Event;
-  tagColors?: CommentTagColors;
-  customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
-  className?: string;
-  /** When true, tag pills get the wiggle animation (e.g. when card is in reorder mode) */
-  wiggle?: boolean;
-}
-
-export default function CommentWithTags({
-  comment,
-  event,
-  tagColors,
-  customPerformerTags = [],
-  className = '',
-  wiggle = false
-}: CommentWithTagsProps) {
-  if (!comment || typeof comment !== 'string') return <span className={className}>{comment ?? ''}</span>;
-  if (!event || !event.id) return <span className={className}>"{comment}"</span>;
-
-  const tags: TagStyle[] = [];
+/** Get styled tag list for an event (for use in RatingModal insert buttons, etc.) */
+export function getEventTagStyles(
+  event: Event,
+  tagColors?: CommentTagColors,
+  customPerformerTags: { slug: string; bg_color: string; text_color: string }[] = []
+): TagStyleResult[] {
+  const tags: TagStyleResult[] = [];
   const add = (value: string, type: string, slug?: string) => {
     if (!value || tags.some((t) => normalizeTagNameKey(t.value) === normalizeTagNameKey(value))) return;
     let bg = '#e5e7eb';
@@ -69,7 +74,6 @@ export default function CommentWithTags({
     }
     tags.push({ value, bg, text });
   };
-
   (event.producers || []).forEach((v) => add(v, 'producer'));
   (event.featured_designers || []).forEach((v) => add(v, 'designer'));
   (event.models || []).forEach((v) => add(v, 'model'));
@@ -83,18 +87,32 @@ export default function CommentWithTags({
       (vals || []).forEach((v) => add(v, 'custom', slug));
     });
   }
+  return tags;
+}
 
-  // Sort by value length descending so "Dior Homme" matches before "Dior"
+export interface ParsedSegment {
+  type: 'text' | 'tag';
+  value: string;
+  tag?: TagStyleResult;
+}
+
+/** Parse comment into segments for display/editing. Uses same logic as CommentWithTags. */
+export function parseCommentToSegments(
+  comment: string,
+  event: Event,
+  tagColors?: CommentTagColors,
+  customPerformerTags: { slug: string; bg_color: string; text_color: string }[] = []
+): ParsedSegment[] {
+  const tagStyles = getEventTagStyles(event, tagColors, customPerformerTags);
+  if (tagStyles.length === 0) return comment ? [{ type: 'text', value: comment }] : [];
+  const tags = tagStyles;
   tags.sort((a, b) => b.value.length - a.value.length);
-
-  const segments: { type: 'text' | 'tag'; value: string; tag?: TagStyle }[] = [];
+  const segments: ParsedSegment[] = [];
   let remaining = comment;
-
   while (remaining.length > 0) {
     let earliest = -1;
-    let matchTag: TagStyle | null = null;
+    let matchTag: TagStyleResult | null = null;
     let matchLen = 0;
-
     for (const tag of tags) {
       const found = findAccentInsensitiveMatch(remaining, tag.value, 0);
       if (!found) continue;
@@ -105,36 +123,14 @@ export default function CommentWithTags({
         matchLen = len;
       }
     }
-
     if (earliest >= 0 && matchTag) {
-      if (earliest > 0) {
-        segments.push({ type: 'text', value: remaining.slice(0, earliest) });
-      }
-      const matched = remaining.slice(earliest, earliest + matchLen);
-      segments.push({ type: 'tag', value: matched, tag: matchTag });
+      if (earliest > 0) segments.push({ type: 'text', value: remaining.slice(0, earliest) });
+      segments.push({ type: 'tag', value: remaining.slice(earliest, earliest + matchLen), tag: matchTag });
       remaining = remaining.slice(earliest + matchLen);
     } else {
       segments.push({ type: 'text', value: remaining });
       remaining = '';
     }
   }
-
-  return (
-    <span className={className}>
-      {segments.map((seg, i) =>
-        seg.type === 'tag' && seg.tag ? (
-          <span
-            key={i}
-            data-tag-pill
-            className={`inline-flex items-center justify-center text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md not-italic font-normal mx-0.5 transition-colors hover:opacity-80 ${wiggle ? 'pill-wiggle' : ''}`}
-            style={{ backgroundColor: seg.tag.bg, color: seg.tag.text }}
-          >
-            {seg.value}
-          </span>
-        ) : (
-          <React.Fragment key={i}>{seg.value}</React.Fragment>
-        )
-      )}
-    </span>
-  );
+  return segments;
 }

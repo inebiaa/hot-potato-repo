@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Event } from '../lib/supabase';
-import { parseCommentToSegments } from './CommentWithTags';
+import { parseCommentToSegments } from '../lib/commentTagParsing';
 
 function escapeHtml(s: string): string {
   const div = document.createElement('div');
@@ -64,7 +64,7 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
       const html = segments
         .map((seg) =>
           seg.type === 'tag' && seg.tag
-            ? `<span contenteditable="false" data-tag-pill class="inline-flex items-center justify-center text-xs px-2 py-1 rounded-md not-italic font-normal mx-0.5 select-none transition-colors" style="background-color:${seg.tag.bg};color:${seg.tag.text}">${escapeHtml(seg.value)}</span>`
+            ? `<span contenteditable="false" data-tag-pill class="inline-flex items-center justify-center text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md not-italic font-normal mx-0.5 select-none transition-colors" style="background-color:${seg.tag.bg};color:${seg.tag.text}">${escapeHtml(seg.value)}</span>`
             : escapeHtml(seg.value)
         )
         .join('');

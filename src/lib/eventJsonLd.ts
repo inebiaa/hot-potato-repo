@@ -13,7 +13,8 @@ import { canonicalEventUrl, canonicalEventUrlFromParts, publicSiteOrigin } from 
  */
 export type EventJsonLdPrerender = { siteOrigin: string; viteBase: string };
 
-function absoluteImageUrl(
+/** Absolute image URL for JSON-LD, Open Graph, and email cards (same rules everywhere). */
+export function eventAbsoluteImageUrl(
   url: string | null | undefined,
   prerender?: EventJsonLdPrerender
 ): string | undefined {
@@ -135,7 +136,7 @@ export function buildEventJsonLd(event: Event, prerender?: EventJsonLdPrerender)
     obj.description = event.description.trim();
   }
 
-  const img = absoluteImageUrl(event.image_url, prerender);
+  const img = eventAbsoluteImageUrl(event.image_url, prerender);
   if (img) {
     obj.image = [img];
   }

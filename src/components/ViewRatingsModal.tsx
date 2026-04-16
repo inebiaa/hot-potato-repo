@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Star, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase, Event } from '../lib/supabase';
 import RatingModal from './RatingModal';
 import CommentWithTags from './CommentWithTags';
+import ModalShell from './ModalShell';
 
 interface Rating {
   id: string;
@@ -55,13 +56,7 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
   const [expandedRatingId, setExpandedRatingId] = useState<string | null>(null);
   const [editingRating, setEditingRating] = useState<Rating | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchRatings();
-    }
-  }, [isOpen, eventId]);
-
-  const fetchRatings = async () => {
+  const fetchRatings = useCallback(async () => {
     setLoading(true);
     try {
       const { data: ratingsData, error: ratingsError } = await supabase
@@ -96,7 +91,13 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
     } finally {
       setLoading(false);
     }
-  };
+  }, [eventId, singleUserId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      void fetchRatings();
+    }
+  }, [isOpen, fetchRatings]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -120,17 +121,16 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
   if (!isOpen) return null;
 
   return createPortal(
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="relative max-w-2xl w-full my-8" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-white rounded-lg shadow-xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+    <>
+      <ModalShell
+        onClose={onClose}
+        title={singleUserId ? 'Your review' : 'All Ratings'}
+        zClass="z-[100]"
+        panelClassName="max-w-2xl sm:rounded-xl"
+        bodyClassName="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-0"
+      >
         {!singleUserId ? (
-          <div className="p-6 border-b">
-            <div className="flex items-center justify-between gap-3 mb-1">
-              <h2 className="text-2xl font-bold text-gray-900">All Ratings</h2>
-            </div>
+          <div className="px-4 sm:px-6 py-4 border-b">
             <p className="text-gray-600">{eventName}</p>
           </div>
         ) : null}
@@ -158,7 +158,7 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
                   key={s}
                   type="button"
                   onClick={() => setEditingRating({ ...ratings[0], rating: s })}
-                  className="focus:outline-none"
+                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   aria-label={`Set rating to ${s}`}
                 >
                   <Star
@@ -182,7 +182,7 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
             <p className="text-gray-500 italic">No ratings yet for this event</p>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="p-6">
             <div className="space-y-3">
               {ratings.map((rating) => (
                 <div
@@ -269,17 +269,17 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
         )}
 
         {onViewEvent && !singleUserId ? (
-          <div className="p-4 border-t bg-gray-50 flex gap-2">
+          <div className="p-4 border-t bg-gray-50 flex gap-2 shrink-0">
             <button
+              type="button"
               onClick={() => onViewEvent(eventId)}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className="min-h-[44px] flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-base sm:text-sm"
             >
               View full event
             </button>
           </div>
         ) : null}
-        </div>
-      </div>
+      </ModalShell>
 
       {editingRating && event && (
         <RatingModal
@@ -287,12 +287,13 @@ export default function ViewRatingsModal({ isOpen, onClose, eventId, eventName, 
           onClose={() => setEditingRating(null)}
           event={event}
           existingRating={editingRating}
-          onRatingSubmitted={() => { setEditingRating(null); fetchRatings(); onRatingSubmitted?.(); }}
+          onRatingSubmitted={() => { setEditingRating(null); void fetchRatings(); onRatingSubmitted?.(); }}
           tagColors={tagColors}
           customPerformerTags={customPerformerTags}
+          zClass="z-[110]"
         />
       )}
-    </div>,
+    </>,
     document.body
   );
 }

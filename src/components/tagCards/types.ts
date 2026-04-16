@@ -1,11 +1,30 @@
 import type { Event } from '../../lib/supabase';
 
+/** Fields loaded for tag matching and tag modal cards (subset of `Event`). */
+export type TagRatingEventSlice = Pick<
+  Event,
+  | 'id'
+  | 'name'
+  | 'date'
+  | 'producers'
+  | 'featured_designers'
+  | 'models'
+  | 'hair_makeup'
+  | 'city'
+  | 'location'
+  | 'genre'
+  | 'header_tags'
+  | 'footer_tags'
+  | 'custom_tags'
+  | 'custom_tag_meta'
+>;
+
 export interface EventRating {
   event_id: string;
   event_name: string;
   avg_rating: number;
   rating_count: number;
-  event?: Event;
+  event?: TagRatingEventSlice;
 }
 
 export interface TagColorsForPills {

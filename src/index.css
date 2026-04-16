@@ -15,9 +15,27 @@
   transition-property: color, background-color, border-color, opacity, box-shadow;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .pill-wiggle {
+    animation: none;
+  }
+}
+
 /* Remove 300ms tap delay on mobile so long-press works on first try */
 [data-tag-pill] {
   touch-action: manipulation;
+}
+
+/* Tag pills: keep tap-friendly layout without forcing a tall min-height slab */
+@media (max-width: 639px) {
+  span[data-tag-pill] {
+    display: inline-flex;
+    align-items: center;
+  }
+  button[data-tag-pill] {
+    display: inline-flex;
+    align-items: center;
+  }
 }
 
 /* Consistent scrollbar styling across the app */

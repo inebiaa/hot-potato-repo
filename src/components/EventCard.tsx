@@ -1,9 +1,9 @@
-import { Link } from 'react-router-dom';
-import { Calendar, MapPin, Star, Edit, Trash2, Share2, MoreVertical, Plus, Check, X } from 'lucide-react';
+import { Link, useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { Calendar, MapPin, Star, Edit, Trash2, Share2, Mail, MoreVertical, Plus, Check, X } from 'lucide-react';
 import { Event, Rating, supabase } from '../lib/supabase';
 import { getIcon } from '../lib/eventCardIcons';
 import { getSeasonFromDate } from '../lib/season';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import RatingModal from './RatingModal';
 import EditEventModal from './EditEventModal';
 import ViewRatingsModal from './ViewRatingsModal';
@@ -15,7 +15,10 @@ import { ensureAlias, ensureIdentity, findIdentityByName, normalizeTagName, type
 import { tryNormalizeExternalUrl } from '../lib/externalUrl';
 import { isEventUpcoming } from '../lib/eventDates';
 import EventCountdownPill from './EventCountdownPill';
+import { buildEventEmailPlainText, buildEventEmailRichHtml } from '../lib/eventEmailRichCard';
+import { formatEventDateDisplay } from '../lib/formatEventDate';
 import { canonicalEventUrl } from '../lib/siteBase';
+import { clearAppModalParams, parseAppModal, setAppModalParams } from '../lib/searchParamsModal';
 
 interface EventCardProps {
   event: Event;
@@ -111,11 +114,28 @@ export default function EventCard({
   wiggleOnlyClearsOnClickAway = false,
   onReorderModeEntered
 }: EventCardProps) {
-  const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
-  const [isViewRatingsModalOpen, setIsViewRatingsModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams();
+  const [searchParams] = useSearchParams();
+  const parsedModal = useMemo(() => parseAppModal(searchParams), [searchParams]);
+  const panelEventId = params.eventId ?? parsedModal.targetEventId ?? '';
+  const isRatingModalOpen = parsedModal.modal === 'rate' && panelEventId === event.id;
+  const isViewRatingsModalOpen = parsedModal.modal === 'view-ratings' && panelEventId === event.id;
+  const isEditModalOpen = parsedModal.modal === 'edit-event' && panelEventId === event.id;
+
+  const closeEventPanels = () => {
+    navigate({ pathname: location.pathname, search: clearAppModalParams(searchParams) });
+  };
+
+  const openEventPanel = (m: 'rate' | 'view-ratings' | 'edit-event') => {
+    navigate({
+      pathname: location.pathname,
+      search: setAppModalParams(searchParams, m, { targetEventId: event.id }),
+    });
+  };
   const [isDeleting, setIsDeleting] = useState(false);
-  const [shareCopied, setShareCopied] = useState<'link' | 'embed' | 'embedcode' | null>(null);
+  const [shareCopied, setShareCopied] = useState<'link' | 'embed' | 'embedcode' | 'email' | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [expandedTagSections, setExpandedTagSections] = useState<Record<string, boolean>>({});
   const [orderedTags, setOrderedTags] = useState({
@@ -185,7 +205,15 @@ export default function EventCard({
     return !!user && s.suggested_by === user.id;
   });
 
-  const readSavedOrder = () => {
+  const readSavedOrder = useCallback((): {
+    producers?: string[];
+    featured_designers?: string[];
+    models?: string[];
+    hair_makeup?: string[];
+    header_tags?: string[];
+    footer_tags?: string[];
+    custom_tags?: Record<string, string[]>;
+  } | null => {
     try {
       const raw = window.localStorage.getItem(TAG_ORDER_STORAGE_KEY);
       if (!raw) return null;
@@ -202,7 +230,7 @@ export default function EventCard({
     } catch {
       return null;
     }
-  };
+  }, [event.id]);
 
   /** Merge event's current tags (source of truth) with saved display order. Saved order only affects ordering; added/removed tags come from current. */
   const mergeWithSavedOrder = (current: string[], saved?: string[] | null): string[] => {
@@ -272,9 +300,9 @@ export default function EventCard({
     setCustomReorderSlug(null);
     setCustomDragIndex(null);
     setCustomDropIndex(null);
-  }, [event.id, event.producers, event.featured_designers, event.models, event.hair_makeup, event.genre, event.header_tags, event.footer_tags, event.custom_tags]);
+  }, [event.id, event.producers, event.featured_designers, event.models, event.hair_makeup, event.genre, event.header_tags, event.footer_tags, event.custom_tags, readSavedOrder]);
 
-  const fetchPendingSuggestions = async () => {
+  const fetchPendingSuggestions = useCallback(async () => {
     const { data, error } = await supabase
       .from('pending_tag_suggestions')
       .select('*')
@@ -289,15 +317,15 @@ export default function EventCard({
     }
     setPendingError(null);
     setPendingSuggestions((data || []) as PendingTagSuggestion[]);
-  };
+  }, [event.id]);
 
   useEffect(() => {
-    if (user) fetchPendingSuggestions();
+    if (user) void fetchPendingSuggestions();
     else {
       setPendingError(null);
       setPendingSuggestions([]);
     }
-  }, [event.id, user, isApprover]);
+  }, [event.id, user, isApprover, fetchPendingSuggestions]);
 
   const countdownOpenUrl = useMemo(
     () => tryNormalizeExternalUrl(event.countdown_link),
@@ -537,6 +565,41 @@ export default function EventCard({
       document.body.removeChild(ta);
       setShareCopied(type);
       setTimeout(() => setShareCopied(null), 2000);
+    }
+  };
+
+  const copyEventEmailCard = async () => {
+    const plain = buildEventEmailPlainText(event);
+    const html = buildEventEmailRichHtml(event);
+    const markCopied = () => {
+      setShareCopied('email');
+      setTimeout(() => setShareCopied(null), 2000);
+    };
+    try {
+      if (typeof navigator.clipboard?.write === 'function' && typeof ClipboardItem !== 'undefined') {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': new Blob([plain], { type: 'text/plain' }),
+            'text/html': new Blob([html], { type: 'text/html' }),
+          }),
+        ]);
+        markCopied();
+        return;
+      }
+    } catch {
+      /* fall through to plain text */
+    }
+    try {
+      await navigator.clipboard.writeText(plain);
+      markCopied();
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = plain;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      markCopied();
     }
   };
 
@@ -794,17 +857,6 @@ export default function EventCard({
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const [year, month, day] = dateString.split('-');
-    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
   const handleCardClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     const isInteractive = target.closest('button') || target.closest('a') || target.closest('[data-event-actions]') || target.closest('[data-tag-pill]');
@@ -836,12 +888,13 @@ export default function EventCard({
 
   if (stackPhotoOnly) {
     return (
-      <div className={`rounded-lg overflow-hidden shrink-0 h-48 ${event.image_url ? 'bg-transparent' : 'bg-gray-200'}`}>
+      <div className={`rounded-lg shadow-md overflow-hidden shrink-0 h-48 ${event.image_url ? 'bg-transparent' : 'bg-gray-200'}`}>
         {event.image_url ? (
           <img
             src={event.image_url}
             alt=""
             className="w-full h-full object-cover"
+            style={imageOpacity !== undefined ? { opacity: imageOpacity } : undefined}
           />
         ) : null}
       </div>
@@ -857,7 +910,7 @@ export default function EventCard({
     return (
       <span
         data-tag-pill
-        className={`inline-flex items-center rounded-md bg-gray-300 text-gray-600 text-xs pl-2 pr-2 py-1 min-w-[100px] ${showWiggle ? 'pill-wiggle' : ''}`}
+        className={`inline-flex items-center rounded-md bg-gray-300 text-gray-600 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 min-w-[100px] ${showWiggle ? 'pill-wiggle' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -1007,11 +1060,22 @@ export default function EventCard({
                       <Share2 size={14} className="text-gray-500" />
                       <span>Copy embed code</span>
                     </button>
+                    <button
+                      onClick={() => { void copyEventEmailCard(); setShowActionsMenu(false); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between border-t border-gray-100"
+                    >
+                      <Mail size={14} className="text-gray-500" />
+                      <span>Copy for email</span>
+                      {shareCopied === 'email' && <span className="text-green-600 text-xs">Copied!</span>}
+                    </button>
                     {canEdit && (
                       <>
                         <div className="border-t border-gray-100 my-1" />
                         <button
-                          onClick={() => { setIsEditModalOpen(true); setShowActionsMenu(false); }}
+                          onClick={() => {
+                            openEventPanel('edit-event');
+                            setShowActionsMenu(false);
+                          }}
                           className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
                         >
                           <Edit size={14} className="text-blue-600" />
@@ -1050,7 +1114,7 @@ export default function EventCard({
                     e.dataTransfer.effectAllowed = 'copy';
                   }
                 }}
-                className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-1 rounded-md text-xs transition-all hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''}`}
+                className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md text-xs transition-all hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''}`}
                 style={{
                   backgroundColor: tagColors?.city_bg_color || '#dbeafe',
                   color: tagColors?.city_text_color || '#1e40af'
@@ -1078,7 +1142,7 @@ export default function EventCard({
                       e.dataTransfer.effectAllowed = 'copy';
                     }
                   }}
-                  className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-1 rounded-md text-xs transition-all hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''}`}
+                  className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md text-xs transition-all hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''}`}
                   style={{
                     backgroundColor: tagColors?.season_bg_color || '#ffedd5',
                     color: tagColors?.season_text_color || '#c2410c'
@@ -1111,7 +1175,7 @@ export default function EventCard({
                         if (!isAnyReorderMode) onTagClick('header_tags', resolveTag('header_tags', tag).canonical);
                       })}
                       data-tag-pill
-                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 whitespace-nowrap ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 whitespace-nowrap ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                       {...tagInteractionProps('header_tags', idx, 'header_tags', tag)}
                       style={{
                         backgroundColor: tagColors?.header_tags_bg_color || '#ccfbf1',
@@ -1130,7 +1194,7 @@ export default function EventCard({
                     <span
                       key={suggestion.id}
                       data-tag-pill
-                      className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
+                      className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
                       onMouseDown={() => startLongPress('header_tags')}
                       onMouseUp={(e) => clearLongPress(e)}
                       onTouchStart={() => startLongPress('header_tags')}
@@ -1166,7 +1230,7 @@ export default function EventCard({
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'header_tags' }); setNewTagValue(''); }}
-                      className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
+                      className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
                       title="Suggest tag"
                     >
                       <Plus size={12} />
@@ -1176,7 +1240,7 @@ export default function EventCard({
                     <button
                       type="button"
                       onClick={() => toggleTagSection('header_tags')}
-                      className="text-xs text-gray-400 hover:text-gray-600 inline-flex items-center shrink-0"
+                      className="text-xs text-gray-400 hover:text-gray-600 inline-flex items-center shrink-0 justify-center max-sm:px-2 max-sm:py-2 rounded-md"
                       title={expandedTagSections['header_tags'] ? 'Show less' : 'View more tags'}
                     >
                       {expandedTagSections['header_tags'] ? '−' : `+${tags.length - TAG_LIMIT}`}
@@ -1194,7 +1258,7 @@ export default function EventCard({
           <div className="space-y-1 mb-4">
             <div className="flex items-center text-gray-500 text-sm">
               <Calendar size={16} className="mr-2 flex-shrink-0" />
-              {formatDate(event.date)}
+              {formatEventDateDisplay(event.date)}
             </div>
             {(() => {
               const addressLine =
@@ -1244,7 +1308,7 @@ export default function EventCard({
                           if (!isAnyReorderMode) onTagClick('producer', resolveTag('producer', producer).canonical);
                         })}
                         data-tag-pill
-                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                         {...tagInteractionProps('producers', idx, 'producer', producer)}
                         style={{
                           backgroundColor: tagColors?.producer_bg_color || '#f3f4f6',
@@ -1262,7 +1326,7 @@ export default function EventCard({
                       <span
                         key={suggestion.id}
                         data-tag-pill
-                        className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
+                        className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
                         onMouseDown={() => startLongPress('producers')}
                         onMouseUp={(e) => clearLongPress(e)}
                         onTouchStart={() => startLongPress('producers')}
@@ -1277,14 +1341,14 @@ export default function EventCard({
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'producers' }); setNewTagValue(''); }}
-                        className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
+                        className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
                         title="Suggest producer"
                       >
                         <Plus size={12} />
                       </button>
                     )}
                     {tags.length > TAG_LIMIT && (
-                      <button type="button" onClick={() => toggleTagSection('producers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['producers'] ? 'Show less' : 'View more tags'}>
+                      <button type="button" onClick={() => toggleTagSection('producers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center max-sm:px-2 max-sm:py-2 rounded-md" title={expandedTagSections['producers'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['producers'] ? '−' : `+${tags.length - TAG_LIMIT}`}
                       </button>
                     )}
@@ -1313,7 +1377,7 @@ export default function EventCard({
                           if (!isAnyReorderMode) onTagClick('designer', resolveTag('designer', designer).canonical);
                         })}
                         data-tag-pill
-                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                         {...tagInteractionProps('featured_designers', idx, 'designer', designer)}
                         style={{
                           backgroundColor: tagColors?.designer_bg_color || '#fef3c7',
@@ -1328,19 +1392,19 @@ export default function EventCard({
                       const isOwn = !!user && suggestion.suggested_by === user.id;
                       const canRemove = isApprover || isOwn;
                       return (
-                      <span key={suggestion.id} data-tag-pill className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`} onMouseDown={() => startLongPress('featured_designers')} onMouseUp={(e) => clearLongPress(e)} onTouchStart={() => startLongPress('featured_designers')} onTouchEnd={(e) => clearLongPress(e)}>
+                      <span key={suggestion.id} data-tag-pill className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`} onMouseDown={() => startLongPress('featured_designers')} onMouseUp={(e) => clearLongPress(e)} onTouchStart={() => startLongPress('featured_designers')} onTouchEnd={(e) => clearLongPress(e)}>
                         <span>{suggestion.proposed_name}</span>
                         {renderSuggestionActions(suggestion, isOwn, canRemove)}
                       </span>
                     );})}
                     {suggestPill('featured_designers')}
                     {isAnyReorderMode && addingFor?.section !== 'featured_designers' && (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'featured_designers' }); setNewTagValue(''); }} className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest designer">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'featured_designers' }); setNewTagValue(''); }} className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest designer">
                         <Plus size={12} />
                       </button>
                     )}
                     {tags.length > TAG_LIMIT && (
-                      <button type="button" onClick={() => toggleTagSection('designers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['designers'] ? 'Show less' : 'View more tags'}>
+                      <button type="button" onClick={() => toggleTagSection('designers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center max-sm:px-2 max-sm:py-2 rounded-md" title={expandedTagSections['designers'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['designers'] ? '−' : `+${tags.length - TAG_LIMIT}`}
                       </button>
                     )}
@@ -1369,7 +1433,7 @@ export default function EventCard({
                           if (!isAnyReorderMode) onTagClick('model', resolveTag('model', model).canonical);
                         })}
                         data-tag-pill
-                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                         {...tagInteractionProps('models', idx, 'model', model)}
                         style={{
                           backgroundColor: tagColors?.model_bg_color || '#fce7f3',
@@ -1384,19 +1448,19 @@ export default function EventCard({
                       const isOwn = !!user && suggestion.suggested_by === user.id;
                       const canRemove = isApprover || isOwn;
                       return (
-                      <span key={suggestion.id} data-tag-pill className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`} onMouseDown={() => startLongPress('models')} onMouseUp={(e) => clearLongPress(e)} onTouchStart={() => startLongPress('models')} onTouchEnd={(e) => clearLongPress(e)}>
+                      <span key={suggestion.id} data-tag-pill className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`} onMouseDown={() => startLongPress('models')} onMouseUp={(e) => clearLongPress(e)} onTouchStart={() => startLongPress('models')} onTouchEnd={(e) => clearLongPress(e)}>
                         <span>{suggestion.proposed_name}</span>
                         {renderSuggestionActions(suggestion, isOwn, canRemove)}
                       </span>
                     );})}
                     {suggestPill('models')}
                     {isAnyReorderMode && addingFor?.section !== 'models' && (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'models' }); setNewTagValue(''); }} className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest model">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'models' }); setNewTagValue(''); }} className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest model">
                         <Plus size={12} />
                       </button>
                     )}
                     {tags.length > TAG_LIMIT && (
-                      <button type="button" onClick={() => toggleTagSection('models')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['models'] ? 'Show less' : 'View more tags'}>
+                      <button type="button" onClick={() => toggleTagSection('models')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center max-sm:px-2 max-sm:py-2 rounded-md" title={expandedTagSections['models'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['models'] ? '−' : `+${tags.length - TAG_LIMIT}`}
                       </button>
                     )}
@@ -1425,7 +1489,7 @@ export default function EventCard({
                           if (!isAnyReorderMode) onTagClick('hair_makeup', resolveTag('hair_makeup', artist).canonical);
                         })}
                         data-tag-pill
-                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                         {...tagInteractionProps('hair_makeup', idx, 'hair_makeup', artist)}
                         style={{
                           backgroundColor: tagColors?.hair_makeup_bg_color || '#f3e8ff',
@@ -1443,7 +1507,7 @@ export default function EventCard({
                       <span
                         key={suggestion.id}
                         data-tag-pill
-                        className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
+                        className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
                         onMouseDown={() => startLongPress('hair_makeup')}
                         onMouseUp={(e) => clearLongPress(e)}
                         onTouchStart={() => startLongPress('hair_makeup')}
@@ -1455,12 +1519,12 @@ export default function EventCard({
                     );})}
                     {suggestPill('hair_makeup')}
                     {isAnyReorderMode && addingFor?.section !== 'hair_makeup' && (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'hair_makeup' }); setNewTagValue(''); }} className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest artist">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'hair_makeup' }); setNewTagValue(''); }} className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest artist">
                         <Plus size={12} />
                       </button>
                     )}
                     {tags.length > TAG_LIMIT && (
-                      <button type="button" onClick={() => toggleTagSection('hair_makeup')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['hair_makeup'] ? 'Show less' : 'View more tags'}>
+                      <button type="button" onClick={() => toggleTagSection('hair_makeup')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center max-sm:px-2 max-sm:py-2 rounded-md" title={expandedTagSections['hair_makeup'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['hair_makeup'] ? '−' : `+${tags.length - TAG_LIMIT}`}
                       </button>
                     )}
@@ -1510,7 +1574,7 @@ export default function EventCard({
                               }
                             })}
                             data-tag-pill
-                            className={`text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && customDropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                            className={`inline-flex items-center text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && customDropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                             {...customTagInteractionProps(tagDef.slug, idx, val)}
                             style={{
                               backgroundColor: tagDef.bg_color || '#e0e7ff',
@@ -1528,7 +1592,7 @@ export default function EventCard({
                           <span
                             key={suggestion.id}
                             data-tag-pill
-                            className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
+                            className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
                             onMouseDown={() => startCustomLongPress(tagDef.slug)}
                             onMouseUp={(e) => clearLongPress(e)}
                             onTouchStart={() => startCustomLongPress(tagDef.slug)}
@@ -1543,7 +1607,7 @@ export default function EventCard({
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'custom', customSlug: tagDef.slug, label: tagDef.label }); setNewTagValue(''); }}
-                            className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
+                            className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
                             title={`Suggest ${tagDef.label}`}
                           >
                             <Plus size={12} />
@@ -1553,7 +1617,7 @@ export default function EventCard({
                           <button
                             type="button"
                             onClick={() => toggleTagSection(`custom_${tagDef.slug}`)}
-                            className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0"
+                            className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center max-sm:px-2 max-sm:py-2 rounded-md"
                           >
                             {expandedTagSections[`custom_${tagDef.slug}`] ? '−' : `+${tags.length - TAG_LIMIT}`}
                           </button>
@@ -1567,7 +1631,8 @@ export default function EventCard({
 
           <div className="flex items-center justify-between pt-4 border-t">
             <button
-              onClick={() => setIsViewRatingsModalOpen(true)}
+              type="button"
+              onClick={() => openEventPanel('view-ratings')}
               className="flex items-center hover:bg-gray-50 p-2 -ml-2 transition-colors group"
               title="View all ratings"
             >
@@ -1586,14 +1651,15 @@ export default function EventCard({
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 if (user) {
-                  setIsRatingModalOpen(true);
+                  openEventPanel('rate');
                   return;
                 }
                 onRequireAuth?.();
               }}
-              className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="min-h-[44px] px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium"
             >
               {user && userRating ? 'Update' : 'Rate Show'}
             </button>
@@ -1632,7 +1698,7 @@ export default function EventCard({
                         if (!isAnyReorderMode) onTagClick('footer_tags', resolveTag('footer_tags', tag).canonical);
                       })}
                       data-tag-pill
-                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
                       {...tagInteractionProps('footer_tags', idx, 'footer_tags', tag)}
                       style={{
                         backgroundColor: tagColors?.footer_tags_bg_color || '#d1fae5',
@@ -1650,7 +1716,7 @@ export default function EventCard({
                     <span
                       key={suggestion.id}
                       data-tag-pill
-                      className={`relative inline-flex items-center gap-1 text-xs pl-2 pr-2 py-1 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
+                      className={`relative inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md bg-gray-300 text-gray-600 cursor-pointer select-none ${showWiggle ? 'pill-wiggle' : ''}`}
                       onMouseDown={() => startLongPress('footer_tags')}
                       onMouseUp={(e) => clearLongPress(e)}
                       onTouchStart={() => startLongPress('footer_tags')}
@@ -1665,14 +1731,14 @@ export default function EventCard({
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'footer_tags' }); setNewTagValue(''); }}
-                      className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex"
+                      className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
                       title="Suggest collection"
                     >
                       <Plus size={12} />
                     </button>
                   )}
                   {tags.length > TAG_LIMIT && (
-                    <button type="button" onClick={() => toggleTagSection('footer_tags')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0" title={expandedTagSections['footer_tags'] ? 'Show less' : 'View more tags'}>
+                    <button type="button" onClick={() => toggleTagSection('footer_tags')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center max-sm:px-2 max-sm:py-2 rounded-md" title={expandedTagSections['footer_tags'] ? 'Show less' : 'View more tags'}>
                       {expandedTagSections['footer_tags'] ? '−' : `+${tags.length - TAG_LIMIT}`}
                     </button>
                   )}
@@ -1685,7 +1751,7 @@ export default function EventCard({
 
       <RatingModal
         isOpen={isRatingModalOpen}
-        onClose={() => setIsRatingModalOpen(false)}
+        onClose={closeEventPanels}
         event={event}
         existingRating={userRating}
         onRatingSubmitted={onRatingSubmitted}
@@ -1695,7 +1761,7 @@ export default function EventCard({
 
       <ViewRatingsModal
         isOpen={isViewRatingsModalOpen}
-        onClose={() => setIsViewRatingsModalOpen(false)}
+        onClose={closeEventPanels}
         eventId={event.id}
         eventName={event.name}
         event={event}
@@ -1707,7 +1773,7 @@ export default function EventCard({
 
       <EditEventModal
         isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
+        onClose={closeEventPanels}
         event={event}
         onEventUpdated={onEventUpdated}
       />

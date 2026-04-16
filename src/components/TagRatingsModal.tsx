@@ -6,7 +6,8 @@ import type { Event } from '../lib/supabase';
 import { eventMatchesVenueTag, type TagResolutionMap } from '../lib/tagDisplayResolution';
 import { sameTagSpelling, tagArrayContainsNormalized } from '../lib/tagIdentity';
 import TagCardRouter from './tagCards/TagCardRouter';
-import type { EventRating } from './tagCards/types';
+import ModalShell from './ModalShell';
+import type { EventRating, TagRatingEventSlice } from './tagCards/types';
 
 interface TagRatingsModalProps {
   isOpen: boolean;
@@ -96,6 +97,8 @@ export default function TagRatingsModal({
     return () => {
       fetchSeqRef.current += 1;
     };
+    // fetchTagRatings is async and reads latest props; listing all deps would refetch excessively
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, tagType, tagValue, refreshTrigger, tagResolutionMap, eventsForTag, cachedAllEvents]);
 
   const matchEvent = (e: {
@@ -151,7 +154,7 @@ export default function TagRatingsModal({
     setLoading(true);
 
     try {
-      let events: any[];
+      let events: TagRatingEventSlice[];
       if (eventsForTag != null) {
         events = eventsForTag;
       } else if (cachedAllEvents !== undefined) {
@@ -165,7 +168,7 @@ export default function TagRatingsModal({
         if (eventsError) throw eventsError;
 
         if (isFetchStale(seq)) return;
-        events = (allEvents || []).filter((e: any) => matchEvent(e));
+        events = ((allEvents || []) as TagRatingEventSlice[]).filter((e) => matchEvent(e));
       }
 
       if (isFetchStale(seq)) return;
@@ -181,7 +184,7 @@ export default function TagRatingsModal({
         return;
       }
 
-      const eventIds = events.map((e: any) => e.id);
+      const eventIds = events.map((e) => e.id);
 
       const { data: ratingsRows, error: ratingsError } = await supabase
         .from('ratings')
@@ -194,9 +197,9 @@ export default function TagRatingsModal({
 
       const ratings = ratingsRows || [];
 
-      const eventRatingsMap = new Map<string, { sum: number; count: number; name: string; event?: Event }>();
+      const eventRatingsMap = new Map<string, { sum: number; count: number; name: string; event?: TagRatingEventSlice }>();
 
-      events.forEach((event: any) => {
+      events.forEach((event) => {
         eventRatingsMap.set(event.id, { sum: 0, count: 0, name: event.name, event });
       });
 
@@ -262,23 +265,25 @@ export default function TagRatingsModal({
   };
 
   const modal = (
-    <div
-      className={`fixed inset-0 z-[70] flex justify-center items-start overflow-y-auto bg-black bg-opacity-50 px-4 py-8 ${eventOverlayOpen ? 'pointer-events-none' : ''}`}
-      onClick={(e) => e.target === e.currentTarget && handleBackdropClick()}
+    <ModalShell
+      onClose={handleBackdropClick}
+      ariaLabel="Tag ratings"
+      zClass="z-[70]"
+      panelClassName="max-w-md sm:rounded-lg"
+      hideTitleBar
+      backdropClassName={eventOverlayOpen ? 'pointer-events-none' : ''}
     >
-      <div className="relative max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-12 px-6">
-              <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin mb-3" />
-              <p className="text-sm text-gray-500">Loading…</p>
-            </div>
-          ) : (
-            <TagCardRouter tagType={tagType} {...sharedCardProps} />
-          )}
-        </div>
+      <div className={eventOverlayOpen ? 'pointer-events-none' : ''}>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-12 px-6">
+            <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin mb-3" />
+            <p className="text-sm text-gray-500">Loading…</p>
+          </div>
+        ) : (
+          <TagCardRouter tagType={tagType} {...sharedCardProps} />
+        )}
       </div>
-    </div>
+    </ModalShell>
   );
 
   return isOpen && typeof document !== 'undefined' ? createPortal(modal, document.body) : null;

@@ -4,7 +4,8 @@ import { Star } from 'lucide-react';
 import { supabase, Event, Rating } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import CommentEditor from './CommentEditor';
-import { getEventTagStyles } from './CommentWithTags';
+import { getEventTagStyles } from '../lib/commentTagParsing';
+import ModalShell from './ModalShell';
 
 interface RatingModalTagColors {
   producer_bg_color?: string;
@@ -35,6 +36,7 @@ interface RatingModalProps {
   onRatingSubmitted: () => void;
   tagColors?: RatingModalTagColors;
   customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
+  zClass?: string;
 }
 
 export default function RatingModal({
@@ -44,7 +46,8 @@ export default function RatingModal({
   existingRating,
   onRatingSubmitted,
   tagColors,
-  customPerformerTags = []
+  customPerformerTags = [],
+  zClass = 'z-[100]',
 }: RatingModalProps) {
   const [rating, setRating] = useState(existingRating?.rating || 0);
   const [hoveredRating, setHoveredRating] = useState(0);
@@ -142,23 +145,20 @@ export default function RatingModal({
 
   /** Portal avoids ancestor stacking (e.g. upcoming stack `relative z-10`) painting above the overlay. */
   return createPortal(
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+    <ModalShell
+      onClose={onClose}
+      title={existingRating ? 'Update Your Rating' : 'Rate Event'}
+      zClass={zClass}
+      panelClassName="max-w-md sm:rounded-xl"
     >
-      <div className="relative max-w-md w-full my-8" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-white rounded-lg shadow-xl w-full p-6">
-        <h2 className="text-2xl font-bold mb-4">
-          {existingRating ? 'Update Your Rating' : 'Rate Event'}
-        </h2>
-        <p className="text-gray-600 mb-6">{event.name}</p>
+        <p className="text-gray-600 mb-4 px-4 sm:px-6 pt-1">{event.name}</p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Your Rating
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-1">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
@@ -166,7 +166,8 @@ export default function RatingModal({
                   onClick={() => setRating(star)}
                   onMouseEnter={() => setHoveredRating(star)}
                   onMouseLeave={() => setHoveredRating(0)}
-                  className="focus:outline-none"
+                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  aria-label={`${star} star${star > 1 ? 's' : ''}`}
                 >
                   <Star
                     size={32}
@@ -182,14 +183,14 @@ export default function RatingModal({
               Comment
             </label>
             {eventTags.length > 0 && (
-              <div className="mb-2 flex flex-wrap gap-1 items-center">
+              <div className="mb-2 flex flex-wrap gap-1.5 items-center">
                 <span className="text-xs text-gray-500 self-center mr-1">Insert tag:</span>
                 {eventTags.map((tag) => (
                   <button
                     key={tag}
                     type="button"
                     onClick={() => insertTag(tag)}
-                    className="text-xs px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                    className="min-h-[44px] max-sm:min-h-[40px] inline-flex items-center rounded-md bg-gray-100 px-2.5 py-2 text-xs text-gray-700 hover:bg-gray-200 sm:min-h-0 sm:py-1"
                   >
                     {tag}
                   </button>
@@ -214,11 +215,11 @@ export default function RatingModal({
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+              className="min-h-[44px] flex-1 bg-blue-600 text-white py-2.5 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 text-base sm:text-sm font-medium"
             >
               {loading ? 'Submitting...' : existingRating ? 'Update Rating' : 'Submit Rating'}
             </button>
@@ -228,16 +229,14 @@ export default function RatingModal({
                 type="button"
                 onClick={handleDelete}
                 disabled={loading}
-                className="px-4 bg-red-600 text-white py-2 rounded-md hover:bg-red-700 transition-colors disabled:bg-gray-400"
+                className="min-h-[44px] px-4 bg-red-600 text-white py-2.5 rounded-md hover:bg-red-700 transition-colors disabled:bg-gray-400 text-base sm:text-sm font-medium"
               >
                 Delete
               </button>
             )}
           </div>
         </form>
-        </div>
-      </div>
-    </div>,
+    </ModalShell>,
     document.body
   );
 }

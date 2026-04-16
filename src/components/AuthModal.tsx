@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import ModalShell from './ModalShell';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -61,15 +62,12 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+    <ModalShell
+      onClose={onClose}
+      title={isLogin ? 'Sign In' : 'Create Account'}
+      panelClassName="max-w-md sm:rounded-xl"
     >
-      <div className="relative max-w-md w-full my-8" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-white rounded-lg shadow-xl w-full p-6">
-        <h2 className="text-2xl font-bold mb-3">
-          {isLogin ? 'Sign In' : 'Create Account'}
-        </h2>
+        <div className="p-4 sm:p-6">
         {promptMessage && (
           <p className="text-sm text-gray-600 mb-5">{promptMessage}</p>
         )}
@@ -85,7 +83,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
               placeholder="Enter email"
               autoComplete="email"
             />
@@ -104,7 +102,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
                   onChange={(e) => setYourName(e.target.value)}
                   required={!isLogin}
                   maxLength={80}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
                   placeholder="e.g., Jane Doe"
                 />
                 <p className="text-xs text-gray-500 mt-1">Your public display name for credits and mentions</p>
@@ -123,7 +121,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
                   maxLength={30}
                   pattern="[a-zA-Z0-9_-]+"
                   title="Username must be 4-30 characters and contain only letters, numbers, underscores, and hyphens"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
                   placeholder="e.g., janedoe2024"
                 />
                 <p className="text-xs text-gray-500 mt-1">Your unique username for profile links and admin lookup</p>
@@ -143,7 +141,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
               required
               minLength={6}
               autoComplete={isLogin ? 'current-password' : 'new-password'}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
             />
           </div>
 
@@ -159,7 +157,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required={!isLogin}
                 minLength={6}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
                 placeholder="Re-enter your password"
               />
             </div>
@@ -192,7 +190,6 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
           </button>
         </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

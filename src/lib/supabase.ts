@@ -25,7 +25,7 @@ export interface EditSuggestion {
   id: string;
   event_id: string;
   suggested_by: string;
-  suggestion_data: any;
+  suggestion_data: Record<string, unknown>;
   reason: string;
   status: 'pending' | 'approved' | 'rejected';
   reviewed_by: string | null;

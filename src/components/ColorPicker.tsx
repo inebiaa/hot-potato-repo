@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Palette, Plus, X } from 'lucide-react';
 import { readableTextForBg } from '../lib/colorUtils';
+import { CUSTOM_COLORS_STORAGE_KEY, PRELOADED_HEX } from '../lib/tagColorPickerData';
 
 interface ColorPickerProps {
   label?: string;
@@ -14,23 +15,6 @@ interface ColorPickerProps {
   onSaveSchemeDefault?: (scheme: 'faded' | 'bright') => void;
   colorsByScheme?: Record<'faded' | 'bright', { name: string; bgHex: string }[]>;
 }
-
-export const CUSTOM_COLORS_STORAGE_KEY = 'tag_custom_colors_v1';
-
-/** Curated swatches: faded (muted) first, then vibrant (saturated) */
-export const PRELOADED_HEX = [
-  /* Faded: neutrals and soft pastels */
-  '#f8fafc', '#f1f5f9', '#e2e8f0', '#cbd5e1', '#94a3b8',
-  '#fef3c7', '#fde68a', '#fce7f3', '#fbcfe8', '#f9a8d4',
-  '#e9d5ff', '#d8b4fe', '#dbeafe', '#93c5fd',
-  '#ccfbf1', '#5eead4', '#d1fae5', '#6ee7b7',
-  '#e0e7ff', '#a5b4fc', '#ffedd5', '#fdba74',
-  /* Vibrant: saturated accents */
-  '#fcd34d', '#fbbf24', '#f472b6', '#c084fc', '#a78bfa',
-  '#60a5fa', '#3b82f6', '#2dd4bf', '#14b8a6',
-  '#34d399', '#10b981', '#818cf8', '#6366f1',
-  '#fb923c', '#f97316',
-];
 
 const uniqueHexList = (colors: string[]) => {
   const seen = new Set<string>();
@@ -128,12 +112,12 @@ export default function ColorPicker({
         <button
           type="button"
           onClick={() => setIsOpen((v) => !v)}
-          className="w-full flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
           title="Pick color"
           aria-label="Pick color"
         >
           <span
-            className="w-6 h-6 rounded-md border border-gray-300 shrink-0"
+            className="w-8 h-8 sm:w-6 sm:h-6 rounded-md border border-gray-300 shrink-0"
             style={{ backgroundColor: bgValue, color: textValue }}
             aria-hidden="true"
           />
@@ -143,15 +127,15 @@ export default function ColorPicker({
         {isOpen && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} aria-hidden="true" />
-            <div className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,300px)] max-h-80 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+            <div className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,300px)] max-h-80 overflow-y-auto overscroll-y-contain bg-white border border-gray-200 rounded-lg shadow-lg p-3">
               <div className="text-xs font-medium text-gray-600 mb-2">Presets</div>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                 {PRELOADED_HEX.map((hex) => (
                   <button
                     key={hex}
                     type="button"
                     onClick={() => pick(hex)}
-                    className={`w-8 h-8 rounded-md border shrink-0 ${hex.toLowerCase() === normalizedBg ? 'ring-2 ring-gray-800 border-gray-800' : 'border-gray-200 hover:scale-105'}`}
+                    className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 w-11 h-11 sm:w-8 sm:h-8 rounded-md border shrink-0 flex items-center justify-center text-xs motion-reduce:transition-none ${hex.toLowerCase() === normalizedBg ? 'ring-2 ring-gray-800 border-gray-800' : 'border-gray-200 hover:scale-105 motion-reduce:hover:scale-100'}`}
                     style={{ backgroundColor: hex, color: readableTextForBg(hex) }}
                     title={hex}
                   >
@@ -172,7 +156,7 @@ export default function ColorPicker({
                       <span className="text-[11px] text-gray-400">Long-press to remove</span>
                     )}
                   </div>
-                  <div className="grid grid-cols-6 gap-2">
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                     {savedColors.map((hex) => (
                       <div key={hex} className="relative">
                         <button
@@ -185,7 +169,7 @@ export default function ColorPicker({
                           onClick={() => {
                             if (!manageMode) pick(hex);
                           }}
-                          className={`w-8 h-8 rounded-md border shrink-0 ${hex === normalizedBg ? 'ring-2 ring-gray-800 border-gray-800' : 'border-gray-200 hover:scale-105'}`}
+                          className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 w-11 h-11 sm:w-8 sm:h-8 rounded-md border shrink-0 flex items-center justify-center text-xs motion-reduce:transition-none ${hex === normalizedBg ? 'ring-2 ring-gray-800 border-gray-800' : 'border-gray-200 hover:scale-105 motion-reduce:hover:scale-100'}`}
                           style={{ backgroundColor: hex, color: readableTextForBg(hex) }}
                           title={hex}
                         >
@@ -195,10 +179,10 @@ export default function ColorPicker({
                           <button
                             type="button"
                             onClick={() => removeSaved(hex)}
-                            className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-white border border-gray-300 text-gray-500 hover:text-red-600 flex items-center justify-center"
+                            className="absolute -top-1 -right-1 h-11 w-11 rounded-full bg-white border border-gray-300 text-gray-500 hover:text-red-600 flex items-center justify-center shadow-sm"
                             aria-label="Delete"
                           >
-                            <X size={10} />
+                            <X size={16} strokeWidth={2} />
                           </button>
                         )}
                       </div>
@@ -211,14 +195,14 @@ export default function ColorPicker({
                 <button
                   type="button"
                   onClick={addCurrent}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-gray-100 text-gray-700 text-xs font-medium hover:bg-gray-200"
+                  className="inline-flex items-center justify-center gap-1.5 min-h-11 px-2.5 rounded-md bg-gray-100 text-gray-700 text-sm sm:text-xs font-medium hover:bg-gray-200"
                   title="Save current color to Saved"
                 >
-                  <Plus size={12} />
+                  <Plus size={14} className="shrink-0" />
                   Save current
                 </button>
-                <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 cursor-pointer text-xs font-medium text-gray-700">
-                  <Palette size={12} />
+                <label className="inline-flex items-center justify-center gap-1.5 min-h-11 px-2.5 rounded-md border border-gray-200 hover:bg-gray-50 cursor-pointer text-sm sm:text-xs font-medium text-gray-700">
+                  <Palette size={14} className="shrink-0" />
                   Custom hex
                   <input
                     type="color"

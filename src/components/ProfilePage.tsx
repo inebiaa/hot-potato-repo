@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, X, ChevronRight, Rows3, LayoutGrid, Copy, RefreshCw, Star } from 'lucide-react';
 import { supabase, UserList, UserListEvent, Rating, Event } from '../lib/supabase';
 import EventCard from './EventCard';
+import MasonryLaneFeed, { type MasonryLaneItem } from './MasonryLaneFeed';
 import { useAuth } from '../contexts/AuthContext';
 import { USER_LISTS_SETUP_SQL, getSupabaseSqlEditorUrl } from '../lib/userListsSetupSql';
 import { TagDisplayProvider } from '../contexts/TagDisplayContext';
@@ -59,7 +60,7 @@ interface ListWithCount extends UserList {
 export default function ProfilePage({
   userId,
   pathname,
-  onClose,
+  onClose: _onClose,
   onTagClick,
   onOpenEvent,
   tagColors,
@@ -213,6 +214,8 @@ export default function ProfilePage({
 
   useEffect(() => {
     fetchProfile();
+    // fetchProfile is defined in-component and intentionally keyed to user + refresh only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, refreshTrigger]);
 
   const openManageList = async (listId: string) => {
@@ -513,28 +516,35 @@ export default function ProfilePage({
             <div className="rounded-2xl bg-white/80 py-16 px-6 text-center"><p className="text-stone-500 text-sm">No reviews yet. Rate a show to see it here.</p></div>
           ) : reviewsLayout === 'cards' ? (
             <TagDisplayProvider map={tagDisplayMap}>
-            <div className="columns-[300px] gap-6">
-              {visibleReviews
-                .filter((row, idx, arr) => arr.findIndex((x) => x.event.id === row.event.id) === idx)
-                .map(({ rating, event, averageRating, ratingCount }) => (
-                  event?.id ? (
-                    <div key={rating.id} className="break-inside-avoid mb-6">
-                      <EventCard
-                        event={event}
-                        averageRating={averageRating}
-                        ratingCount={ratingCount}
-                        userRating={rating}
-                        onRatingSubmitted={fetchProfile}
-                        onEventUpdated={fetchProfile}
-                        onTagClick={onTagClick || (() => {})}
-                        onViewClick={onOpenEvent}
-                        tagColors={tagColors}
-                        customPerformerTags={customPerformerTags}
-                      />
-                    </div>
-                  ) : null
-                ))}
-            </div>
+            <MasonryLaneFeed
+              items={
+                visibleReviews
+                  .filter((row, idx, arr) => arr.findIndex((x) => x.event.id === row.event.id) === idx)
+                  .reduce<MasonryLaneItem[]>((acc, { rating, event, averageRating, ratingCount }) => {
+                    if (!event?.id) return acc;
+                    acc.push({
+                      id: rating.id,
+                      children: (
+                        <EventCard
+                          event={event}
+                          averageRating={averageRating}
+                          ratingCount={ratingCount}
+                          userRating={rating}
+                          onRatingSubmitted={fetchProfile}
+                          onEventUpdated={fetchProfile}
+                          onTagClick={onTagClick || (() => {})}
+                          onViewClick={onOpenEvent}
+                          tagColors={tagColors}
+                          customPerformerTags={customPerformerTags}
+                        />
+                      ),
+                    });
+                    return acc;
+                  }, [])
+              }
+              columnMinWidthPx={220}
+              gapPx={24}
+            />
             </TagDisplayProvider>
           ) : (
             <ul className="space-y-2">

@@ -8,6 +8,7 @@ import type { Plugin } from 'vite'
 import type { Event } from './src/lib/eventTypes'
 import { canonicalEventUrlFromParts } from './src/lib/siteBase'
 import { eventJsonLdScriptContentPrerender } from './src/lib/eventJsonLd'
+import { buildEventSocialMetaTagsHtml } from './src/lib/eventSocialMeta'
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
@@ -33,9 +34,10 @@ function injectEventSeoShell(indexHtml: string, event: Event, site: string, vite
   const prerender = { siteOrigin: site, viteBase }
   const canonical = canonicalEventUrlFromParts(event.id, site, viteBase)
   const jsonLd = jsonLdForHtml(eventJsonLdScriptContentPrerender(event, prerender))
+  const socialMeta = buildEventSocialMetaTagsHtml(event, prerender)
   const title = `${event.name} | Secret Blogger`
   let html = indexHtml.replace(/<title>.*?<\/title>/s, `<title>${escapeTitleText(title)}</title>`)
-  const block = `  <link rel="canonical" href="${escapeHtmlAttr(canonical)}" />\n  <script id="secret-blogger-event-jsonld" type="application/ld+json">${jsonLd}</script>\n`
+  const block = `  <link rel="canonical" href="${escapeHtmlAttr(canonical)}" />\n${socialMeta}\n  <script id="secret-blogger-event-jsonld" type="application/ld+json">${jsonLd}</script>\n`
   html = html.replace('</head>', `${block}</head>`)
   return html
 }
