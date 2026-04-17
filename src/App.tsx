@@ -735,7 +735,15 @@ function App() {
     setOverlayOpenWithWiggle(!!openWithWiggle);
     setOverlaySuggestSection(openWithWiggle && !suggestCustomSlug && suggestSection !== 'custom' ? (suggestSection ?? 'header_tags') : undefined);
     setOverlaySuggestCustomSlug(openWithWiggle ? suggestCustomSlug : undefined);
-    navigate(`/event/${eventId}`);
+    // Stay on profile when opening a review from My reviews (don’t navigate to /event/:id).
+    if (showProfile) {
+      const next = new URLSearchParams(searchParams);
+      next.set('profile', '1');
+      next.set('event', eventId);
+      navigate({ pathname: '/', search: next.toString() });
+    } else {
+      navigate(`/event/${eventId}`);
+    }
   };
 
   const closeEventOverlay = () => {
@@ -746,7 +754,13 @@ function App() {
     setOverlaySuggestSection(undefined);
     setOverlaySuggestCustomSlug(undefined);
     setTagModalRefreshTrigger((t) => t + 1);
-    navigate('/');
+    if (searchParams.get('profile') === '1') {
+      const next = new URLSearchParams(searchParams);
+      next.delete('event');
+      navigate({ pathname: '/', search: next.toString() });
+    } else {
+      navigate('/');
+    }
   };
 
   const goBack = () => {
@@ -837,6 +851,7 @@ function App() {
       <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
         <AppHeader
           pathname={pathname}
+          activeView="stats"
           appSettings={appSettings}
           user={user}
           isAdmin={!!isAdmin}
@@ -848,7 +863,7 @@ function App() {
           onSignIn={() => openAuthModal('signin')}
           onSignOut={() => signOut()}
         />
-        <main className="flex-1 min-h-0 overflow-y-auto">
+        <main className="flex-1 min-h-0 overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
           <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
             <PrimarySearchBar
               appSettings={appSettings}
@@ -995,6 +1010,7 @@ function App() {
       <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
         <AppHeader
           pathname={pathname}
+          activeView="profile"
           appSettings={appSettings}
           user={user}
           isAdmin={!!isAdmin}
@@ -1006,8 +1022,8 @@ function App() {
           onSignIn={() => openAuthModal('signin')}
           onSignOut={() => signOut()}
         />
-        <main className="flex-1 min-h-0 overflow-y-auto">
-          <div className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
+        <main className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+          <div className="max-w-[2400px] mx-auto min-w-0 px-2 py-6 sm:px-6 sm:py-8 lg:px-8 sm:my-8">
           <PrimarySearchBar
             appSettings={appSettings}
             searchDragOver={searchDragOver}
@@ -1160,6 +1176,7 @@ function App() {
     <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
       <AppHeader
         pathname={pathname}
+        activeView="home"
         appSettings={appSettings}
         user={user}
         isAdmin={!!isAdmin}
@@ -1172,7 +1189,7 @@ function App() {
         onSignOut={() => signOut()}
       />
 
-      <main className="flex-1 min-h-0 overflow-y-auto">
+      <main className="flex-1 min-h-0 overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
         <div className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
         <div className="mb-8 overflow-visible">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Fashion Shows</h2>
