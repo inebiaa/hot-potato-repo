@@ -8,6 +8,7 @@ import { USER_LISTS_SETUP_SQL, getSupabaseSqlEditorUrl } from '../lib/userListsS
 import { TagDisplayProvider } from '../contexts/TagDisplayContext';
 import { fetchTagResolutionForEvents, type TagResolutionMap } from '../lib/tagDisplayResolution';
 import { normalizeForSearch } from '../lib/normalize';
+import ProfileReviewsPlaylist from './ProfileReviewsPlaylist';
 
 interface ProfilePageProps {
   userId: string;
@@ -510,7 +511,7 @@ export default function ProfilePage({
           </div>
         </header>
 
-        <section className="space-y-4">
+        <section className="min-w-0 space-y-4">
           <h2 className="text-lg font-semibold text-stone-900">My reviews</h2>
           {visibleReviews.length === 0 ? (
             <div className="rounded-2xl bg-white/80 py-16 px-6 text-center"><p className="text-stone-500 text-sm">No reviews yet. Rate a show to see it here.</p></div>
@@ -547,42 +548,9 @@ export default function ProfilePage({
             />
             </TagDisplayProvider>
           ) : (
-            <ul className="space-y-2">
-              {visibleReviews.map(({ rating, eventName, eventDate, event }) => (
-                <li key={rating.id}>
-                  <button
-                    type="button"
-                    onClick={() => onOpenEvent?.(event.id)}
-                    className="w-full text-left rounded-xl bg-white/90 px-3 py-3 hover:bg-white transition-all border border-stone-100 hover:shadow-sm"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-lg bg-stone-100 overflow-hidden shrink-0">
-                        {event.image_url ? (
-                          <img src={event.image_url} alt="" className="w-full h-full object-cover" />
-                        ) : null}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm text-stone-800 truncate">{eventName}</span>
-                          <span className="text-xs text-stone-500 shrink-0">
-                            {eventDate ? new Date(eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
-                          </span>
-                        </div>
-                        <div className="mt-1.5 flex items-center gap-1">
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <Star
-                              key={s}
-                              size={14}
-                              className={s <= rating.rating ? 'fill-yellow-400 text-yellow-400' : 'text-stone-300'}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <TagDisplayProvider map={tagDisplayMap}>
+              <ProfileReviewsPlaylist rows={visibleReviews} onOpenEvent={onOpenEvent} />
+            </TagDisplayProvider>
           )}
         </section>
 
