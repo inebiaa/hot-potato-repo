@@ -17,12 +17,14 @@ export function getPillColors(tagType: string, tagColors?: TagColorsForPills): {
     case 'venue':
       return { bg: c.city_bg_color || '#dbeafe', text: c.city_text_color || '#1e40af' };
     case 'season':
+    case 'year':
       return { bg: c.season_bg_color || '#ffedd5', text: c.season_text_color || '#c2410c' };
     case 'header_tags':
       return { bg: c.header_tags_bg_color || '#ccfbf1', text: c.header_tags_text_color || '#0f766e' };
     case 'footer_tags':
       return { bg: c.footer_tags_bg_color || '#d1fae5', text: c.footer_tags_text_color || '#065f46' };
+    case 'custom_performer':
     default:
-      return { bg: c.optional_tags_bg_color || '#f3f4f6', text: c.optional_tags_text_color || '#374151' };
+      return { bg: c.optional_tags_bg_color || '#e0e7ff', text: c.optional_tags_text_color || '#3730a3' };
   }
 }

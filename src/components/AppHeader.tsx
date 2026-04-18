@@ -1,14 +1,19 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Plus, LogOut, LogIn, Sparkles, BarChart3, User, Settings, Home, MoreVertical } from 'lucide-react';
 import type { AppSettings } from '../types/appSettings';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 export type AppHeaderActiveView = 'home' | 'stats' | 'profile';
 
+/** Primary actions: no chrome box — icon / text only, tint on hover. */
+const ctaGhost =
+  'text-blue-600 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
+
 interface AppHeaderProps {
   pathname: string;
-  /** Drives bottom-nav highlight when query-based views use `/`. */
   activeView?: AppHeaderActiveView;
+  /** Mouse/trackpad-style device: never show the phone bottom tab bar, even at narrow widths. */
+  desktopLikePointer: boolean;
   appSettings: AppSettings;
   user: { id: string } | null;
   isAdmin: boolean;
@@ -19,11 +24,17 @@ interface AppHeaderProps {
   onAddEvent: () => void;
   onSignIn: () => void;
   onSignOut: () => void;
+  searchBar?: ReactNode;
 }
+
+/** Icon tools: no border or card — hover wash only. */
+const iconBtn =
+  'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
 
 export default function AppHeader({
   pathname: _pathname,
   activeView = 'home',
+  desktopLikePointer,
   appSettings,
   user,
   isAdmin: _isAdmin,
@@ -34,6 +45,7 @@ export default function AppHeader({
   onAddEvent,
   onSignIn,
   onSignOut,
+  searchBar,
 }: AppHeaderProps) {
   const menuId = useId();
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -80,118 +92,112 @@ export default function AppHeader({
     closeDrawer();
   };
 
+  const showPhoneBottomNav = !desktopLikePointer;
+  const drawerFullNavClass = desktopLikePointer ? 'flex flex-col gap-1' : 'hidden flex-col gap-1 md:flex';
+  const drawerMobileOverflowClass = desktopLikePointer ? 'hidden' : 'flex flex-col gap-1 md:hidden';
+
   return (
     <>
-      <header className="shrink-0 bg-white shadow-sm border-b sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-3 sm:py-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex min-w-0 items-center gap-3 pr-2 md:pr-0">
-              {appSettings.app_logo_url ? (
-                <button type="button" onClick={onGoHome} className="p-0 border-0 bg-transparent cursor-pointer shrink-0">
-                  <img src={appSettings.app_logo_url} alt={appSettings.app_name} className="h-9 sm:h-10 object-contain" />
-                </button>
-              ) : (
-                <>
-                  {appSettings.app_icon_url ? (
-                    <img src={appSettings.app_icon_url} alt="App Icon" className="w-9 h-9 sm:w-10 sm:h-10 shrink-0" />
+      <header className="sticky top-0 z-40 shrink-0 border-b border-gray-200 bg-white shadow-sm">
+        <div className="mx-auto max-w-[2400px] px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+            <div className="flex flex-col gap-2 sm:gap-3 lg:contents">
+              <div className="flex min-w-0 items-center justify-between gap-2 pr-2 lg:shrink-0 lg:pr-0">
+                <div className="flex min-w-0 items-center gap-3">
+                  {appSettings.app_logo_url ? (
+                    <button
+                      type="button"
+                      onClick={onGoHome}
+                      className="shrink-0 cursor-pointer border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                    >
+                      <img src={appSettings.app_logo_url} alt={appSettings.app_name} className="h-9 object-contain sm:h-10" />
+                    </button>
                   ) : (
-                    <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2 shrink-0">
-                      <Sparkles className="text-white" size={22} />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={onGoHome}
+                      className="flex min-w-0 max-w-[70vw] items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 sm:max-w-none lg:max-w-md"
+                    >
+                      {appSettings.app_icon_url ? (
+                        <img src={appSettings.app_icon_url} alt="App Icon" className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" />
+                      ) : (
+                        <div className="shrink-0 bg-gradient-to-br from-blue-600 to-blue-700 p-2">
+                          <Sparkles className="text-white" size={22} />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <h1 className="truncate text-lg font-bold text-gray-900 sm:text-2xl">{appSettings.app_name}</h1>
+                        {appSettings.tagline ? (
+                          <p className="truncate text-xs text-gray-500">{appSettings.tagline}</p>
+                        ) : null}
+                      </div>
+                    </button>
                   )}
-                  <div className="min-w-0 flex-1">
-                    <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">{appSettings.app_name}</h1>
-                    {appSettings.tagline && (
-                      <p className="text-xs text-gray-500 truncate">{appSettings.tagline}</p>
-                    )}
-                  </div>
-                </>
-              )}
-
-              <div className="ml-auto flex shrink-0 items-center md:hidden">
-                <button
-                  ref={menuButtonRef}
-                  type="button"
-                  className="rounded-lg p-2.5 text-gray-700 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  aria-expanded={drawerOpen}
-                  aria-controls={menuId}
-                  aria-haspopup="dialog"
-                  aria-label={drawerOpen ? 'Close menu' : 'Open menu'}
-                  onClick={() => setDrawerOpen((o) => !o)}
-                >
-                  <MoreVertical size={22} strokeWidth={2} />
-                </button>
+                </div>
+                <div className="flex shrink-0 lg:hidden">
+                  <button
+                    ref={menuButtonRef}
+                    type="button"
+                    className={iconBtn}
+                    aria-expanded={drawerOpen}
+                    aria-controls={menuId}
+                    aria-haspopup="dialog"
+                    aria-label={drawerOpen ? 'Close menu' : 'Open menu'}
+                    onClick={() => setDrawerOpen((o) => !o)}
+                  >
+                    <MoreVertical size={22} strokeWidth={2} />
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div className="hidden md:flex flex-wrap items-center gap-2 md:justify-end md:gap-3">
-              <button
-                onClick={onGoHome}
-                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                title="Home"
-              >
-                <Home size={20} />
-                <span className="text-sm">Home</span>
-              </button>
-              <button
-                onClick={onOpenStats}
-                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                title="View Statistics"
-              >
-                <BarChart3 size={20} />
-                <span className="text-sm">Stats</span>
-              </button>
-              {user ? (
-                <>
+              {searchBar ? <div className="min-w-0 w-full lg:flex-1 lg:min-w-0">{searchBar}</div> : null}
+
+              <div className="hidden shrink-0 items-center gap-1 lg:flex lg:pl-1">
+                <button type="button" onClick={onGoHome} className={iconBtn} title="Home">
+                  <Home size={20} strokeWidth={activeView === 'home' ? 2.25 : 2} className={activeView === 'home' ? 'text-blue-600' : ''} />
+                </button>
+                <button type="button" onClick={onOpenStats} className={iconBtn} title="Statistics">
+                  <BarChart3 size={20} strokeWidth={activeView === 'stats' ? 2.25 : 2} className={activeView === 'stats' ? 'text-blue-600' : ''} />
+                </button>
+                {user ? (
+                  <>
+                    <button type="button" onClick={onOpenProfile} className={iconBtn} title="My profile">
+                      <User size={20} strokeWidth={activeView === 'profile' ? 2.25 : 2} className={activeView === 'profile' ? 'text-blue-600' : ''} />
+                    </button>
+                    <button type="button" onClick={onOpenSettings} className={iconBtn} title="Settings">
+                      <Settings size={20} strokeWidth={2} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onAddEvent}
+                      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition ${ctaGhost}`}
+                      title="Add show"
+                    >
+                      <Plus size={20} strokeWidth={2.5} />
+                    </button>
+                    <button type="button" onClick={onSignOut} className={iconBtn} title="Sign out">
+                      <LogOut size={20} strokeWidth={2} />
+                    </button>
+                  </>
+                ) : (
                   <button
                     type="button"
-                    onClick={onOpenProfile}
-                    className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    title="My Profile"
+                    onClick={onSignIn}
+                    className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition ${ctaGhost}`}
                   >
-                    <User size={20} />
-                    <span className="text-sm">My Profile</span>
+                    <LogIn size={18} strokeWidth={2.5} />
+                    <span>Sign in</span>
                   </button>
-                  <button
-                    onClick={onOpenSettings}
-                    className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    title="App Settings"
-                  >
-                    <Settings size={20} />
-                    <span className="text-sm">Settings</span>
-                  </button>
-                  <button
-                    onClick={onAddEvent}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                  >
-                    <Plus size={20} />
-                    <span>Add Show</span>
-                  </button>
-                  <button
-                    onClick={onSignOut}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <LogOut size={20} />
-                    <span>Sign Out</span>
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={onSignIn}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                >
-                  <LogIn size={20} />
-                  Sign In
-                </button>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Mobile bottom bar: primary destinations (overflow in ⋮ drawer) */}
+      {/* Touch phones: bottom tab bar. Narrow desktop windows keep this hidden (desktopLikePointer). */}
       <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur-sm pb-[env(safe-area-inset-bottom)]"
+        className={`fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] ${showPhoneBottomNav ? 'md:hidden' : 'hidden'}`}
         aria-label="Primary"
       >
         <div className="mx-auto flex max-w-lg items-stretch justify-around">
@@ -221,15 +227,9 @@ export default function AppHeader({
         </div>
       </nav>
 
-      {/* Mobile ⋮ drawer */}
       {drawerOpen && (
-        <div className="md:hidden fixed inset-0 z-50" role="presentation">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/40"
-            aria-label="Close menu"
-            onClick={closeDrawer}
-          />
+        <div className="fixed inset-0 z-50 lg:hidden" role="presentation">
+          <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close menu" onClick={closeDrawer} />
           <div
             ref={drawerPanelRef}
             id={menuId}
@@ -239,46 +239,113 @@ export default function AppHeader({
             className="absolute right-0 top-0 flex h-full w-[min(20rem,88vw)] flex-col border-l border-gray-200 bg-white shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <span className="text-sm font-semibold text-gray-900">More</span>
-              <button
-                type="button"
-                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
-                aria-label="Close"
-                onClick={closeDrawer}
-              >
+              <span className="text-sm font-semibold text-gray-900">Menu</span>
+              <button type="button" className="rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="Close" onClick={closeDrawer}>
                 <span className="text-lg leading-none">×</span>
               </button>
             </div>
-            <div className="flex flex-1 flex-col gap-1 p-3">
-              {user ? (
-                <>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
-                    onClick={() => runAndClose(onOpenSettings)}
-                  >
-                    <Settings size={20} className="shrink-0 text-gray-600" />
-                    <span className="text-sm font-medium">Settings</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
-                    onClick={() => runAndClose(onSignOut)}
-                  >
-                    <LogOut size={20} className="shrink-0 text-gray-600" />
-                    <span className="text-sm font-medium">Sign out</span>
-                  </button>
-                </>
-              ) : (
+            <div className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
+              {/* Non-phone or md+: full nav in drawer when there is no bottom tab bar. */}
+              <div className={drawerFullNavClass}>
                 <button
                   type="button"
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
-                  onClick={() => runAndClose(onSignIn)}
+                  onClick={() => runAndClose(onGoHome)}
                 >
-                  <LogIn size={20} className="shrink-0 text-gray-600" />
-                  <span className="text-sm font-medium">Sign in</span>
+                  <Home size={20} className="shrink-0 text-gray-600" />
+                  <span className="text-sm font-medium">Home</span>
                 </button>
-              )}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                  onClick={() => runAndClose(onOpenStats)}
+                >
+                  <BarChart3 size={20} className="shrink-0 text-gray-600" />
+                  <span className="text-sm font-medium">Statistics</span>
+                </button>
+                {user ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                    onClick={() => runAndClose(onOpenProfile)}
+                  >
+                    <User size={20} className="shrink-0 text-gray-600" />
+                    <span className="text-sm font-medium">My profile</span>
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                  onClick={() => runAndClose(onAddEvent)}
+                >
+                  <Plus size={20} className="shrink-0 text-gray-600" />
+                  <span className="text-sm font-medium">Add show</span>
+                </button>
+                {!user ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                    onClick={() => runAndClose(onSignIn)}
+                  >
+                    <LogIn size={20} className="shrink-0 text-gray-600" />
+                    <span className="text-sm font-medium">Sign in</span>
+                  </button>
+                ) : null}
+                {user ? (
+                  <>
+                    <div className="my-2 border-t border-gray-100" role="separator" />
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                      onClick={() => runAndClose(onOpenSettings)}
+                    >
+                      <Settings size={20} className="shrink-0 text-gray-600" />
+                      <span className="text-sm font-medium">Settings</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                      onClick={() => runAndClose(onSignOut)}
+                    >
+                      <LogOut size={20} className="shrink-0 text-gray-600" />
+                      <span className="text-sm font-medium">Sign out</span>
+                    </button>
+                  </>
+                ) : null}
+              </div>
+
+              {/* Phone + tab bar: drawer is settings/sign-out (or sign-in) only. */}
+              <div className={drawerMobileOverflowClass}>
+                {user ? (
+                  <>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                      onClick={() => runAndClose(onOpenSettings)}
+                    >
+                      <Settings size={20} className="shrink-0 text-gray-600" />
+                      <span className="text-sm font-medium">Settings</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                      onClick={() => runAndClose(onSignOut)}
+                    >
+                      <LogOut size={20} className="shrink-0 text-gray-600" />
+                      <span className="text-sm font-medium">Sign out</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                    onClick={() => runAndClose(onSignIn)}
+                  >
+                    <LogIn size={20} className="shrink-0 text-gray-600" />
+                    <span className="text-sm font-medium">Sign in</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

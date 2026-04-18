@@ -1,10 +1,13 @@
-import { Filter, MapPin, Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { useRef, type DragEvent } from 'react';
 import type { AppSettings } from '../types/appSettings';
+import { getPillColors } from './tagCards/getPillColors';
 import TagPillSplitLabel, {
   tagPillSplitContainerWithIconClass,
   type TagPillSegmentColors,
 } from './TagPillSplitLabel';
+
+export type CustomPerformerTagDef = { slug: string; bg_color: string; text_color: string };
 
 function SearchBarTagValueSlot({
   text,
@@ -34,12 +37,11 @@ interface TagSuggestion {
 
 interface PrimarySearchBarProps {
   appSettings: AppSettings;
+  embeddedInHeader?: boolean;
+  customPerformerTags?: CustomPerformerTagDef[];
   searchDragOver: boolean;
   searchFocused: boolean;
   selectedTags: TagFilter[];
-  selectedCity: string;
-  dateFilter: 'all' | 'past' | 'future';
-  allCities: string[];
   searchQuery: string;
   tagSuggestions: TagSuggestion[];
   filteredCount?: number;
@@ -55,13 +57,7 @@ interface PrimarySearchBarProps {
   onSearchQueryChange: (value: string) => void;
   onSelectTagFilter: (type: string, value: string) => void;
   onRemoveTagFilter: (type: string, value: string) => void;
-  onSelectedCityChange: (value: string) => void;
-  onDateFilterChange: (value: 'all' | 'past' | 'future') => void;
   onClearFilters: () => void;
-}
-
-function isHex(value: string | undefined) {
-  return !!value && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value);
 }
 
 function tagLabel(type: string): string {
@@ -79,6 +75,13 @@ function tagLabel(type: string): string {
   return '';
 }
 
+/** Lucide X on each filter chip (same size/weight as query-clear). */
+const chipDismissBtn =
+  'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-80 transition-opacity hover:bg-black/10 hover:opacity-100';
+
+const queryClearBtn =
+  'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-600 opacity-80 transition-opacity hover:bg-gray-100 hover:opacity-100';
+
 function suggestionTypeLabel(type: string): string {
   if (type === 'header_tags') return 'Genre';
   if (type === 'footer_tags') return 'Collection';
@@ -87,14 +90,35 @@ function suggestionTypeLabel(type: string): string {
   return type.replace(/_/g, ' ');
 }
 
+function pillColorsForFilter(
+  type: string,
+  value: string,
+  appSettings: AppSettings,
+  customPerformerTags?: CustomPerformerTagDef[]
+): { bg: string; text: string } {
+  if (type === 'custom_performer' && customPerformerTags?.length) {
+    const slug = value.split('\x00')[0];
+    const def = customPerformerTags.find((t) => t.slug === slug);
+    if (def?.bg_color && def?.text_color) {
+      return { bg: def.bg_color, text: def.text_color };
+    }
+  }
+  const pillType =
+    type === 'year'
+      ? 'year'
+      : type.startsWith('custom:')
+        ? 'custom_performer'
+        : type;
+  return getPillColors(pillType, appSettings);
+}
+
 export default function PrimarySearchBar({
   appSettings,
+  embeddedInHeader = false,
+  customPerformerTags,
   searchDragOver,
   searchFocused,
   selectedTags,
-  selectedCity,
-  dateFilter,
-  allCities,
   searchQuery,
   tagSuggestions,
   filteredCount,
@@ -110,49 +134,47 @@ export default function PrimarySearchBar({
   onSearchQueryChange,
   onSelectTagFilter,
   onRemoveTagFilter,
-  onSelectedCityChange,
-  onDateFilterChange,
-  onClearFilters,
+  onClearFilters: _onClearFilters,
 }: PrimarySearchBarProps) {
+  void _onClearFilters;
+  const hasFilterActivity = Boolean(searchQuery) || selectedTags.length > 0;
+  const showCounts =
+    !embeddedInHeader &&
+    hasFilterActivity &&
+    typeof filteredCount === 'number' &&
+    typeof totalCount === 'number';
+
+  const showTagSuggestions = searchFocused && tagSuggestions.length > 0;
+
+  const searchFieldClass = embeddedInHeader
+    ? `relative flex h-10 w-full min-w-0 flex-nowrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-900 shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'bg-blue-50 ring-2 ring-blue-400' : ''}`
+    : `relative flex min-h-[2.5rem] w-full min-w-[200px] flex-nowrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`;
+
+  const chipsAndInputRow =
+    'flex min-h-0 min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-hidden';
+
   return (
-    <div className="border-b border-gray-200 pb-4 mb-6">
-      <div className="flex flex-wrap gap-3 items-center">
+    <div className={embeddedInHeader ? 'w-full min-w-0' : 'mb-6 border-b border-gray-200 pb-4'}>
+      <div className={embeddedInHeader ? 'w-full' : 'flex flex-wrap items-center gap-3'}>
         <div
-          className={`relative flex-1 min-w-[200px] flex items-center gap-2 pl-3 pr-4 py-2 border border-gray-200 rounded-lg bg-white transition-colors text-sm focus-within:ring-1 focus-within:ring-gray-300 focus-within:border-gray-300 ${searchDragOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
+          className={searchFieldClass}
           onDragOver={onSearchDragOver}
           onDragLeave={onSearchDragLeave}
           onDrop={onSearchDrop}
         >
-          <Search className="shrink-0 text-gray-400" size={18} />
-          <div className="flex flex-nowrap items-center gap-1.5 min-w-0 flex-1 overflow-x-auto">
+          <Search className="pointer-events-none shrink-0 text-gray-400" size={18} strokeWidth={2} />
+          <div className={chipsAndInputRow}>
             {selectedTags.map((selectedTag) => {
-              const type = selectedTag.type;
-              const bg = (type === 'producer' && isHex(appSettings.producer_bg_color)) ? appSettings.producer_bg_color!
-                : (type === 'designer' && isHex(appSettings.designer_bg_color)) ? appSettings.designer_bg_color!
-                : (type === 'model' && isHex(appSettings.model_bg_color)) ? appSettings.model_bg_color!
-                : (type === 'hair_makeup' && isHex(appSettings.hair_makeup_bg_color)) ? appSettings.hair_makeup_bg_color!
-                : ((type === 'city' || type === 'venue') && isHex(appSettings.city_bg_color)) ? appSettings.city_bg_color!
-                : (type === 'season' || type === 'year') && isHex(appSettings.season_bg_color) ? appSettings.season_bg_color!
-                : (type === 'header_tags' && isHex(appSettings.header_tags_bg_color)) ? appSettings.header_tags_bg_color!
-                : (type === 'footer_tags' && isHex(appSettings.footer_tags_bg_color)) ? appSettings.footer_tags_bg_color!
-                : '#dbeafe';
-              const text = (type === 'producer' && isHex(appSettings.producer_text_color)) ? appSettings.producer_text_color!
-                : (type === 'designer' && isHex(appSettings.designer_text_color)) ? appSettings.designer_text_color!
-                : (type === 'model' && isHex(appSettings.model_text_color)) ? appSettings.model_text_color!
-                : (type === 'hair_makeup' && isHex(appSettings.hair_makeup_text_color)) ? appSettings.hair_makeup_text_color!
-                : ((type === 'city' || type === 'venue') && isHex(appSettings.city_text_color)) ? appSettings.city_text_color!
-                : (type === 'season' || type === 'year') && isHex(appSettings.season_text_color) ? appSettings.season_text_color!
-                : (type === 'header_tags' && isHex(appSettings.header_tags_text_color)) ? appSettings.header_tags_text_color!
-                : (type === 'footer_tags' && isHex(appSettings.footer_tags_text_color)) ? appSettings.footer_tags_text_color!
-                : '#1e40af';
-              const val = type === 'custom_performer' ? selectedTag.value.split('\x00')[1] : selectedTag.value;
+              const { type, value } = selectedTag;
+              const { bg, text } = pillColorsForFilter(type, value, appSettings, customPerformerTags);
+              const val = type === 'custom_performer' ? value.split('\x00')[1] ?? value : value;
               return (
                 <span
-                  key={`${type}:${selectedTag.value}`}
-                  className={`${tagPillSplitContainerWithIconClass} p-0 max-w-[min(100%,24rem)] min-w-0 text-xs shrink-0`}
+                  key={`${type}:${value}`}
+                  className={`${tagPillSplitContainerWithIconClass} max-w-[min(11rem,42vw)] shrink-0 overflow-hidden rounded-md text-xs sm:max-w-[13rem]`}
                 >
                   <span
-                    className="inline-flex shrink-0 whitespace-nowrap rounded-md px-2 py-1 max-sm:py-1 text-xs"
+                    className="inline-flex shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-xs"
                     style={{ backgroundColor: bg, color: text }}
                   >
                     {tagLabel(type)}
@@ -160,140 +182,76 @@ export default function PrimarySearchBar({
                   <SearchBarTagValueSlot text={val} segmentColors={{ backgroundColor: bg, color: text }} />
                   <button
                     type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemoveTagFilter(type, selectedTag.value); }}
-                    className="shrink-0 opacity-80 hover:opacity-100 -mr-0.5"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onRemoveTagFilter(type, value);
+                    }}
+                    className={`${chipDismissBtn} -mr-0.5`}
+                    style={{ color: text }}
                     aria-label={`Remove ${val} filter`}
                   >
-                    <span className="sr-only">Remove</span>
-                    <span aria-hidden>×</span>
+                    <span className="sr-only">Remove filter</span>
+                    <X size={14} strokeWidth={2} aria-hidden />
                   </button>
                 </span>
               );
             })}
-            {selectedCity && (
-              <span className={`${tagPillSplitContainerWithIconClass} p-0 max-w-[min(100%,24rem)] min-w-0 text-xs shrink-0`}>
-                <span
-                  className="inline-flex shrink-0 whitespace-nowrap rounded-md px-2 py-1 max-sm:py-1 text-xs"
-                  style={{
-                    backgroundColor: isHex(appSettings.city_bg_color) ? appSettings.city_bg_color! : '#dbeafe',
-                    color: isHex(appSettings.city_text_color) ? appSettings.city_text_color! : '#1e40af',
-                  }}
-                >
-                  City:{' '}
-                </span>
-                <SearchBarTagValueSlot
-                  text={selectedCity}
-                  segmentColors={{
-                    backgroundColor: isHex(appSettings.city_bg_color) ? appSettings.city_bg_color! : '#dbeafe',
-                    color: isHex(appSettings.city_text_color) ? appSettings.city_text_color! : '#1e40af',
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSelectedCityChange(''); }}
-                  className="shrink-0 opacity-80 hover:opacity-100 -mr-0.5"
-                  aria-label={`Remove city filter`}
-                >
-                  <span className="sr-only">Remove</span>
-                  <span aria-hidden>×</span>
-                </button>
-              </span>
-            )}
-            {dateFilter !== 'all' && (
-              <span className={`${tagPillSplitContainerWithIconClass} p-0 min-w-0 text-xs shrink-0`}>
-                <SearchBarTagValueSlot
-                  text={dateFilter === 'future' ? 'Upcoming' : 'Past'}
-                  segmentColors={{ backgroundColor: '#e7e5e4', color: '#292524' }}
-                />
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDateFilterChange('all'); }}
-                  className="shrink-0 opacity-80 hover:opacity-100 -mr-0.5"
-                  aria-label="Remove date filter"
-                >
-                  <span className="sr-only">Remove</span>
-                  <span aria-hidden>×</span>
-                </button>
-              </span>
-            )}
+            {searchQuery.trim() ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onSearchQueryChange('');
+                }}
+                className={queryClearBtn}
+                aria-label="Clear search text"
+              >
+                <X size={14} strokeWidth={2} />
+              </button>
+            ) : null}
             <input
               type="text"
-              placeholder={(selectedTags.length || selectedCity || dateFilter !== 'all') ? '' : 'Search shows, designers, models...'}
+              placeholder={selectedTags.length ? '' : 'Search shows, designers, models...'}
               value={searchQuery}
               onChange={(e) => onSearchQueryChange(e.target.value)}
               onFocus={onSearchFocus}
               onBlur={onSearchBlur}
-              className="flex-1 min-w-[120px] py-0.5 border-0 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"
+              className="min-h-0 min-w-0 flex-1 border-0 bg-transparent py-0.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"
             />
           </div>
-          {searchFocused && tagSuggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
-              <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-100">Filter by tag</div>
+          {showTagSuggestions ? (
+            <div
+              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white py-0.5 shadow-lg"
+              role="listbox"
+              aria-label="Tag suggestions"
+            >
               {tagSuggestions.map((t) => (
                 <button
                   key={`${t.type}:${t.value}:${t.label}`}
                   type="button"
+                  role="option"
                   onMouseDown={(e) => { e.preventDefault(); onSelectTagFilter(t.type, t.value); }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0"
+                  className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-2 text-left text-sm hover:bg-gray-50"
                 >
-                  <span className="text-gray-400 text-xs capitalize shrink-0">
+                  <span className="shrink-0 text-xs capitalize text-gray-400">
                     {suggestionTypeLabel(t.type)}:
                   </span>
-                  <span className="text-gray-900 min-w-0 flex-1">
+                  <span className="min-w-0 flex-1 text-gray-900">
                     <TagPillSplitLabel fitToContainer text={t.label} />
                   </span>
                 </button>
               ))}
             </div>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <div className="relative">
-            <select
-              value={selectedCity}
-              onChange={(e) => onSelectedCityChange(e.target.value)}
-              className="pl-3 pr-8 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 appearance-none cursor-pointer"
-            >
-              <option value="">All Cities</option>
-              {allCities.map((city) => (
-                <option key={city} value={city}>
-                  {city}
-                </option>
-              ))}
-            </select>
-            <MapPin className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" size={14} />
-          </div>
-          <div className="relative">
-            <select
-              value={dateFilter}
-              onChange={(e) => onDateFilterChange(e.target.value as 'all' | 'past' | 'future')}
-              className="pl-3 pr-8 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 appearance-none cursor-pointer"
-            >
-              <option value="all">All Events</option>
-              <option value="future">Upcoming</option>
-              <option value="past">Past</option>
-            </select>
-            <Filter className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" size={14} />
-          </div>
+          ) : null}
         </div>
       </div>
 
-      {(searchQuery || selectedCity || selectedTags.length || dateFilter !== 'all') && (
-        <div className="mt-3 flex items-center gap-2 flex-wrap">
-          {typeof filteredCount === 'number' && typeof totalCount === 'number' && (
-            <span className="text-sm text-gray-600">
-              {summaryOverride || `Showing ${filteredCount} of ${totalCount} ${totalCount === 1 ? summaryLabelSingular : summaryLabelPlural}`}
-            </span>
-          )}
-          <button
-            onClick={onClearFilters}
-            className="text-sm text-blue-600 hover:text-blue-700"
-          >
-            Clear filters
-          </button>
+      {showCounts ? (
+        <div className="mt-3 text-sm text-gray-600">
+          {summaryOverride || `Showing ${filteredCount} of ${totalCount} ${totalCount === 1 ? summaryLabelSingular : summaryLabelPlural}`}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

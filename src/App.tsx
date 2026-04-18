@@ -31,6 +31,7 @@ import EventJsonLd from './components/EventJsonLd';
 import { eventPagePath } from './lib/siteBase';
 import { clearAppModalParams, parseAppModal, setAppModalParams } from './lib/searchParamsModal';
 import { useBodyScrollLock } from './hooks/useBodyScrollLock';
+import { useDesktopLikePointer } from './hooks/useDesktopLikePointer';
 
 interface EventWithStats extends Event {
   average_rating: number;
@@ -44,15 +45,13 @@ function App() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user, loading: authLoading, signOut, isAdmin } = useAuth();
+  const desktopLikePointer = useDesktopLikePointer();
   const [events, setEvents] = useState<EventWithStats[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<EventWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCity, setSelectedCity] = useState('');
   const [selectedTags, setSelectedTags] = useState<{ type: string; value: string }[]>([]);
-  const [dateFilter, setDateFilter] = useState<'all' | 'past' | 'future'>('all');
-  const [allCities, setAllCities] = useState<string[]>([]);
   const [overlayEventId, setOverlayEventId] = useState<string | null>(null);
   const [overlaySource, setOverlaySource] = useState<'tagModal' | 'viewRatings' | null>(null);
   const [, setOverlayOpenWithWiggle] = useState(false);
@@ -273,14 +272,6 @@ function App() {
 
       setEvents(eventsWithStats);
       setFilteredEvents(eventsWithStats);
-
-      const citiesSet = new Set<string>();
-      eventsWithStats.forEach((event) => {
-        if (event.city) {
-          citiesSet.add(event.city);
-        }
-      });
-      setAllCities(Array.from(citiesSet).sort());
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setEventsError(message);
@@ -453,9 +444,7 @@ function App() {
 
   const clearFilters = () => {
     setSearchQuery('');
-    setSelectedCity('');
     setSelectedTags([]);
-    setDateFilter('all');
   };
 
   // Legacy URLs: /?event=uuid → /event/uuid (keeps embed, stats, etc.)
@@ -584,12 +573,6 @@ function App() {
   useEffect(() => {
     let filtered = [...events];
 
-    if (dateFilter === 'past') {
-      filtered = filtered.filter((event) => !isEventUpcoming(event.date));
-    } else if (dateFilter === 'future') {
-      filtered = filtered.filter((event) => isEventUpcoming(event.date));
-    }
-
     if (searchQuery.trim()) {
       const queryNorm = normalizeForSearch(searchQuery);
       if (queryNorm) {
@@ -643,10 +626,6 @@ function App() {
       }
     }
 
-    if (selectedCity) {
-      filtered = filtered.filter((event) => sameTagSpelling(event.city, selectedCity));
-    }
-
     selectedTags.forEach((tag) => {
       filtered = filtered.filter((event) => {
         switch (tag.type) {
@@ -683,7 +662,7 @@ function App() {
     });
 
     setFilteredEvents(filtered);
-  }, [searchQuery, selectedCity, selectedTags, dateFilter, events, tagResolutionMap]);
+  }, [searchQuery, selectedTags, events, tagResolutionMap]);
 
   const overlayEventFromCache = overlayEventId ? (events.find((e) => e.id === overlayEventId) ?? filteredEvents.find((e) => e.id === overlayEventId)) : null;
   const [overlayEventFetched, setOverlayEventFetched] = useState<EventWithStats | null>(null);
@@ -852,6 +831,7 @@ function App() {
         <AppHeader
           pathname={pathname}
           activeView="stats"
+          desktopLikePointer={desktopLikePointer}
           appSettings={appSettings}
           user={user}
           isAdmin={!!isAdmin}
@@ -862,17 +842,13 @@ function App() {
           onAddEvent={openAddEventModal}
           onSignIn={() => openAuthModal('signin')}
           onSignOut={() => signOut()}
-        />
-        <main className="flex-1 min-h-0 overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
-          <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
+          searchBar={
             <PrimarySearchBar
+              embeddedInHeader
               appSettings={appSettings}
               searchDragOver={searchDragOver}
               searchFocused={searchFocused}
               selectedTags={selectedTags}
-              selectedCity={selectedCity}
-              dateFilter={dateFilter}
-              allCities={allCities}
               searchQuery={searchQuery}
               tagSuggestions={tagSuggestions}
               filteredCount={filteredEvents.length}
@@ -885,10 +861,14 @@ function App() {
               onSearchQueryChange={setSearchQuery}
               onSelectTagFilter={selectTagFilter}
               onRemoveTagFilter={removeTagFilter}
-              onSelectedCityChange={setSelectedCity}
-              onDateFilterChange={setDateFilter}
               onClearFilters={clearFilters}
             />
+          }
+        />
+        <main
+          className={`flex-1 min-h-0 overflow-y-auto ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
+        >
+          <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
             <button
               onClick={goBackFromStats}
               className="text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
@@ -1011,6 +991,7 @@ function App() {
         <AppHeader
           pathname={pathname}
           activeView="profile"
+          desktopLikePointer={desktopLikePointer}
           appSettings={appSettings}
           user={user}
           isAdmin={!!isAdmin}
@@ -1021,35 +1002,35 @@ function App() {
           onAddEvent={openAddEventModal}
           onSignIn={() => openAuthModal('signin')}
           onSignOut={() => signOut()}
+          searchBar={
+            <PrimarySearchBar
+              embeddedInHeader
+              appSettings={appSettings}
+              searchDragOver={searchDragOver}
+              searchFocused={searchFocused}
+              selectedTags={selectedTags}
+              searchQuery={searchQuery}
+              tagSuggestions={tagSuggestions}
+              filteredCount={profileReviewCounts?.visible}
+              totalCount={profileReviewCounts?.total}
+              summaryLabelSingular="review"
+              summaryLabelPlural="reviews"
+              onSearchDrop={handleSearchDrop}
+              onSearchDragOver={handleSearchDragOver}
+              onSearchDragLeave={handleSearchDragLeave}
+              onSearchFocus={() => setSearchFocused(true)}
+              onSearchBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+              onSearchQueryChange={setSearchQuery}
+              onSelectTagFilter={selectTagFilter}
+              onRemoveTagFilter={removeTagFilter}
+              onClearFilters={clearFilters}
+            />
+          }
         />
-        <main className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+        <main
+          className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
+        >
           <div className="max-w-[2400px] mx-auto min-w-0 px-2 py-6 sm:px-6 sm:py-8 lg:px-8 sm:my-8">
-          <PrimarySearchBar
-            appSettings={appSettings}
-            searchDragOver={searchDragOver}
-            searchFocused={searchFocused}
-            selectedTags={selectedTags}
-            selectedCity={selectedCity}
-            dateFilter={dateFilter}
-            allCities={allCities}
-            searchQuery={searchQuery}
-            tagSuggestions={tagSuggestions}
-            filteredCount={profileReviewCounts?.visible}
-            totalCount={profileReviewCounts?.total}
-            summaryLabelSingular="review"
-            summaryLabelPlural="reviews"
-            onSearchDrop={handleSearchDrop}
-            onSearchDragOver={handleSearchDragOver}
-            onSearchDragLeave={handleSearchDragLeave}
-            onSearchFocus={() => setSearchFocused(true)}
-            onSearchBlur={() => setTimeout(() => setSearchFocused(false), 150)}
-            onSearchQueryChange={setSearchQuery}
-            onSelectTagFilter={selectTagFilter}
-            onRemoveTagFilter={removeTagFilter}
-            onSelectedCityChange={setSelectedCity}
-            onDateFilterChange={setDateFilter}
-            onClearFilters={clearFilters}
-          />
           <button
             onClick={goBack}
             className="text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
@@ -1177,6 +1158,7 @@ function App() {
       <AppHeader
         pathname={pathname}
         activeView="home"
+        desktopLikePointer={desktopLikePointer}
         appSettings={appSettings}
         user={user}
         isAdmin={!!isAdmin}
@@ -1187,24 +1169,13 @@ function App() {
         onAddEvent={openAddEventModal}
         onSignIn={() => openAuthModal('signin')}
         onSignOut={() => signOut()}
-      />
-
-      <main className="flex-1 min-h-0 overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
-        <div className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
-        <div className="mb-8 overflow-visible">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Fashion Shows</h2>
-          <p className="text-gray-600 mb-6">
-            {user ? 'Discover, rate, and review fashion shows from around the world' : 'Sign in to rate shows and add your own!'}
-          </p>
-
+        searchBar={
           <PrimarySearchBar
+            embeddedInHeader
             appSettings={appSettings}
             searchDragOver={searchDragOver}
             searchFocused={searchFocused}
             selectedTags={selectedTags}
-            selectedCity={selectedCity}
-            dateFilter={dateFilter}
-            allCities={allCities}
             searchQuery={searchQuery}
             tagSuggestions={tagSuggestions}
             filteredCount={filteredEvents.length}
@@ -1217,10 +1188,20 @@ function App() {
             onSearchQueryChange={setSearchQuery}
             onSelectTagFilter={selectTagFilter}
             onRemoveTagFilter={removeTagFilter}
-            onSelectedCityChange={setSelectedCity}
-            onDateFilterChange={setDateFilter}
             onClearFilters={clearFilters}
           />
+        }
+      />
+
+      <main
+        className={`flex-1 min-h-0 overflow-y-auto ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
+      >
+        <div className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
+        <div className="mb-8 overflow-visible">
+          <h2 className="mb-2 text-3xl font-bold text-gray-900">Fashion Shows</h2>
+          <p className="max-w-2xl text-gray-600">
+            {user ? 'Discover, rate, and review fashion shows from around the world' : 'Sign in to rate shows and add your own!'}
+          </p>
         </div>
 
         {eventsError && (
