@@ -9,13 +9,6 @@ import EditEventModal from './EditEventModal';
 import ViewRatingsModal from './ViewRatingsModal';
 import CommentWithTags from './CommentWithTags';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
-
-/** Pending suggestion pills (neutral gray) — per-chunk mini-pills use this fill. */
-const PENDING_TAG_PILL_COLORS = { backgroundColor: '#d1d5db', color: '#4b5563' } as const;
-
-/** City / season / genre: one rounded shell with icon + label inside (same idea as EventCountdownPill). */
-const HEADER_ICON_INSIDE_PILL_CLASS =
-  'inline-flex max-w-full min-w-0 items-center gap-1 rounded-md px-2 py-1 max-sm:px-2.5 max-sm:py-2 text-xs transition-colors hover:opacity-80';
 import { useAuth } from '../contexts/AuthContext';
 import { useTagDisplayMap } from '../contexts/TagDisplayContext';
 import { tagResolutionKey } from '../lib/tagDisplayResolution';
@@ -27,6 +20,13 @@ import { buildEventEmailPlainText, buildEventEmailRichHtml } from '../lib/eventE
 import { formatEventDateDisplay } from '../lib/formatEventDate';
 import { canonicalEventUrl } from '../lib/siteBase';
 import { clearAppModalParams, parseAppModal, setAppModalParams } from '../lib/searchParamsModal';
+
+/** Pending suggestion pills (neutral gray) — per-chunk mini-pills use this fill. */
+const PENDING_TAG_PILL_COLORS = { backgroundColor: '#d1d5db', color: '#4b5563' } as const;
+
+/** City / season / genre: one rounded shell with icon + label inside (same idea as EventCountdownPill). */
+const HEADER_ICON_INSIDE_PILL_CLASS =
+  'inline-flex max-w-full min-w-0 items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors hover:opacity-80';
 
 interface EventCardProps {
   event: Event;
@@ -152,7 +152,7 @@ export default function EventCard({
     featured_designers: event.featured_designers || [],
     models: event.models || [],
     hair_makeup: event.hair_makeup || [],
-    header_tags: (event.genre || event.header_tags || []) as string[],
+    header_tags: (event.header_tags || []) as string[],
     footer_tags: event.footer_tags || []
   });
   const [reorderSection, setReorderSection] = useState<keyof typeof orderedTags | null>(
@@ -282,7 +282,7 @@ export default function EventCard({
       featured_designers: event.featured_designers || [],
       models: event.models || [],
       hair_makeup: event.hair_makeup || [],
-      header_tags: (event.genre || event.header_tags || []) as string[],
+      header_tags: (event.header_tags || []) as string[],
       footer_tags: event.footer_tags || []
     };
     const fallbackCustom = (event.custom_tags && typeof event.custom_tags === 'object' && !Array.isArray(event.custom_tags))
@@ -309,7 +309,7 @@ export default function EventCard({
     setCustomReorderSlug(null);
     setCustomDragIndex(null);
     setCustomDropIndex(null);
-  }, [event.id, event.producers, event.featured_designers, event.models, event.hair_makeup, event.genre, event.header_tags, event.footer_tags, event.custom_tags, readSavedOrder]);
+  }, [event.id, event.producers, event.featured_designers, event.models, event.hair_makeup, event.header_tags, event.footer_tags, event.custom_tags, readSavedOrder]);
 
   const fetchPendingSuggestions = useCallback(async () => {
     const { data, error } = await supabase
@@ -448,7 +448,7 @@ export default function EventCard({
           eventUpdate.custom_tags = { ...source, [slug]: nextVals };
         }
       } else if (suggestion.section_key === 'header_tags') {
-        const source = (event.header_tags || event.genre || []) as string[];
+        const source = (event.header_tags || []) as string[];
         const nextVals = source.some((x) => normalizeTagName(x) === normalizeTagName(finalName)) ? source : [...source, finalName];
         eventUpdate.header_tags = nextVals;
       } else {
@@ -919,7 +919,7 @@ export default function EventCard({
     return (
       <span
         data-tag-pill
-        className={`inline-flex items-center rounded-md bg-gray-300 text-gray-600 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 min-w-[100px] ${showWiggle ? 'pill-wiggle' : ''}`}
+        className={`inline-flex items-center rounded-md bg-gray-300 text-gray-600 text-xs px-2 py-1 min-w-[100px] ${showWiggle ? 'pill-wiggle' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -1255,7 +1255,7 @@ export default function EventCard({
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'header_tags' }); setNewTagValue(''); }}
-                      className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
+                      className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
                       title="Suggest tag"
                     >
                       <Plus size={12} />
@@ -1265,7 +1265,7 @@ export default function EventCard({
                     <button
                       type="button"
                       onClick={() => toggleTagSection('header_tags')}
-                      className="text-xs text-gray-400 hover:text-gray-600 inline-flex items-center shrink-0 justify-center max-sm:px-2 max-sm:py-2 rounded-md"
+                      className="text-xs text-gray-400 hover:text-gray-600 inline-flex items-center shrink-0 justify-center rounded-md"
                       title={expandedTagSections['header_tags'] ? 'Show less' : 'View more tags'}
                     >
                       {expandedTagSections['header_tags'] ? '−' : `+${tags.length - TAG_LIMIT}`}
@@ -1370,14 +1370,14 @@ export default function EventCard({
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'producers' }); setNewTagValue(''); }}
-                        className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
+                        className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
                         title="Suggest producer"
                       >
                         <Plus size={12} />
                       </button>
                     )}
                     {tags.length > TAG_LIMIT && (
-                      <button type="button" onClick={() => toggleTagSection('producers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center max-sm:px-2 max-sm:py-2 rounded-md" title={expandedTagSections['producers'] ? 'Show less' : 'View more tags'}>
+                      <button type="button" onClick={() => toggleTagSection('producers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center rounded-md" title={expandedTagSections['producers'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['producers'] ? '−' : `+${tags.length - TAG_LIMIT}`}
                       </button>
                     )}
@@ -1432,12 +1432,12 @@ export default function EventCard({
                     );})}
                     {suggestPill('featured_designers')}
                     {isAnyReorderMode && addingFor?.section !== 'featured_designers' && (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'featured_designers' }); setNewTagValue(''); }} className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest designer">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'featured_designers' }); setNewTagValue(''); }} className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest designer">
                         <Plus size={12} />
                       </button>
                     )}
                     {tags.length > TAG_LIMIT && (
-                      <button type="button" onClick={() => toggleTagSection('designers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center max-sm:px-2 max-sm:py-2 rounded-md" title={expandedTagSections['designers'] ? 'Show less' : 'View more tags'}>
+                      <button type="button" onClick={() => toggleTagSection('designers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center rounded-md" title={expandedTagSections['designers'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['designers'] ? '−' : `+${tags.length - TAG_LIMIT}`}
                       </button>
                     )}
@@ -1492,12 +1492,12 @@ export default function EventCard({
                     );})}
                     {suggestPill('models')}
                     {isAnyReorderMode && addingFor?.section !== 'models' && (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'models' }); setNewTagValue(''); }} className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest model">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'models' }); setNewTagValue(''); }} className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest model">
                         <Plus size={12} />
                       </button>
                     )}
                     {tags.length > TAG_LIMIT && (
-                      <button type="button" onClick={() => toggleTagSection('models')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center max-sm:px-2 max-sm:py-2 rounded-md" title={expandedTagSections['models'] ? 'Show less' : 'View more tags'}>
+                      <button type="button" onClick={() => toggleTagSection('models')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center rounded-md" title={expandedTagSections['models'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['models'] ? '−' : `+${tags.length - TAG_LIMIT}`}
                       </button>
                     )}
@@ -1560,12 +1560,12 @@ export default function EventCard({
                     );})}
                     {suggestPill('hair_makeup')}
                     {isAnyReorderMode && addingFor?.section !== 'hair_makeup' && (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'hair_makeup' }); setNewTagValue(''); }} className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest artist">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'hair_makeup' }); setNewTagValue(''); }} className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center" title="Suggest artist">
                         <Plus size={12} />
                       </button>
                     )}
                     {tags.length > TAG_LIMIT && (
-                      <button type="button" onClick={() => toggleTagSection('hair_makeup')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center max-sm:px-2 max-sm:py-2 rounded-md" title={expandedTagSections['hair_makeup'] ? 'Show less' : 'View more tags'}>
+                      <button type="button" onClick={() => toggleTagSection('hair_makeup')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center rounded-md" title={expandedTagSections['hair_makeup'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['hair_makeup'] ? '−' : `+${tags.length - TAG_LIMIT}`}
                       </button>
                     )}
@@ -1652,7 +1652,7 @@ export default function EventCard({
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'custom', customSlug: tagDef.slug, label: tagDef.label }); setNewTagValue(''); }}
-                            className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
+                            className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
                             title={`Suggest ${tagDef.label}`}
                           >
                             <Plus size={12} />
@@ -1662,7 +1662,7 @@ export default function EventCard({
                           <button
                             type="button"
                             onClick={() => toggleTagSection(`custom_${tagDef.slug}`)}
-                            className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center max-sm:px-2 max-sm:py-2 rounded-md"
+                            className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center rounded-md"
                           >
                             {expandedTagSections[`custom_${tagDef.slug}`] ? '−' : `+${tags.length - TAG_LIMIT}`}
                           </button>
@@ -1770,14 +1770,14 @@ export default function EventCard({
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setAddingFor({ section: 'footer_tags' }); setNewTagValue(''); }}
-                      className="text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
+                      className="text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 inline-flex items-center"
                       title="Suggest collection"
                     >
                       <Plus size={12} />
                     </button>
                   )}
                   {tags.length > TAG_LIMIT && (
-                    <button type="button" onClick={() => toggleTagSection('footer_tags')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center max-sm:px-2 max-sm:py-2 rounded-md" title={expandedTagSections['footer_tags'] ? 'Show less' : 'View more tags'}>
+                    <button type="button" onClick={() => toggleTagSection('footer_tags')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center rounded-md" title={expandedTagSections['footer_tags'] ? 'Show less' : 'View more tags'}>
                       {expandedTagSections['footer_tags'] ? '−' : `+${tags.length - TAG_LIMIT}`}
                     </button>
                   )}

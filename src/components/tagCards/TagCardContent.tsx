@@ -133,7 +133,7 @@ export default function TagCardContent({
               <button
                 type="button"
                 onClick={() => setPillsExpanded((x) => !x)}
-                className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md"
+                className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center px-2 py-1 rounded-md"
                 title={pillsExpanded ? 'Show less' : 'View more shows'}
               >
                 {pillsExpanded ? '−' : `+${sortedEventRatings.length - TAG_LIMIT}`}

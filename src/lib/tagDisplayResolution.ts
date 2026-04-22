@@ -42,7 +42,7 @@ function collectTagPairs(events: Event[]): Map<string, { type: string; raw: stri
     (e.featured_designers || []).forEach((v) => add('designer', v));
     (e.models || []).forEach((v) => add('model', v));
     (e.hair_makeup || []).forEach((v) => add('hair_makeup', v));
-    (e.genre || e.header_tags || []).forEach((v: string) => add('header_tags', v));
+    (e.header_tags || []).forEach((v: string) => add('header_tags', v));
     (e.footer_tags || []).forEach((v) => add('footer_tags', v));
     if (e.location) add('venue', e.location);
     if (e.custom_tags && typeof e.custom_tags === 'object') {

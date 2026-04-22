@@ -220,7 +220,7 @@ export default function StatisticsPage({
       case 'hair_makeup': return tagArrayContainsNormalized(e.hair_makeup, value);
       case 'city': return sameTagSpelling(e.city, value);
       case 'season': return (e.season || getSeasonFromDate(e.date)) === value;
-      case 'header_tags': return tagArrayContainsNormalized(e.header_tags || e.genre, value);
+      case 'header_tags': return tagArrayContainsNormalized(e.header_tags, value);
       case 'footer_tags': return tagArrayContainsNormalized(e.footer_tags, value);
       default: return false;
     }

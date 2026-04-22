@@ -64,7 +64,7 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
       const html = segments
         .map((seg) => {
           if (seg.type === 'tag' && seg.tag) {
-            const inner = `<span class="inline-flex max-w-full whitespace-normal break-words rounded-md px-2 py-1 max-sm:px-2.5 max-sm:py-2 text-xs text-left" style="background-color:${escapeHtml(seg.tag.bg)};color:${escapeHtml(seg.tag.text)}">${escapeHtml(seg.value)}</span>`;
+            const inner = `<span class="inline-flex max-w-full whitespace-normal break-words rounded-md px-2 py-1 text-xs text-left" style="background-color:${escapeHtml(seg.tag.bg)};color:${escapeHtml(seg.tag.text)}">${escapeHtml(seg.value)}</span>`;
             return `<span contenteditable="false" data-tag-pill class="inline-flex max-w-full min-w-0 flex-wrap items-center gap-1 p-0 text-left text-xs not-italic font-normal mx-0.5 select-none transition-colors hover:opacity-80">${inner}</span>`;
           }
           return escapeHtml(seg.value);

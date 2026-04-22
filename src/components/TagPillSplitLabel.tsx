@@ -25,7 +25,7 @@ export type TagPillSegmentColors = {
 };
 
 const FONT_PROBE_CLASS =
-  'sr-only text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 whitespace-nowrap font-normal tabular-nums';
+  'sr-only text-xs px-2 py-1 whitespace-nowrap font-normal tabular-nums';
 
 /** Nearest wrapping flex row width, or a sensible fallback (px). */
 function findTagRowBudgetWidth(wrapEl: HTMLElement): number {
@@ -89,7 +89,7 @@ export default function TagPillSplitLabel({
   const [chunks, setChunks] = useState<string[]>(() => splitTagPillLabel(text));
 
   const segmentShell =
-    'inline-flex whitespace-nowrap rounded-md px-2 py-1 max-sm:px-2.5 max-sm:py-2 text-xs';
+    'inline-flex whitespace-nowrap rounded-md px-2 py-1 text-xs';
 
   useLayoutEffect(() => {
     if (!useWidthSplit) {

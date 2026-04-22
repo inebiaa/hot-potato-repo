@@ -1,28 +1,9 @@
 import { Search, X } from 'lucide-react';
-import { useRef, type DragEvent } from 'react';
+import type { DragEvent } from 'react';
 import type { AppSettings } from '../types/appSettings';
 import { getPillColors } from './tagCards/getPillColors';
-import TagPillSplitLabel, {
-  tagPillSplitContainerWithIconClass,
-  type TagPillSegmentColors,
-} from './TagPillSplitLabel';
 
 export type CustomPerformerTagDef = { slug: string; bg_color: string; text_color: string };
-
-function SearchBarTagValueSlot({
-  text,
-  segmentColors,
-}: {
-  text: string;
-  segmentColors: TagPillSegmentColors;
-}) {
-  const slotRef = useRef<HTMLSpanElement>(null);
-  return (
-    <span ref={slotRef} className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col justify-center self-stretch">
-      <TagPillSplitLabel layoutWidthRef={slotRef} text={text} segmentColors={segmentColors} />
-    </span>
-  );
-}
 
 interface TagFilter {
   type: string;
@@ -167,19 +148,21 @@ export default function PrimarySearchBar({
             {selectedTags.map((selectedTag) => {
               const { type, value } = selectedTag;
               const { bg, text } = pillColorsForFilter(type, value, appSettings, customPerformerTags);
-              const val = type === 'custom_performer' ? value.split('\x00')[1] ?? value : value;
+              const rawVal = type === 'custom_performer' ? value.split('\x00')[1] ?? value : value;
+              const val = rawVal.replace(/\r\n|\r|\n/g, ' ').trim();
               return (
                 <span
                   key={`${type}:${value}`}
-                  className={`${tagPillSplitContainerWithIconClass} max-w-[min(11rem,42vw)] shrink-0 overflow-hidden rounded-md text-xs sm:max-w-[13rem]`}
+                  className="inline-grid min-w-0 max-w-[min(28rem,100%)] shrink grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 overflow-hidden rounded-md text-xs"
+                  title={`${tagLabel(type)}${val}`}
                 >
                   <span
-                    className="inline-flex shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-xs"
+                    className="min-w-0 truncate rounded-md px-2 py-1 text-xs"
                     style={{ backgroundColor: bg, color: text }}
                   >
                     {tagLabel(type)}
+                    {val}
                   </span>
-                  <SearchBarTagValueSlot text={val} segmentColors={{ backgroundColor: bg, color: text }} />
                   <button
                     type="button"
                     onClick={(e) => {
@@ -232,13 +215,13 @@ export default function PrimarySearchBar({
                   type="button"
                   role="option"
                   onMouseDown={(e) => { e.preventDefault(); onSelectTagFilter(t.type, t.value); }}
-                  className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                  className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
                 >
                   <span className="shrink-0 text-xs capitalize text-gray-400">
                     {suggestionTypeLabel(t.type)}:
                   </span>
-                  <span className="min-w-0 flex-1 text-gray-900">
-                    <TagPillSplitLabel fitToContainer text={t.label} />
+                  <span className="min-w-0 truncate text-gray-900" title={t.label.replace(/\r\n|\r|\n/g, ' ')}>
+                    {t.label.replace(/\r\n|\r|\n/g, ' ')}
                   </span>
                 </button>
               ))}

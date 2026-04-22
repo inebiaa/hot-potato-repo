@@ -259,6 +259,7 @@ interface EventTagSource {
   location?: string | null;
   header_tags?: string[] | null;
   footer_tags?: string[] | null;
+  custom_tags?: Record<string, unknown> | null;
 }
 
 /** Search tags from events (producers, designers, etc.). Use when tag_identities is empty or doesn't have the tag yet. */
@@ -268,7 +269,7 @@ export async function searchEventTags(query: string): Promise<Pick<TagIdentityRe
 
   const { data: events, error } = await supabase
     .from('events')
-    .select('producers, featured_designers, models, hair_makeup, location, header_tags, footer_tags')
+    .select('producers, featured_designers, models, hair_makeup, location, header_tags, footer_tags, custom_tags')
     .order('date', { ascending: false })
     .limit(500);
 
@@ -293,6 +294,17 @@ export async function searchEventTags(query: string): Promise<Pick<TagIdentityRe
       }
     }
     if (typeof ev.location === 'string') add('venue', ev.location);
+    const ct = ev.custom_tags;
+    if (ct && typeof ct === 'object' && !Array.isArray(ct)) {
+      for (const [slug, vals] of Object.entries(ct)) {
+        const tagType = `custom:${slug}` as TagType;
+        if (Array.isArray(vals)) {
+          for (const v of vals) {
+            if (typeof v === 'string') add(tagType, v);
+          }
+        }
+      }
+    }
   }
 
   return Array.from(seen.values()).slice(0, 15);

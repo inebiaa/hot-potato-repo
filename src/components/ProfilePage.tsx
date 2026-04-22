@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, X, ChevronRight, Rows3, LayoutGrid, Copy, RefreshCw, Star } from 'lucide-react';
+import { Plus, Trash2, X, ChevronRight, Rows3, LayoutGrid, Copy, RefreshCw } from 'lucide-react';
 import { supabase, UserList, UserListEvent, Rating, Event } from '../lib/supabase';
 import EventCard from './EventCard';
 import MasonryLaneFeed, { type MasonryLaneItem } from './MasonryLaneFeed';

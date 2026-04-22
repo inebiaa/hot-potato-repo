@@ -213,7 +213,7 @@ export default function StatisticsPageContent({
                   <button
                     key={idx}
                     onClick={() => handleTagClick(stat)}
-                    className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md px-2 py-1 max-sm:px-2.5 max-sm:py-2 text-xs text-left transition-colors hover:opacity-80"
+                    className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md px-2 py-1 text-xs text-left transition-colors hover:opacity-80"
                     style={{ backgroundColor: colors.bg, color: colors.text }}
                   >
                     <span className={`${tagPillSplitContainerClass} min-w-0`}>
