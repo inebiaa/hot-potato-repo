@@ -8,6 +8,7 @@ import { ensureIdentity, normalizeTagName, type TagType } from '../lib/tagIdenti
 import { normalizeExternalUrl } from '../lib/externalUrl';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
+import CustomPerformerCategoryInput from './CustomPerformerCategoryInput';
 import ModalShell from './ModalShell';
 
 interface EditEventModalProps {
@@ -32,7 +33,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
   const [designers, setDesigners] = useState<string[]>(() => toArray(event.featured_designers));
   const [models, setModels] = useState<string[]>(event.models || []);
   const [hairMakeup, setHairMakeup] = useState<string[]>(event.hair_makeup || []);
-  const [headerTags, setHeaderTags] = useState<string[]>(event.header_tags || event.genre || []);
+  const [headerTags, setHeaderTags] = useState<string[]>(event.header_tags || []);
   const [footerTags, setFooterTags] = useState<string[]>(event.footer_tags || []);
   const [customTags, setCustomTags] = useState<Record<string, string[]>>(event.custom_tags || {});
   const [inlineCustomTypes, setInlineCustomTypes] = useState<{ slug: string; label: string; icon: string }[]>(() => {
@@ -63,7 +64,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       setDesigners(toArray(event.featured_designers));
       setModels(event.models || []);
       setHairMakeup(event.hair_makeup || []);
-      setHeaderTags(event.header_tags || event.genre || []);
+      setHeaderTags(event.header_tags || []);
       setFooterTags(event.footer_tags || []);
       setCustomTags(event.custom_tags || {});
       const ct = event.custom_tags || {};
@@ -339,10 +340,9 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
                   label=""
                   value={customTags[slug] || []}
                   onChange={(v) => setCustomTags((prev) => ({ ...prev, [slug]: v }))}
-                  tagColumn="header_tags"
                   customTagSlug={slug}
                   placeholder={`e.g., ${label}...`}
-                  hint={`Optional ${label.toLowerCase()}`}
+                  hint="Type and press Enter to add; suggestions appear as you type"
                 />
               </div>
               <button
@@ -369,15 +369,19 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
               <label htmlFor="newCustomType" className="block text-sm font-medium text-gray-700 mb-1">
                 Add custom performer category
               </label>
-              <input
+              <CustomPerformerCategoryInput
                 id="newCustomType"
-                type="text"
                 value={newCustomTypeLabel}
-                onChange={(e) => setNewCustomTypeLabel(e.target.value)}
-                placeholder="e.g., Hosted By, Music By"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                onChange={setNewCustomTypeLabel}
+                excludedSlugs={inlineCustomTypes.map((t) => t.slug)}
+                onPickExisting={(slug, label) => {
+                  if (inlineCustomTypes.some((t) => t.slug === slug)) return;
+                  setInlineCustomTypes((prev) => [...prev, { slug, label, icon: 'Tag' }]);
+                }}
               />
-              <p className="text-xs text-gray-500 mt-0.5">Add a custom tag type (e.g. Hosted By, Music By)</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Choose an existing category as you type, or enter a new name and click Add
+              </p>
             </div>
             <button
               type="button"
@@ -432,7 +436,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="https://… public ticket or registration page"
             />
-            <p className="text-xs text-gray-500 mt-0.5">Opens when the countdown pill is tapped on upcoming shows. http or https only.</p>
+            <p className="text-xs text-gray-500 mt-0.5">Opens when the countdown pill is tapped on upcoming shows.</p>
           </div>
 
           {error && (

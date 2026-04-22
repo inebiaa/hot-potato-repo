@@ -129,7 +129,7 @@ export default function TagRatingsModal({
       case 'season':
         return getSeasonFromDate(e.date || '') === tagValue;
       case 'header_tags':
-        return tagArrayContainsNormalized(e.header_tags || e.genre, tagValue);
+        return tagArrayContainsNormalized(e.header_tags, tagValue);
       case 'footer_tags':
         return tagArrayContainsNormalized(e.footer_tags, tagValue);
       default:

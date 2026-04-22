@@ -350,7 +350,7 @@ function App() {
       (e.featured_designers || []).forEach((v) => expandIdentity('designer', v));
       (e.models || []).forEach((v) => expandIdentity('model', v));
       (e.hair_makeup || []).forEach((v) => expandIdentity('hair_makeup', v));
-      (e.genre || e.header_tags || []).forEach((v: string) => expandIdentity('header_tags', v));
+      (e.header_tags || []).forEach((v: string) => expandIdentity('header_tags', v));
       (e.footer_tags || []).forEach((v) => expandIdentity('footer_tags', v));
       if (e.city) add('city', e.city);
       if (e.location) expandIdentity('venue', e.location);
@@ -399,14 +399,13 @@ function App() {
     const out: { type: string; value: string; label: string }[] = [...fromEvents];
     for (const id of identitySearchHits) {
       if (!identityIdsInUse.has(id.id)) continue;
-      const sug =
-        id.tag_type.startsWith('custom:')
-          ? {
-              type: 'custom_performer',
-              value: `${id.tag_type.slice(7)}\x00${id.canonical_name}`,
-              label: id.canonical_name,
-            }
-          : { type: id.tag_type, value: id.canonical_name, label: id.canonical_name };
+      const sug = id.tag_type.startsWith('custom:')
+        ? {
+            type: 'custom_performer' as const,
+            value: `${id.tag_type.slice(7)}\x00${id.canonical_name}`,
+            label: id.canonical_name,
+          }
+        : { type: id.tag_type, value: id.canonical_name, label: id.canonical_name };
       const key = `${sug.type}:${sug.value}`;
       if (!seen.has(key)) {
         seen.add(key);
@@ -596,7 +595,7 @@ function App() {
           const designersMatch = event.featured_designers?.some((d) => tagLineMatch('designer', d)) || false;
           const modelsMatch = event.models?.some((m) => tagLineMatch('model', m)) || false;
           const producersMatch = event.producers?.some((p) => tagLineMatch('producer', p)) || false;
-          const headerTagsMatch = (event.genre || event.header_tags)?.some((t: string) => tagLineMatch('header_tags', t)) || false;
+          const headerTagsMatch = event.header_tags?.some((t: string) => tagLineMatch('header_tags', t)) || false;
           const footerTagsMatch = event.footer_tags?.some((t) => tagLineMatch('footer_tags', t)) || false;
           const customTagsMatch =
             event.custom_tags && typeof event.custom_tags === 'object'
@@ -646,7 +645,7 @@ function App() {
           case 'hair_makeup':
             return tagArrayContainsNormalized(event.hair_makeup, tag.value);
           case 'header_tags':
-            return tagArrayContainsNormalized(event.genre || event.header_tags, tag.value);
+            return tagArrayContainsNormalized(event.header_tags, tag.value);
           case 'footer_tags':
             return tagArrayContainsNormalized(event.footer_tags, tag.value);
           case 'custom_performer': {

@@ -6,6 +6,7 @@ import { normalizeExternalUrl } from '../lib/externalUrl';
 import { useAuth } from '../contexts/AuthContext';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
+import CustomPerformerCategoryInput from './CustomPerformerCategoryInput';
 import ModalShell from './ModalShell';
 
 interface AddEventModalProps {
@@ -275,10 +276,9 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
                   label=""
                   value={customTags[slug] || []}
                   onChange={(v) => setCustomTags((prev) => ({ ...prev, [slug]: v }))}
-                  tagColumn="header_tags"
                   customTagSlug={slug}
                   placeholder={`e.g., ${label}...`}
-                  hint={`Optional ${label.toLowerCase()}`}
+                  hint="Type and press Enter to add; suggestions appear as you type"
                 />
               </div>
               <button
@@ -305,15 +305,19 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
               <label htmlFor="newCustomType" className="block text-sm font-medium text-gray-700 mb-1">
                 Add custom performer category
               </label>
-              <input
+              <CustomPerformerCategoryInput
                 id="newCustomType"
-                type="text"
                 value={newCustomTypeLabel}
-                onChange={(e) => setNewCustomTypeLabel(e.target.value)}
-                placeholder="e.g., Hosted By, Music By"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                onChange={setNewCustomTypeLabel}
+                excludedSlugs={inlineCustomTypes.map((t) => t.slug)}
+                onPickExisting={(slug, label) => {
+                  if (inlineCustomTypes.some((t) => t.slug === slug)) return;
+                  setInlineCustomTypes((prev) => [...prev, { slug, label, icon: 'Tag' }]);
+                }}
               />
-              <p className="text-xs text-gray-500 mt-0.5">Add a custom tag type (e.g. Hosted By, Music By)</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Choose an existing category as you type, or enter a new name and click Add
+              </p>
             </div>
             <button
               type="button"
@@ -368,7 +372,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="https://… public ticket or registration page"
             />
-            <p className="text-xs text-gray-500 mt-0.5">Opens when the countdown pill is tapped on upcoming shows. http or https only.</p>
+            <p className="text-xs text-gray-500 mt-0.5">Opens when the countdown pill is tapped on upcoming shows.</p>
           </div>
 
           {error && (

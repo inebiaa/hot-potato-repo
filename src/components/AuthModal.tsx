@@ -124,7 +124,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
                   placeholder="e.g., janedoe2024"
                 />
-                <p className="text-xs text-gray-500 mt-1">Your unique username for profile links and admin lookup</p>
+                <p className="text-xs text-gray-500 mt-1">Your unique username for your profile link and credits</p>
               </div>
             </>
           )}

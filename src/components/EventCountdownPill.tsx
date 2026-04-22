@@ -79,7 +79,7 @@ function EventCountdownPillInner({
     <button
       type="button"
       data-tag-pill
-      className={`inline-flex items-center gap-1 text-xs px-2 py-1 max-sm:px-2.5 max-sm:py-2 rounded-md transition-colors hover:opacity-80 tabular-nums whitespace-nowrap ${countdownOpenUrl ? 'cursor-pointer' : ''} ${showWiggle ? 'pill-wiggle' : ''}`}
+      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 tabular-nums whitespace-nowrap ${countdownOpenUrl ? 'cursor-pointer' : ''} ${showWiggle ? 'pill-wiggle' : ''}`}
       style={{
         backgroundColor: countdownBg || '#fef3c7',
         color: countdownText || '#92400e',

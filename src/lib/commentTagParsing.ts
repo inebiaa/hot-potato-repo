@@ -78,7 +78,7 @@ export function getEventTagStyles(
   (event.featured_designers || []).forEach((v) => add(v, 'designer'));
   (event.models || []).forEach((v) => add(v, 'model'));
   (event.hair_makeup || []).forEach((v) => add(v, 'hair_makeup'));
-  (event.genre || event.header_tags || []).forEach((v: string) => add(v, 'header_tags'));
+  (event.header_tags || []).forEach((v: string) => add(v, 'header_tags'));
   (event.footer_tags || []).forEach((v) => add(v, 'footer_tags'));
   if (event.city) add(event.city, 'city');
   if (event.date) add(getSeasonFromDate(event.date), 'season');
