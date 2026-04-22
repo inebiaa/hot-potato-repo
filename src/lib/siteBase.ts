@@ -1,3 +1,5 @@
+import { DEFAULT_SITE_ORIGIN } from './brandMeta';
+
 /** Vite base path, e.g. "/" or "/repo/" — normalized with leading/trailing slashes. */
 export function viteBasePath(): string {
   let b = import.meta.env.BASE_URL || '/';
@@ -18,7 +20,7 @@ export function publicSiteOrigin(): string {
   if (typeof window !== 'undefined') {
     return window.location.origin;
   }
-  return 'https://www.secretblogger.app';
+  return DEFAULT_SITE_ORIGIN;
 }
 
 /** Path to an event page, with Vite base prefix. */

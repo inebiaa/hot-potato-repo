@@ -1,3 +1,4 @@
+-- Prerequisite: run 20260422120000_tag_identity_link_graph.sql first (adds links_to_identity_id) unless that migration is already on the database.
 -- Symmetric "same person" groups: `cluster_id` is shared; no "main" row.
 -- Link merges two clusters; unlink gives that row a new `cluster_id`.
 

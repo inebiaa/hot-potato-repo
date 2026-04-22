@@ -323,6 +323,7 @@ export async function fetchTagResolutionForEvents(events: Event[]): Promise<TagR
     const searchable = new Set<string>([canonical, ...(raws ?? [])]);
     for (const m of allClusterMembers) {
       if (m.cluster_id !== clusterId) continue;
+      if (m.canonical_name) searchable.add(m.canonical_name);
       for (const a of aliasesByRow.get(m.id) || []) {
         if (a.alias) searchable.add(a.alias);
       }

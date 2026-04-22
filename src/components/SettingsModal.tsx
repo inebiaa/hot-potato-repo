@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import ModalShell from './ModalShell';
 import TagPillSplitLabel, {
   tagPillSplitSegmentGroupClass,
@@ -23,6 +23,7 @@ import {
   type TagIdentityRecord,
   type TagType,
 } from '../lib/tagIdentity';
+import { loadAdminTagGroupMembers } from '../lib/adminTagGroupMembers';
 import type { AppSettings } from '../types/appSettings';
 
 function formatTagTypeLabel(tagType: string): string {
@@ -83,6 +84,11 @@ function creditPillClass(active: boolean) {
 
 function creditPillSegmentColors(active: boolean): TagPillSegmentColors {
   return active ? CREDIT_PILL_SEGMENT_ACTIVE : CREDIT_PILL_SEGMENT_IDLE;
+}
+
+/** Same gray chunk styling as credit pills; no blue ring — selection is fill only. */
+function linkedGroupPillClass() {
+  return `${tagPillSplitSegmentGroupClass} p-0 max-w-full text-xs transition-colors hover:opacity-80`;
 }
 
 const PALETTE_STORAGE_KEY = 'tag_settings_palette_v1';
@@ -224,6 +230,8 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [dragOverCollectionId, setDragOverCollectionId] = useState<string | null>(null);
   const skipNextPreviewRef = useRef(false);
+  /** Drop stale in-flight `fetchAdminLinkContext` results (e.g. fast Back + pick another name). */
+  const fetchAdminLinkContextGenRef = useRef(0);
 
   const [editName, setEditName] = useState('');
   const [editUsername, setEditUsername] = useState('');
@@ -260,7 +268,15 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   const [adminMergeSearching, setAdminMergeSearching] = useState(false);
   const [adminMergeAbsorb, setAdminMergeAbsorb] = useState<TagIdentityRecord | null>(null);
   const [adminLinking, setAdminLinking] = useState(false);
-  const [adminIdentityClusterPeers, setAdminIdentityClusterPeers] = useState<{ id: string; canonical_name: string }[]>([]);
+  /** Every `tag_identities` row in the same cluster (including the open profile), for proof of linking. */
+  const [adminIdentityClusterMembers, setAdminIdentityClusterMembers] = useState<{ id: string; canonical_name: string }[]>([]);
+
+  /** Hide alias rows that only repeat the profile’s main name; “also credited as” is for alternate spellings. */
+  const adminAliasesForDisplay = useMemo(() => {
+    if (!adminManagedIdentity) return adminManagedAliases;
+    const c = normalizeTagName(adminManagedIdentity.canonical_name);
+    return adminManagedAliases.filter((al) => normalizeTagName(al.alias) !== c);
+  }, [adminManagedAliases, adminManagedIdentity]);
 
   const tagOptions: { key: SwatchColorKey; label: string }[] = [
     { key: 'producer', label: 'Producer' },
@@ -796,6 +812,11 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
 
   useEffect(() => {
     if (!isOpen || !isAdmin) return;
+    if (adminManagedIdentity) {
+      setAdminIdentitySearchResults([]);
+      setAdminIdentitySearching(false);
+      return;
+    }
     const q = adminIdentitySearch.trim();
     if (q.length < 2) {
       setAdminIdentitySearchResults([]);
@@ -808,10 +829,13 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
           setAdminIdentitySearchResults(rows);
           setAdminIdentitySearching(false);
         })
-        .catch(() => setAdminIdentitySearching(false));
+        .catch(() => {
+          setAdminIdentitySearchResults([]);
+          setAdminIdentitySearching(false);
+        });
     }, 200);
     return () => window.clearTimeout(t);
-  }, [adminIdentitySearch, isOpen, isAdmin]);
+  }, [adminIdentitySearch, isOpen, isAdmin, adminManagedIdentity]);
 
   useEffect(() => {
     if (!isOpen || !isAdmin || !adminManagedIdentity) {
@@ -836,7 +860,10 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
           );
           setAdminMergeSearching(false);
         })
-        .catch(() => setAdminMergeSearching(false));
+        .catch(() => {
+          setAdminMergeSearchResults([]);
+          setAdminMergeSearching(false);
+        });
     }, 200);
     return () => window.clearTimeout(t);
   }, [adminMergeSearch, isOpen, isAdmin, adminManagedIdentity]);
@@ -852,6 +879,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       }
       if (!isAdmin) setActiveTab('account');
     } else {
+      fetchAdminLinkContextGenRef.current += 1;
       setSettingsLoaded(false);
       setAdminIdentitySearch('');
       setAdminIdentitySearchResults([]);
@@ -867,7 +895,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       setAdminMergeSearchResults([]);
       setAdminMergeAbsorb(null);
       setAdminLinking(false);
-      setAdminIdentityClusterPeers([]);
+      setAdminIdentityClusterMembers([]);
     }
     // One-shot when modal opens; fetch* helpers are intentionally not deps (unstable identities)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1033,24 +1061,72 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     }
   };
 
-  const fetchAdminLinkContext = async (identityId: string) => {
-    setAdminIdentityClusterPeers([]);
-    const { data: row, error } = await supabase
+  /**
+   * Loads every tag in the same person-group as this row.
+   * Uses cluster_id + same tag_type, with an or() so we don’t miss rows (rep id, PostgREST edge cases, etc.).
+   * @param alsoPartnerId — after a fresh link, pass the other id in case a single query missed a row.
+   */
+  const fetchAdminLinkContext = async (
+    identityId: string,
+    alsoPartnerId?: string
+  ): Promise<{ id: string; canonical_name: string }[]> => {
+    const gen = ++fetchAdminLinkContextGenRef.current;
+    let row: { id: string; cluster_id?: string; canonical_name: string; tag_type: string } | null = null;
+    const r1 = await supabase
       .from('tag_identities')
-      .select('id, cluster_id, canonical_name')
+      .select('id, cluster_id, canonical_name, tag_type')
       .eq('id', identityId)
       .maybeSingle();
-    if (error || !row) return;
-    const r = row as { id: string; cluster_id?: string; canonical_name: string };
-    const clusterId = r.cluster_id ?? r.id;
-    const { data: peers, error: peersErr } = await supabase
-      .from('tag_identities')
-      .select('id, canonical_name')
-      .eq('cluster_id', clusterId)
-      .neq('id', identityId)
-      .order('canonical_name', { ascending: true });
-    if (peersErr) return;
-    setAdminIdentityClusterPeers((peers || []) as { id: string; canonical_name: string }[]);
+    if (r1.error) {
+      const r0 = await supabase
+        .from('tag_identities')
+        .select('id, canonical_name, tag_type')
+        .eq('id', identityId)
+        .maybeSingle();
+      if (r0.error || !r0.data) {
+        if (gen === fetchAdminLinkContextGenRef.current) {
+          setAdminIdentityClusterMembers([]);
+          setAdminAliasError('Could not load profile.');
+        }
+        return [];
+      }
+      const a = r0.data as { id: string; canonical_name: string; tag_type: string };
+      row = { id: a.id, canonical_name: a.canonical_name, tag_type: a.tag_type, cluster_id: a.id };
+    } else {
+      row = r1.data as { id: string; cluster_id?: string; canonical_name: string; tag_type: string };
+    }
+    if (!row) {
+      if (gen === fetchAdminLinkContextGenRef.current) {
+        setAdminIdentityClusterMembers([]);
+      }
+      return [];
+    }
+    const r = row;
+    const { members, errorMessage } = await loadAdminTagGroupMembers(r, alsoPartnerId);
+    if (gen !== fetchAdminLinkContextGenRef.current) {
+      return members;
+    }
+    if (errorMessage) {
+      setAdminAliasError(errorMessage);
+    } else {
+      setAdminAliasError((prev) =>
+        prev && (prev.startsWith('Could not load linked group') || /cluster_id|migration 202604/i.test(prev))
+          ? null
+          : prev
+      );
+    }
+    setAdminIdentityClusterMembers(members);
+    setAdminManagedIdentity((prev) =>
+      prev?.id === identityId
+        ? {
+            ...prev,
+            clusterId: r.cluster_id ?? r.id,
+            canonical_name: r.canonical_name,
+            tag_type: r.tag_type,
+          }
+        : prev
+    );
+    return members;
   };
 
   const fetchAdminAliasesForIdentity = async (identityId: string) => {
@@ -1087,9 +1163,38 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   const selectAdminMergeAbsorb = (row: TagIdentityRecord) => {
     if (!adminManagedIdentity || row.id === adminManagedIdentity.id) return;
     if (row.tag_type !== adminManagedIdentity.tag_type) return;
+    if (row.clusterId && adminManagedIdentity.clusterId && row.clusterId === adminManagedIdentity.clusterId) {
+      setAdminMergeSearch('');
+      setAdminMergeSearchResults([]);
+      setSuccess('Already connected.');
+      setTimeout(() => setSuccess(''), 3000);
+      void fetchAdminLinkContext(adminManagedIdentity.id, row.id);
+      return;
+    }
     setAdminMergeAbsorb(row);
     setAdminMergeSearch('');
     setAdminMergeSearchResults([]);
+  };
+
+  /** Switch which cluster member is open (same group; aliases load for that row). */
+  const switchAdminToLinkedMember = (m: { id: string; canonical_name: string }) => {
+    if (!adminManagedIdentity || m.id === adminManagedIdentity.id) return;
+    setAdminManagedIdentity({
+      id: m.id,
+      tag_type: adminManagedIdentity.tag_type,
+      canonical_name: m.canonical_name,
+      clusterId: adminManagedIdentity.clusterId,
+    });
+    setAdminMergeSearch('');
+    setAdminMergeSearchResults([]);
+    setAdminMergeAbsorb(null);
+    setEditingAdminAliasId(null);
+    setEditAdminAliasDraft('');
+    setAdminAliasDeleteMode(false);
+    setAdminAddingAlias(false);
+    setNewAdminAliasText('');
+    void fetchAdminAliasesForIdentity(m.id);
+    void fetchAdminLinkContext(m.id);
   };
 
   const deleteAdminAliasRow = async (aliasId: string) => {
@@ -1124,6 +1229,10 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     const text = newAdminAliasText.trim();
     if (!text) return;
     const norm = normalizeTagName(text);
+    if (norm === normalizeTagName(adminManagedIdentity.canonical_name)) {
+      setAdminAliasError('That spelling is already the name on file for this tag. Use an alternate or nickname.');
+      return;
+    }
     const taken = await isNormalizedAliasTakenByOtherIdentity(
       adminManagedIdentity.tag_type as TagType,
       adminManagedIdentity.id,
@@ -1154,34 +1263,110 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       setAdminAliasError('Pick a different identity to link.');
       return;
     }
-    if (
-      !window.confirm(
-        `Link “${adminMergeAbsorb.canonical_name}” to “${adminManagedIdentity.canonical_name}”? Search and filters will treat them as the same. You can unlink later.`
-      )
-    ) {
-      return;
-    }
+    const otherName = adminMergeAbsorb.canonical_name;
+    const thisName = adminManagedIdentity.canonical_name;
+    const partnerId = adminMergeAbsorb.id;
+    const selfId = adminManagedIdentity.id;
     setAdminAliasError(null);
     setAdminLinking(true);
-    const { error } = await adminLinkTagIdentities(adminMergeAbsorb.id, adminManagedIdentity.id);
-    setAdminLinking(false);
-    if (error) {
-      setAdminAliasError(error.message || 'Link failed');
+
+    const { data: aRow } = await supabase.from('tag_identities').select('cluster_id').eq('id', partnerId).maybeSingle();
+    const { data: bRow } = await supabase.from('tag_identities').select('cluster_id').eq('id', selfId).maybeSingle();
+    const ca = (aRow as { cluster_id?: string } | null)?.cluster_id;
+    const cb = (bRow as { cluster_id?: string } | null)?.cluster_id;
+    if (ca != null && cb != null && ca === cb) {
+      setAdminLinking(false);
+      setAdminMergeAbsorb(null);
+      setAdminMergeSearch('');
+      setAdminMergeSearchResults([]);
+      setSuccess('Already connected — same person.');
+      setTimeout(() => setSuccess(''), 3500);
+      const { data: fresh } = await supabase
+        .from('tag_identities')
+        .select('id, tag_type, canonical_name, cluster_id')
+        .eq('id', selfId)
+        .maybeSingle();
+      if (fresh) {
+        const f = fresh as { id: string; tag_type: string; canonical_name: string; cluster_id?: string };
+        setAdminManagedIdentity({
+          id: f.id,
+          tag_type: f.tag_type,
+          canonical_name: f.canonical_name,
+          clusterId: f.cluster_id ?? f.id,
+        });
+      }
+      await fetchAdminAliasesForIdentity(selfId);
+      await fetchAdminLinkContext(selfId, partnerId);
       return;
     }
+
+    const { error } = await adminLinkTagIdentities(partnerId, selfId);
+    setAdminLinking(false);
+
+    if (error) {
+      const errText = (error as Error).message || 'Link failed';
+      const isCycle = /invalid link|would form a cycle|cycle/i.test(errText);
+      setAdminMergeAbsorb(null);
+      setAdminMergeSearch('');
+      setAdminMergeSearchResults([]);
+      const { data: freshE } = await supabase
+        .from('tag_identities')
+        .select('id, tag_type, canonical_name, cluster_id')
+        .eq('id', selfId)
+        .maybeSingle();
+      if (freshE) {
+        const f = freshE as { id: string; tag_type: string; canonical_name: string; cluster_id?: string };
+        setAdminManagedIdentity({
+          id: f.id,
+          tag_type: f.tag_type,
+          canonical_name: f.canonical_name,
+          clusterId: f.cluster_id ?? f.id,
+        });
+      }
+      await fetchAdminAliasesForIdentity(selfId);
+      let members = await fetchAdminLinkContext(selfId, partnerId);
+      if (isCycle && members.length < 2) {
+        const byId = new Map<string, { id: string; canonical_name: string }>();
+        byId.set(partnerId, { id: partnerId, canonical_name: otherName });
+        byId.set(selfId, { id: selfId, canonical_name: thisName });
+        members = Array.from(byId.values()).sort((a, b) => a.canonical_name.localeCompare(b.canonical_name));
+        setAdminIdentityClusterMembers(members);
+      }
+      if (isCycle) {
+        setAdminAliasError(null);
+        setSuccess('Already connected (same in the system).');
+        setTimeout(() => setSuccess(''), 4000);
+      } else {
+        setAdminAliasError(errText);
+      }
+      return;
+    }
+
     setAdminMergeAbsorb(null);
     setAdminMergeSearch('');
     setAdminMergeSearchResults([]);
-    setSuccess('Identities linked');
-    setTimeout(() => setSuccess(''), 3000);
-    if (adminManagedIdentity) {
-      void fetchAdminAliasesForIdentity(adminManagedIdentity.id);
-      void fetchAdminLinkContext(adminManagedIdentity.id);
+    setSuccess(`Linked: “${otherName}” ↔ “${thisName}”`);
+    setTimeout(() => setSuccess(''), 4000);
+    const { data: fresh } = await supabase
+      .from('tag_identities')
+      .select('id, tag_type, canonical_name, cluster_id')
+      .eq('id', selfId)
+      .maybeSingle();
+    if (fresh) {
+      const f = fresh as { id: string; tag_type: string; canonical_name: string; cluster_id?: string };
+      setAdminManagedIdentity({
+        id: f.id,
+        tag_type: f.tag_type,
+        canonical_name: f.canonical_name,
+        clusterId: f.cluster_id ?? f.id,
+      });
     }
+    await fetchAdminAliasesForIdentity(selfId);
+    await fetchAdminLinkContext(selfId, partnerId);
   };
 
   const runAdminUnlink = async (identityId: string) => {
-    if (!window.confirm('Unlink this profile? It will be treated as a separate name again in search and filters.')) {
+    if (!window.confirm('Remove this profile from the linked set? It becomes its own tag again.')) {
       return;
     }
     setAdminAliasError(null);
@@ -1192,10 +1377,26 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
       setAdminAliasError(error.message || 'Unlink failed');
       return;
     }
-    setSuccess('Link removed');
+    setSuccess('Unlinked');
     setTimeout(() => setSuccess(''), 3000);
     if (adminManagedIdentity) {
-      void fetchAdminLinkContext(adminManagedIdentity.id);
+      if (adminManagedIdentity.id === identityId) {
+        const { data: fr } = await supabase
+          .from('tag_identities')
+          .select('id, tag_type, canonical_name, cluster_id')
+          .eq('id', identityId)
+          .maybeSingle();
+        if (fr) {
+          const f = fr as { id: string; tag_type: string; canonical_name: string; cluster_id?: string };
+          setAdminManagedIdentity({
+            id: f.id,
+            tag_type: f.tag_type,
+            canonical_name: f.canonical_name,
+            clusterId: f.cluster_id ?? f.id,
+          });
+        }
+      }
+      await fetchAdminLinkContext(adminManagedIdentity.id);
       void fetchAdminAliasesForIdentity(adminManagedIdentity.id);
     }
   };
@@ -1405,126 +1606,168 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                   ))}
                 </div>
 
-                <section className="border-t border-stone-100 pt-5 mt-5 space-y-3">
-                  <h3 className="text-sm font-semibold text-stone-800 mb-1">Manage tag aliases</h3>
-                  <p className="text-xs text-stone-500 mb-3">Search for a tag identity, then add, edit, or remove aliases.</p>
+                <section
+                  className="border-t border-stone-100 pt-5 mt-5 space-y-3"
+                  aria-labelledby="admin-tag-aliases-heading"
+                >
+                  <h3 id="admin-tag-aliases-heading" className="text-sm font-semibold text-stone-800">
+                    Tag aliases
+                  </h3>
                   <div className="relative">
                     <input
                       type="text"
                       value={adminIdentitySearch}
                       onChange={(e) => setAdminIdentitySearch(e.target.value)}
-                      placeholder="Search shows, designers, models…"
+                      placeholder="Search (2+ letters)…"
                       className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
                       autoComplete="off"
                     />
                     {adminIdentitySearching && (
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">Searching…</span>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">…</span>
                     )}
                   </div>
-                  {adminIdentitySearch.trim().length >= 2 && adminIdentitySearchResults.length > 0 && (
-                    <div className="rounded-md border border-stone-200 bg-white divide-y divide-stone-100 max-h-48 overflow-y-auto shadow-sm">
+                  {adminIdentitySearch.trim().length >= 2 && !adminManagedIdentity && adminIdentitySearchResults.length > 0 && (
+                    <div className="rounded-md border border-stone-200 bg-white divide-y divide-stone-100 max-h-40 overflow-y-auto">
                       {adminIdentitySearchResults.map((row) => (
                         <button
                           key={row.id}
                           type="button"
                           onClick={() => selectAdminManagedIdentity(row)}
-                          className="w-full flex items-stretch gap-2 px-3 py-2 text-left hover:bg-gray-50"
+                          className="w-full flex items-stretch gap-2 px-3 py-2 text-left hover:bg-stone-50"
                         >
-                          <div className="flex flex-1 min-w-0 items-center gap-2">
-                            <span className="text-gray-400 text-xs shrink-0">{connectSearchTypePrefix(row.tag_type)}</span>
-                            <span className="text-sm text-gray-900 truncate">{row.canonical_name}</span>
-                          </div>
-                          <span className="shrink-0 self-center text-xs text-stone-500">Open</span>
+                          <span className="text-stone-400 text-xs shrink-0">{connectSearchTypePrefix(row.tag_type)}</span>
+                          <span className="text-sm text-stone-900 truncate flex-1">{row.canonical_name}</span>
                         </button>
                       ))}
                     </div>
                   )}
-                  {adminIdentitySearch.trim().length >= 2 && !adminIdentitySearching && adminIdentitySearchResults.length === 0 && (
-                    <p className="text-xs text-stone-600">No identities match.</p>
+                  {adminIdentitySearch.trim().length >= 2 && !adminManagedIdentity && !adminIdentitySearching && adminIdentitySearchResults.length === 0 && (
+                    <p className="text-xs text-stone-500">No match.</p>
                   )}
 
                   {adminManagedIdentity && (
-                    <div className="rounded-xl border border-stone-100 p-3 bg-stone-50/70 space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center text-xs px-2 py-1 rounded-md bg-gray-300 text-gray-600">
-                          {formatTagTypeLabel(adminManagedIdentity.tag_type)}
-                        </span>
-                        <span className="text-sm font-medium text-stone-900">{adminManagedIdentity.canonical_name}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAdminManagedIdentity(null);
-                            setAdminManagedAliases([]);
-                            setAdminAliasDeleteMode(false);
-                            setEditingAdminAliasId(null);
-                            setAdminAddingAlias(false);
-                            setAdminMergeSearch('');
-                            setAdminMergeSearchResults([]);
-                            setAdminMergeAbsorb(null);
-                            setAdminIdentityClusterPeers([]);
-                          }}
-                          className="ml-auto text-[11px] text-stone-400 hover:text-stone-700"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      {adminIdentityClusterPeers.length > 0 && (
-                        <div className="text-xs text-stone-600 space-y-1">
-                          <p className="text-[11px] font-medium text-stone-600">
-                            Same person (linked names; unlink any to split)
-                          </p>
-                          <ul className="list-none space-y-1">
-                            {adminIdentityClusterPeers.map((f) => (
-                              <li key={f.id} className="flex flex-wrap items-center gap-2 pl-0">
-                                <span className="text-stone-800">{f.canonical_name}</span>
-                                <button
-                                  type="button"
-                                  disabled={adminLinking}
-                                  onClick={() => void runAdminUnlink(f.id)}
-                                  className="text-[11px] text-amber-800 underline decoration-amber-300 hover:text-amber-950"
-                                >
-                                  Unlink
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                          <div className="pt-0.5">
-                            <button
-                              type="button"
-                              disabled={adminLinking}
-                              onClick={() => void runAdminUnlink(adminManagedIdentity.id)}
-                              className="text-[11px] text-amber-800 underline decoration-amber-300 hover:text-amber-950"
-                            >
-                              Unlink &quot;{adminManagedIdentity.canonical_name}&quot; (split this spelling out)
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      {adminAliasLoading && <p className="text-xs text-stone-500">Loading aliases…</p>}
-                      {adminAliasError && <p className="text-xs text-amber-800">{adminAliasError}</p>}
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                          <span className="text-[11px] font-medium text-stone-600">Also credited as</span>
-                          {adminAliasDeleteMode ? (
-                            <button
-                              type="button"
-                              onClick={() => setAdminAliasDeleteMode(false)}
-                              className="text-[11px] text-stone-600 hover:text-stone-900"
-                            >
-                              Done
-                            </button>
+                    <div className="rounded-xl border border-stone-200 bg-white p-3 space-y-3">
+                      <div className="flex flex-wrap items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          {adminIdentityClusterMembers.length >= 2 ? (
+                            <div className="space-y-2 min-w-0">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span className="inline-flex items-center text-xs px-2 py-1 rounded-md bg-gray-300 text-gray-600 shrink-0">
+                                  {formatTagTypeLabel(adminManagedIdentity.tag_type)}
+                                </span>
+                                <span className="text-stone-300 text-[11px] select-none" aria-hidden>
+                                  ·
+                                </span>
+                                <span className="text-sm font-medium text-stone-900 min-w-0 break-words">
+                                  {adminManagedIdentity.canonical_name}
+                                </span>
+                              </div>
+                              <div
+                                className="flex flex-wrap items-center gap-1.5 pl-0"
+                                role="group"
+                                aria-label="Other names in this linked set"
+                              >
+                                {adminIdentityClusterMembers
+                                  .filter((m) => m.id !== adminManagedIdentity.id)
+                                  .sort((a, b) => a.canonical_name.localeCompare(b.canonical_name))
+                                  .map((m) => (
+                                    <span
+                                      key={m.id}
+                                      className="inline-flex items-center max-w-full gap-0.5"
+                                    >
+                                      <button
+                                        type="button"
+                                        data-tag-pill
+                                        className={linkedGroupPillClass()}
+                                        onClick={() => switchAdminToLinkedMember(m)}
+                                        title={`Edit “${m.canonical_name}”`}
+                                      >
+                                        <TagPillSplitLabel
+                                          text={m.canonical_name}
+                                          segmentColors={creditPillSegmentColors(false)}
+                                        />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="shrink-0 p-0.5 leading-none text-stone-400 hover:text-red-600 disabled:opacity-40"
+                                        disabled={adminLinking}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          void runAdminUnlink(m.id);
+                                        }}
+                                        title={`Remove “${m.canonical_name}” from the linked set`}
+                                        aria-label={`Remove ${m.canonical_name} from the linked set`}
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    </span>
+                                  ))}
+                              </div>
+                            </div>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => setAdminAliasDeleteMode(true)}
-                              className="text-[11px] text-stone-500 hover:text-stone-800"
-                            >
-                              Remove aliases
-                            </button>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                              <span className="inline-flex items-center text-xs px-2 py-1 rounded-md bg-gray-300 text-gray-600 shrink-0">
+                                {formatTagTypeLabel(adminManagedIdentity.tag_type)}
+                              </span>
+                              <span className="text-stone-300 text-[11px] select-none" aria-hidden>
+                                ·
+                              </span>
+                              <span className="text-sm font-medium text-stone-900 break-words min-w-0">
+                                {adminManagedIdentity.canonical_name}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              fetchAdminLinkContextGenRef.current += 1;
+                              setAdminManagedIdentity(null);
+                              setAdminManagedAliases([]);
+                              setAdminAliasDeleteMode(false);
+                              setEditingAdminAliasId(null);
+                              setAdminAddingAlias(false);
+                              setNewAdminAliasText('');
+                              setAdminMergeSearch('');
+                              setAdminMergeSearchResults([]);
+                              setAdminMergeAbsorb(null);
+                              setAdminIdentityClusterMembers([]);
+                            }}
+                            className="text-xs px-2 py-1 rounded border border-stone-200 text-stone-600 hover:bg-stone-50"
+                          >
+                            Back
+                          </button>
+                        </div>
+                      </div>
+                      {adminAliasLoading && <p className="text-xs text-stone-500">Loading…</p>}
+                      {adminAliasError && <p className="text-xs text-amber-800">{adminAliasError}</p>}
+
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] text-stone-500">Aliases</span>
+                          {adminAliasesForDisplay.length > 0 && (
+                            adminAliasDeleteMode ? (
+                              <button
+                                type="button"
+                                onClick={() => setAdminAliasDeleteMode(false)}
+                                className="text-[11px] text-stone-600"
+                              >
+                                Done
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setAdminAliasDeleteMode(true)}
+                                className="text-[11px] text-stone-500"
+                              >
+                                Remove
+                              </button>
+                            )
                           )}
                         </div>
                         <div className="flex flex-wrap gap-1.5 items-center">
-                          {adminManagedAliases.map((al) =>
+                          {adminAliasesForDisplay.map((al) =>
                             editingAdminAliasId === al.id ? (
                               <div key={al.id} className="inline-flex flex-wrap items-center gap-1.5">
                                 <input
@@ -1621,68 +1864,70 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
                             <button
                               type="button"
                               onClick={() => setAdminAddingAlias(true)}
-                              className="inline-flex items-center justify-center text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50"
-                              title="Add alias"
+                              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-dashed border-stone-300 text-stone-600 hover:bg-stone-50"
                             >
-                              <Plus size={14} />
+                              <Plus size={14} className="shrink-0" />
+                              Add spelling
                             </button>
                           )}
                         </div>
                       </div>
-                      <div className="pt-3 border-t border-stone-200/80">
-                        <p className="text-[11px] font-medium text-stone-600 mb-1">Link another profile</p>
-                        <p className="text-xs text-stone-500 mb-2">Same type only. Reversible.</p>
+
+                      <div className="pt-2 border-t border-stone-200/80 space-y-2">
+                        <p className="text-[11px] text-stone-500">Link a second profile (same type)</p>
                         <div className="relative">
                           <input
                             type="text"
                             value={adminMergeSearch}
                             onChange={(e) => setAdminMergeSearch(e.target.value)}
-                            placeholder="Search duplicate to merge in…"
+                            placeholder="Search other name…"
                             className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
                             autoComplete="off"
                           />
                           {adminMergeSearching && (
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">Searching…</span>
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">…</span>
                           )}
                         </div>
                         {adminMergeSearch.trim().length >= 2 && adminMergeSearchResults.length > 0 && (
-                          <div className="mt-1 rounded-md border border-stone-200 bg-white max-h-36 overflow-y-auto shadow-sm">
+                          <div className="rounded-md border border-stone-200 max-h-32 overflow-y-auto divide-y divide-stone-100">
                             {adminMergeSearchResults.map((row) => (
                               <button
                                 key={row.id}
                                 type="button"
                                 onClick={() => selectAdminMergeAbsorb(row)}
-                                className="w-full text-left px-3 py-2 text-sm text-stone-900 hover:bg-stone-50"
+                                className="w-full flex items-center gap-2 text-left px-3 py-2 text-sm text-stone-900 hover:bg-stone-50"
                               >
-                                {row.canonical_name}
+                                <span className="text-stone-400 text-xs shrink-0">{connectSearchTypePrefix(row.tag_type)}</span>
+                                <span className="truncate">{row.canonical_name}</span>
                               </button>
                             ))}
                           </div>
                         )}
                         {adminMergeSearch.trim().length >= 2 && !adminMergeSearching && adminMergeSearchResults.length === 0 && (
-                          <p className="text-xs text-stone-500 mt-1">No other identities of this type match.</p>
+                          <p className="text-xs text-stone-500">No match.</p>
                         )}
                         {adminMergeAbsorb && (
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <span className="text-xs text-stone-700 min-w-0">
-                              <span className="text-stone-500">Merge </span>
-                              <span className="font-medium">{adminMergeAbsorb.canonical_name}</span>
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                            <span className="text-xs text-stone-600">
+                              Link &quot;{adminMergeAbsorb.canonical_name}&quot; with &quot;{adminManagedIdentity.canonical_name}&quot;?
                             </span>
-                            <button
-                              type="button"
-                              className="text-[11px] text-stone-500 hover:text-stone-800"
-                              onClick={() => setAdminMergeAbsorb(null)}
-                            >
-                              Clear
-                            </button>
-                            <button
-                              type="button"
-                              disabled={adminLinking}
-                              onClick={() => void runAdminLink()}
-                              className="text-xs ml-auto min-h-11 sm:min-h-0 px-2.5 py-1.5 rounded-md bg-amber-100 text-amber-950 font-medium hover:bg-amber-200 disabled:opacity-50"
-                            >
-                              {adminLinking ? 'Linking…' : `Link to ${adminManagedIdentity.canonical_name}`}
-                            </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-1 rounded border border-stone-200"
+                                onClick={() => setAdminMergeAbsorb(null)}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                disabled={adminLinking}
+                                onClick={() => void runAdminLink()}
+                                className="text-xs px-2 py-1 rounded bg-amber-200 text-amber-950 font-medium disabled:opacity-50"
+                              >
+                                {adminLinking ? '…' : 'Link'}
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>

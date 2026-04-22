@@ -96,8 +96,11 @@ export async function findIdentityByName(tagType: TagType, name: string): Promis
 }
 
 /**
- * All distinct alias display strings for an identity resolved from `headlineTagValue`, excluding any
- * spelling that matches the headline (normalized). Empty when there is no identity (e.g. city/season).
+ * All distinct “also credited as” display strings: row aliases, optional public display labels, and
+ * **every other linked identity’s canonical** in the same cluster (separate `tag_identities` rows
+ * are not each other’s `tag_aliases` rows, so we must list peer canonicals explicitly).
+ * Excludes any spelling that matches `headlineTagValue` (normalized). Empty when there is no identity
+ * (e.g. city/season).
  */
 export async function fetchAliasStringsForTag(tagType: string, headlineTagValue: string): Promise<string[]> {
   if (tagType === 'city' || tagType === 'season') return [];
@@ -108,28 +111,69 @@ export async function fetchAliasStringsForTag(tagType: string, headlineTagValue:
   const identity = await findIdentityByName(tagType as TagType, headlineTagValue);
   if (!identity) return [];
 
-  const { data: members } = await supabase.from('tag_identities').select('id').eq('cluster_id', identity.clusterId);
-  const memberIds = (members || []).map((m: { id: string }) => m.id);
-  if (memberIds.length === 0) return [];
+  const { data: byCluster, error: clusterErr } = await supabase
+    .from('tag_identities')
+    .select('id, canonical_name, public_display_alias_id')
+    .eq('tag_type', tagType)
+    .eq('cluster_id', identity.clusterId);
 
-  const { data: rows, error } = await supabase
+  type Member = { id: string; canonical_name: string; public_display_alias_id: string | null };
+  let members: Member[] = [];
+  if (!clusterErr && byCluster && byCluster.length > 0) {
+    members = byCluster as Member[];
+  } else {
+    const { data: one } = await supabase
+      .from('tag_identities')
+      .select('id, canonical_name, public_display_alias_id')
+      .eq('id', identity.id)
+      .maybeSingle();
+    if (!one) return [];
+    members = [one as Member];
+  }
+
+  const memberIds = members.map((m) => m.id);
+  const seenNorm = new Set<string>();
+  const out: string[] = [];
+  const push = (s: string | null | undefined) => {
+    if (!s) return;
+    const n = normalizeTagName(s);
+    if (!n || n === headlineNorm) return;
+    if (seenNorm.has(n)) return;
+    seenNorm.add(n);
+    out.push(s);
+  };
+
+  for (const m of members) {
+    push(m.canonical_name);
+  }
+
+  const pubIds = [...new Set(members.map((m) => m.public_display_alias_id).filter(Boolean))] as string[];
+  if (pubIds.length) {
+    const { data: pubAli } = await supabase.from('tag_aliases').select('id, alias').in('id', pubIds);
+    const byPubId = new Map(
+      (pubAli || []).map((r) => {
+        const row = r as { id: string; alias: string };
+        return [row.id, row.alias] as const;
+      })
+    );
+    for (const m of members) {
+      if (m.public_display_alias_id) {
+        const a = byPubId.get(m.public_display_alias_id);
+        if (a) push(a);
+      }
+    }
+  }
+
+  const { data: rows } = await supabase
     .from('tag_aliases')
     .select('alias')
     .in('identity_id', memberIds)
     .order('alias', { ascending: true });
-
-  if (error || !rows?.length) return [];
-
-  const seenNorm = new Set<string>();
-  const out: string[] = [];
-  for (const row of rows as { alias: string }[]) {
-    const n = normalizeTagName(row.alias);
-    if (!n || n === headlineNorm) continue;
-    if (seenNorm.has(n)) continue;
-    seenNorm.add(n);
-    out.push(row.alias);
+  for (const row of rows || []) {
+    push((row as { alias: string }).alias);
   }
-  return out;
+
+  return out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
 export async function ensureIdentity(tagType: TagType, name: string, createdBy?: string): Promise<TagIdentityRecord | null> {
@@ -228,6 +272,37 @@ export async function ensureAlias(identityId: string, alias: string, createdBy?:
   });
 }
 
+type IdentityNameRow = { id: string; tag_type: string; canonical_name: string };
+
+/**
+ * Fetches cluster_id for search hits in one round-trip. If the column is missing or the query
+ * fails, every row maps to `clusterId === id` so search still populates.
+ */
+async function toRecordsWithClusterIds(rows: IdentityNameRow[]): Promise<TagIdentityRecord[]> {
+  if (rows.length === 0) return [];
+  const ids = [...new Set(rows.map((r) => r.id))];
+  const { data: clusterRows, error } = await supabase
+    .from('tag_identities')
+    .select('id, cluster_id')
+    .in('id', ids);
+  const clusterById = new Map<string, string>();
+  if (!error && clusterRows) {
+    for (const r of clusterRows as { id: string; cluster_id?: string }[]) {
+      clusterById.set(r.id, r.cluster_id ?? r.id);
+    }
+  } else {
+    for (const id of ids) clusterById.set(id, id);
+  }
+  return rows.map((row) =>
+    toRecord({
+      id: row.id,
+      tag_type: row.tag_type,
+      canonical_name: row.canonical_name,
+      cluster_id: clusterById.get(row.id) ?? row.id,
+    })
+  );
+}
+
 /** Search tag identities by name (canonical or alias), any type. For "find yourself" / credit search. */
 export async function searchTagIdentities(query: string): Promise<TagIdentityRecord[]> {
   const q = normalizeTagName(query);
@@ -236,29 +311,29 @@ export async function searchTagIdentities(query: string): Promise<TagIdentityRec
   const safe = (s: string) => s.replace(/'/g, "''");
   const trimQ = query.trim();
   const seen = new Set<string>();
-  const out: TagIdentityRecord[] = [];
+  const out: IdentityNameRow[] = [];
 
   const { data: byCanonical } = await supabase
     .from('tag_identities')
-    .select('id, tag_type, canonical_name, cluster_id')
+    .select('id, tag_type, canonical_name')
     .ilike('canonical_name', `%${safe(trimQ)}%`)
     .limit(15);
-  (byCanonical || []).forEach((row: TagIdentityRecord & { cluster_id: string }) => {
+  (byCanonical || []).forEach((row: IdentityNameRow) => {
     if (!seen.has(row.id)) {
       seen.add(row.id);
-      out.push(toRecord(row as { id: string; cluster_id: string; tag_type: string; canonical_name: string }));
+      out.push(row);
     }
   });
 
   const { data: byNormalized } = await supabase
     .from('tag_identities')
-    .select('id, tag_type, canonical_name, cluster_id')
+    .select('id, tag_type, canonical_name')
     .like('normalized_name', `%${q}%`)
     .limit(15);
-  (byNormalized || []).forEach((row: TagIdentityRecord & { cluster_id: string }) => {
+  (byNormalized || []).forEach((row: IdentityNameRow) => {
     if (!seen.has(row.id)) {
       seen.add(row.id);
-      out.push(toRecord(row as { id: string; cluster_id: string; tag_type: string; canonical_name: string }));
+      out.push(row);
     }
   });
 
@@ -271,13 +346,13 @@ export async function searchTagIdentities(query: string): Promise<TagIdentityRec
   if (aliasIds.length > 0) {
     const { data: identities } = await supabase
       .from('tag_identities')
-      .select('id, tag_type, canonical_name, cluster_id')
+      .select('id, tag_type, canonical_name')
       .in('id', aliasIds)
-      .limit(15);
-    (identities || []).forEach((row: TagIdentityRecord & { cluster_id: string }) => {
+      .limit(20);
+    (identities || []).forEach((row: IdentityNameRow) => {
       if (!seen.has(row.id)) {
         seen.add(row.id);
-        out.push(toRecord(row as { id: string; cluster_id: string; tag_type: string; canonical_name: string }));
+        out.push(row);
       }
     });
   }
@@ -286,7 +361,7 @@ export async function searchTagIdentities(query: string): Promise<TagIdentityRec
 
   // Keep all matching **rows** (not one per cluster) so every linked spelling stays searchable
   // and remains visible by its canonical or alias. Filter dedupes by type+value.
-  return out.slice(0, 20);
+  return toRecordsWithClusterIds(out.slice(0, 20));
 }
 
 const EVENT_TAG_COLUMNS: { key: keyof EventTagSource; tagType: TagType }[] = [

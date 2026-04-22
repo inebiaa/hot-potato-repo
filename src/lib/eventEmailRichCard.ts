@@ -2,6 +2,7 @@ import type { Event } from './eventTypes';
 import { eventAbsoluteImageUrl } from './eventJsonLd';
 import { canonicalEventUrl } from './siteBase';
 import { formatEventDateDisplay } from './formatEventDate';
+import { appName } from './brandMeta';
 
 function escapeHtml(s: string): string {
   return s
@@ -43,7 +44,7 @@ export function buildEventEmailPlainText(event: Event): string {
     lines.push(`Tickets / info: ${ticket}`);
   }
   lines.push('');
-  lines.push(`View on Secret Blogger: ${url}`);
+  lines.push(`View on ${appName()}: ${url}`);
   return lines.join('\n');
 }
 
