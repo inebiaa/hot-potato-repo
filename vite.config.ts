@@ -11,6 +11,11 @@ import { canonicalEventUrlFromParts } from './src/lib/siteBase'
 import { eventJsonLdScriptContentPrerender } from './src/lib/eventJsonLd'
 import { buildEventSocialMetaTagsHtml } from './src/lib/eventSocialMeta'
 
+const APP_NAME = (process.env.VITE_APP_NAME || 'Secret Blogger').trim() || 'Secret Blogger'
+const APP_DESCRIPTION =
+  (process.env.VITE_APP_DESCRIPTION || 'Discover, rate, and review fashion shows from around the world.').trim() ||
+  'Discover, rate, and review fashion shows from around the world.'
+
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
 }
@@ -36,7 +41,7 @@ function injectEventSeoShell(indexHtml: string, event: Event, site: string, vite
   const canonical = canonicalEventUrlFromParts(event.id, site, viteBase)
   const jsonLd = jsonLdForHtml(eventJsonLdScriptContentPrerender(event, prerender))
   const socialMeta = buildEventSocialMetaTagsHtml(event, prerender)
-  const title = `${event.name} | Secret Blogger`
+  const title = `${event.name} | ${APP_NAME}`
   let html = indexHtml.replace(/<title>.*?<\/title>/s, `<title>${escapeTitleText(title)}</title>`)
   const block = `  <link rel="canonical" href="${escapeHtmlAttr(canonical)}" />\n${socialMeta}\n  <script id="secret-blogger-event-jsonld" type="application/ld+json">${jsonLd}</script>\n`
   html = html.replace('</head>', `${block}</head>`)
@@ -149,9 +154,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['og-default.png', 'robots.txt', 'CNAME'],
       manifest: {
-        name: 'Secret Blogger',
-        short_name: 'Secret Blogger',
-        description: 'Discover, rate, and review fashion shows from around the world.',
+        name: APP_NAME,
+        short_name: APP_NAME,
+        description: APP_DESCRIPTION,
         theme_color: '#f8fafc',
         background_color: '#f8fafc',
         display: 'standalone',

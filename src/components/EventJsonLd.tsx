@@ -3,6 +3,7 @@ import type { Event } from '../lib/supabase';
 import { eventJsonLdScriptContent } from '../lib/eventJsonLd';
 import { buildEventSocialMetaTagSpecs } from '../lib/eventSocialMeta';
 import { canonicalEventUrl } from '../lib/siteBase';
+import { appName } from '../lib/brandMeta';
 
 const SCRIPT_ID = 'secret-blogger-event-jsonld';
 const SOCIAL_META_ATTR = 'data-secret-blogger-event-social';
@@ -12,14 +13,13 @@ interface EventJsonLdProps {
 }
 
 /**
- * Injects Event JSON-LD, canonical, Open Graph / Twitter meta, and document title for the event page.
+ * Injects Event JSON-LD, canonical, Open Graph meta, and document title for the event page.
  * Removes injected head nodes on unmount.
  */
 export default function EventJsonLd({ event }: EventJsonLdProps) {
   useEffect(() => {
-    const appName = 'Secret Blogger';
     const prevTitle = document.title;
-    document.title = `${event.name} | ${appName}`;
+    document.title = `${event.name} | ${appName()}`;
 
     document.querySelectorAll(`meta[${SOCIAL_META_ATTR}]`).forEach((el) => el.remove());
 

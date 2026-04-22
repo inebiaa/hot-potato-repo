@@ -3,6 +3,7 @@ import { canonicalEventUrl, canonicalEventUrlFromParts } from './siteBase';
 import type { EventJsonLdPrerender } from './eventJsonLd';
 import { eventAbsoluteImageUrl } from './eventJsonLd';
 import { formatEventDateDisplay } from './formatEventDate';
+import { appName } from './brandMeta';
 
 function escapeHtmlAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -24,7 +25,7 @@ export function buildEventOgDescription(event: Event, maxLen = 200): string {
 }
 
 /**
- * Open Graph + Twitter Card tags for link previews (email, Slack, etc.).
+ * Open Graph tags for link previews (email, Slack, iMessage, etc.).
  * Safe to inject in `<head>` when attribute values are escaped.
  */
 export function buildEventSocialMetaTagsHtml(event: Event, prerender?: EventJsonLdPrerender): string {
@@ -38,10 +39,11 @@ export function buildEventSocialMetaTagsHtml(event: Event, prerender?: EventJson
   const titleEsc = escapeHtmlAttr(title);
   const descEsc = escapeHtmlAttr(description);
   const urlEsc = escapeHtmlAttr(canonical);
+  const siteNameEsc = escapeHtmlAttr(appName());
 
   const sb = 'data-secret-blogger-event-social=""';
   const lines: string[] = [
-    `<meta property="og:site_name" content="Secret Blogger" ${sb} />`,
+    `<meta property="og:site_name" content="${siteNameEsc}" ${sb} />`,
     `<meta property="og:locale" content="en_US" ${sb} />`,
     `<meta property="og:type" content="website" ${sb} />`,
     `<meta property="og:title" content="${titleEsc}" ${sb} />`,
@@ -55,18 +57,6 @@ export function buildEventSocialMetaTagsHtml(event: Event, prerender?: EventJson
     lines.push(`<meta property="og:image:width" content="1200" ${sb} />`);
     lines.push(`<meta property="og:image:height" content="630" ${sb} />`);
     lines.push(`<meta property="og:image:alt" content="${titleEsc}" ${sb} />`);
-  }
-  const twitterCard = image ? 'summary_large_image' : 'summary';
-  lines.push(`<meta name="twitter:card" content="${twitterCard}" ${sb} />`);
-  lines.push(`<meta name="twitter:site" content="@SecretBloggerTW" ${sb} />`);
-  lines.push(`<meta name="twitter:creator" content="@SecretBloggerTW" ${sb} />`);
-  lines.push(`<meta name="twitter:domain" content="secretblogger.app" ${sb} />`);
-  lines.push(`<meta name="twitter:url" content="${urlEsc}" ${sb} />`);
-  lines.push(`<meta name="twitter:title" content="${titleEsc}" ${sb} />`);
-  lines.push(`<meta name="twitter:description" content="${descEsc}" ${sb} />`);
-  if (image) {
-    lines.push(`<meta name="twitter:image" content="${escapeHtmlAttr(image)}" ${sb} />`);
-    lines.push(`<meta name="twitter:image:alt" content="${titleEsc}" ${sb} />`);
   }
   return lines.map((l) => `  ${l}`).join('\n');
 }
@@ -83,8 +73,9 @@ export function buildEventSocialMetaTagSpecs(event: Event, prerender?: EventJson
   const title = event.name;
   const description = buildEventOgDescription(event);
   const image = eventAbsoluteImageUrl(event.image_url, prerender);
+  const siteName = appName();
   const specs: SocialMetaTagSpec[] = [
-    { kind: 'property', key: 'og:site_name', content: 'Secret Blogger' },
+    { kind: 'property', key: 'og:site_name', content: siteName },
     { kind: 'property', key: 'og:locale', content: 'en_US' },
     { kind: 'property', key: 'og:type', content: 'website' },
     { kind: 'property', key: 'og:title', content: title },
@@ -98,18 +89,6 @@ export function buildEventSocialMetaTagSpecs(event: Event, prerender?: EventJson
     specs.push({ kind: 'property', key: 'og:image:width', content: '1200' });
     specs.push({ kind: 'property', key: 'og:image:height', content: '630' });
     specs.push({ kind: 'property', key: 'og:image:alt', content: title });
-  }
-  const twitterCard = image ? 'summary_large_image' : 'summary';
-  specs.push({ kind: 'name', key: 'twitter:card', content: twitterCard });
-  specs.push({ kind: 'name', key: 'twitter:site', content: '@SecretBloggerTW' });
-  specs.push({ kind: 'name', key: 'twitter:creator', content: '@SecretBloggerTW' });
-  specs.push({ kind: 'name', key: 'twitter:domain', content: 'secretblogger.app' });
-  specs.push({ kind: 'name', key: 'twitter:url', content: canonical });
-  specs.push({ kind: 'name', key: 'twitter:title', content: title });
-  specs.push({ kind: 'name', key: 'twitter:description', content: description });
-  if (image) {
-    specs.push({ kind: 'name', key: 'twitter:image', content: image });
-    specs.push({ kind: 'name', key: 'twitter:image:alt', content: title });
   }
   return specs;
 }
