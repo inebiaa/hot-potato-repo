@@ -4,7 +4,9 @@ import { Trash2 } from 'lucide-react';
 import { supabase, Event } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 import { useAuth } from '../contexts/AuthContext';
-import { ensureIdentity, normalizeTagName, type TagType } from '../lib/tagIdentity';
+import { normalizeTagName, syncTagIdentitiesFromEventFields } from '../lib/tagIdentity';
+import { coalesceTagList } from '../lib/eventTagArray';
+import { effectiveHeaderTags } from '../lib/eventHeaderTags';
 import { normalizeExternalUrl } from '../lib/externalUrl';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
@@ -14,7 +16,7 @@ import ModalShell from './ModalShell';
 interface EditEventModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onEventUpdated: () => void;
+  onEventUpdated: () => void | Promise<void>;
   event: Event;
 }
 
@@ -27,14 +29,12 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
   const [address, setAddress] = useState(event.address || '');
   const [imageUrl, setImageUrl] = useState(event.image_url || '');
   const [countdownLink, setCountdownLink] = useState(event.countdown_link || '');
-  const toArray = (v: unknown): string[] =>
-    Array.isArray(v) ? v.map((s) => String(s).trim()).filter(Boolean) : [];
-  const [producers, setProducers] = useState<string[]>(() => toArray(event.producers));
-  const [designers, setDesigners] = useState<string[]>(() => toArray(event.featured_designers));
-  const [models, setModels] = useState<string[]>(event.models || []);
-  const [hairMakeup, setHairMakeup] = useState<string[]>(event.hair_makeup || []);
-  const [headerTags, setHeaderTags] = useState<string[]>(event.header_tags || []);
-  const [footerTags, setFooterTags] = useState<string[]>(event.footer_tags || []);
+  const [producers, setProducers] = useState<string[]>(() => coalesceTagList(event.producers));
+  const [designers, setDesigners] = useState<string[]>(() => coalesceTagList(event.featured_designers));
+  const [models, setModels] = useState<string[]>(() => coalesceTagList(event.models));
+  const [hairMakeup, setHairMakeup] = useState<string[]>(() => coalesceTagList(event.hair_makeup));
+  const [headerTags, setHeaderTags] = useState<string[]>(() => effectiveHeaderTags(event));
+  const [footerTags, setFooterTags] = useState<string[]>(() => coalesceTagList(event.footer_tags));
   const [customTags, setCustomTags] = useState<Record<string, string[]>>(event.custom_tags || {});
   const [inlineCustomTypes, setInlineCustomTypes] = useState<{ slug: string; label: string; icon: string }[]>(() => {
     const ct = event.custom_tags || {};
@@ -60,12 +60,12 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       setAddress(event.address || '');
       setImageUrl(event.image_url || '');
       setCountdownLink(event.countdown_link || '');
-      setProducers(toArray(event.producers));
-      setDesigners(toArray(event.featured_designers));
-      setModels(event.models || []);
-      setHairMakeup(event.hair_makeup || []);
-      setHeaderTags(event.header_tags || []);
-      setFooterTags(event.footer_tags || []);
+      setProducers(coalesceTagList(event.producers));
+      setDesigners(coalesceTagList(event.featured_designers));
+      setModels(coalesceTagList(event.models));
+      setHairMakeup(coalesceTagList(event.hair_makeup));
+      setHeaderTags(effectiveHeaderTags(event));
+      setFooterTags(coalesceTagList(event.footer_tags));
       setCustomTags(event.custom_tags || {});
       const ct = event.custom_tags || {};
       const meta = event.custom_tag_meta || {};
@@ -114,42 +114,37 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
     }
 
     try {
-      const resolveTags = async (tagType: TagType, newTags: string[]): Promise<string[]> => {
-        const resolved: string[] = [];
-        for (const tag of newTags) {
-          const identity = await ensureIdentity(tagType, tag, user.id);
-          const canon = identity?.canonical_name ?? tag.trim();
-          resolved.push(canon);
-        }
+      /** Keep exact spellings; trim, dedupe by normalized form only. Identities/aliases are for search & credits, not to rewrite event text. */
+      const resolveTags = (newTags: string[]): string[] => {
         const seenNorm = new Set<string>();
-        const deduped: string[] = [];
-        for (const t of resolved) {
+        const out: string[] = [];
+        for (const tag of newTags) {
+          const t = String(tag).trim();
+          if (!t) continue;
           const n = normalizeTagName(t);
           if (seenNorm.has(n)) continue;
           seenNorm.add(n);
-          deduped.push(t);
+          out.push(t);
         }
-        return deduped;
+        return out;
       };
 
-      const [resolvedProducers, resolvedDesigners, resolvedModels, resolvedHairMakeup, resolvedHeaderTags, resolvedFooterTags] = await Promise.all([
-        resolveTags('producer', cleanProducers),
-        resolveTags('designer', cleanDesigners),
-        resolveTags('model', clean(models)),
-        resolveTags('hair_makeup', clean(hairMakeup)),
-        resolveTags('header_tags', clean(headerTags)),
-        resolveTags('footer_tags', clean(footerTags)),
-      ]);
+      const resolvedProducers = resolveTags(cleanProducers);
+      const resolvedDesigners = resolveTags(cleanDesigners);
+      const resolvedModels = resolveTags(clean(models));
+      const resolvedHairMakeup = resolveTags(clean(hairMakeup));
+      const resolvedHeaderTags = resolveTags(clean(headerTags));
+      const resolvedFooterTags = resolveTags(clean(footerTags));
 
       const resolvedCustomTags: Record<string, string[]> = {};
       for (const [slug, tags] of Object.entries(customTags)) {
         const cleaned = (Array.isArray(tags) ? tags : []).map((s) => String(s).trim()).filter(Boolean);
         if (cleaned.length > 0) {
-          resolvedCustomTags[slug] = await resolveTags(`custom:${slug}` as TagType, cleaned);
+          resolvedCustomTags[slug] = resolveTags(cleaned);
         }
       }
 
-      const { error: updateError } = await supabase
+      const { data: updatedRows, error: updateError } = await supabase
         .from('events')
         .update({
           name,
@@ -170,11 +165,31 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           custom_tags: Object.keys(resolvedCustomTags).length ? resolvedCustomTags : null,
           custom_tag_meta: inlineCustomTypes.length ? Object.fromEntries(inlineCustomTypes.map((t) => [t.slug, { icon: t.icon || 'Tag' }])) : null,
         })
-        .eq('id', event.id);
+        .eq('id', event.id)
+        .select('id');
 
       if (updateError) throw updateError;
+      if (!updatedRows || updatedRows.length === 0) {
+        throw new Error(
+          'Your changes were not saved. You may not have permission to edit this show, or it may have been removed.'
+        );
+      }
 
-      onEventUpdated();
+      await syncTagIdentitiesFromEventFields(
+        {
+          producers: resolvedProducers,
+          featured_designers: resolvedDesigners,
+          models: resolvedModels,
+          hair_makeup: resolvedHairMakeup,
+          header_tags: resolvedHeaderTags,
+          footer_tags: resolvedFooterTags,
+          location: venue[0] || null,
+          custom_tags: Object.keys(resolvedCustomTags).length ? resolvedCustomTags : null,
+        },
+        user.id
+      );
+
+      await onEventUpdated();
       onClose();
     } catch (err) {
       console.error('Failed to update event:', err);

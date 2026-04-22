@@ -12,7 +12,13 @@ export type TagType =
   | `custom:${string}`;
 
 export interface TagIdentityRecord {
+  /** `tag_identities.id` (this row) — use for admin, credits, and alias rows. */
   id: string;
+  /**
+   * Shared by all names linked as the same person. Use for search chips and event filters
+   * (not a "main" row: any member’s id works for linking/unlinking in admin).
+   */
+  clusterId: string;
   tag_type: string;
   canonical_name: string;
 }
@@ -34,17 +40,29 @@ export function sameTagSpelling(a: string | null | undefined, b: string | null |
   return normalizeTagName(a ?? '') === normalizeTagName(b ?? '');
 }
 
+function toRecord(row: { id: string; cluster_id?: string; tag_type: string; canonical_name: string }): TagIdentityRecord {
+  const cid = row.cluster_id ?? row.id;
+  return {
+    id: row.id,
+    clusterId: cid,
+    tag_type: row.tag_type,
+    canonical_name: row.canonical_name,
+  };
+}
+
 export async function findIdentityByName(tagType: TagType, name: string): Promise<TagIdentityRecord | null> {
   const normalized = normalizeTagName(name);
   if (!normalized) return null;
 
   const { data: canonicalRows } = await supabase
     .from('tag_identities')
-    .select('id, tag_type, canonical_name')
+    .select('id, tag_type, canonical_name, normalized_name, cluster_id')
     .eq('tag_type', tagType)
     .eq('normalized_name', normalized)
     .limit(1);
-  if (canonicalRows && canonicalRows.length > 0) return canonicalRows[0] as TagIdentityRecord;
+  if (canonicalRows && canonicalRows.length > 0) {
+    return toRecord(canonicalRows[0] as { id: string; cluster_id: string; tag_type: string; canonical_name: string });
+  }
 
   const { data: aliasRows } = await supabase
     .from('tag_aliases')
@@ -56,17 +74,25 @@ export async function findIdentityByName(tagType: TagType, name: string): Promis
 
   const { data: identities } = await supabase
     .from('tag_identities')
-    .select('id, tag_type, canonical_name, normalized_name')
+    .select('id, tag_type, canonical_name, normalized_name, cluster_id')
     .in('id', identityIds)
     .eq('tag_type', tagType);
   if (!identities?.length) return null;
-  if (identities.length === 1) return identities[0] as TagIdentityRecord;
+  if (identities.length === 1) {
+    return toRecord(identities[0] as { id: string; cluster_id: string; tag_type: string; canonical_name: string });
+  }
 
-  const exactCanonical = identities.find((row: { normalized_name: string }) => row.normalized_name === normalized);
-  if (exactCanonical) return exactCanonical as TagIdentityRecord;
-
-  const sorted = [...identities].sort((a, b) => a.id.localeCompare(b.id));
-  return sorted[0] as TagIdentityRecord;
+  const exactCanonical = identities.find((row: { normalized_name: string }) => row.normalized_name === normalized) as
+    | { id: string; cluster_id: string; tag_type: string; canonical_name: string }
+    | undefined;
+  const pick =
+    exactCanonical ?? [...identities].sort((a, b) => a.id.localeCompare(b.id))[0] as {
+      id: string;
+      cluster_id: string;
+      tag_type: string;
+      canonical_name: string;
+    };
+  return toRecord(pick);
 }
 
 /**
@@ -82,10 +108,14 @@ export async function fetchAliasStringsForTag(tagType: string, headlineTagValue:
   const identity = await findIdentityByName(tagType as TagType, headlineTagValue);
   if (!identity) return [];
 
+  const { data: members } = await supabase.from('tag_identities').select('id').eq('cluster_id', identity.clusterId);
+  const memberIds = (members || []).map((m: { id: string }) => m.id);
+  if (memberIds.length === 0) return [];
+
   const { data: rows, error } = await supabase
     .from('tag_aliases')
     .select('alias')
-    .eq('identity_id', identity.id)
+    .in('identity_id', memberIds)
     .order('alias', { ascending: true });
 
   if (error || !rows?.length) return [];
@@ -118,7 +148,7 @@ export async function ensureIdentity(tagType: TagType, name: string, createdBy?:
       normalized_name: normalized,
       created_by: createdBy || null,
     })
-    .select('id, tag_type, canonical_name')
+    .select('id, tag_type, canonical_name, cluster_id')
     .limit(1)
     .maybeSingle();
   if (error || !inserted) return null;
@@ -130,30 +160,43 @@ export async function ensureIdentity(tagType: TagType, name: string, createdBy?:
     created_by: createdBy || null,
   });
 
-  return inserted as TagIdentityRecord;
+  return toRecord(inserted as { id: string; cluster_id: string; tag_type: string; canonical_name: string });
 }
 
-/** True if another identity of this tag type already has this normalized spelling as an alias. */
+/** True if another cluster of this tag type already has this normalized spelling as an alias. */
 export async function isNormalizedAliasTakenByOtherIdentity(
   tagType: TagType,
   identityId: string,
   normalized: string
 ): Promise<boolean> {
   if (!normalized) return false;
+  const { data: self } = await supabase
+    .from('tag_identities')
+    .select('cluster_id')
+    .eq('id', identityId)
+    .maybeSingle();
+  const myCluster = (self as { cluster_id?: string } | null)?.cluster_id ?? identityId;
+
   const { data: rows } = await supabase
     .from('tag_aliases')
     .select('identity_id')
-    .eq('normalized_alias', normalized)
-    .neq('identity_id', identityId);
+    .eq('normalized_alias', normalized);
   if (!rows?.length) return false;
-  const otherIds = [...new Set(rows.map((r: { identity_id: string }) => r.identity_id))];
-  const { data: hit } = await supabase
+  const otherIds = [...new Set(rows.map((r: { identity_id: string }) => r.identity_id))].filter(
+    (id) => id !== identityId
+  );
+  if (otherIds.length === 0) return false;
+
+  const { data: candidates } = await supabase
     .from('tag_identities')
-    .select('id')
+    .select('id, cluster_id')
     .in('id', otherIds)
-    .eq('tag_type', tagType)
-    .limit(1);
-  return (hit?.length ?? 0) > 0;
+    .eq('tag_type', tagType);
+  for (const row of candidates || []) {
+    const cid = (row as { cluster_id?: string }).cluster_id ?? row.id;
+    if (cid !== myCluster) return true;
+  }
+  return false;
 }
 
 export async function ensureAlias(identityId: string, alias: string, createdBy?: string): Promise<void> {
@@ -197,25 +240,25 @@ export async function searchTagIdentities(query: string): Promise<TagIdentityRec
 
   const { data: byCanonical } = await supabase
     .from('tag_identities')
-    .select('id, tag_type, canonical_name')
+    .select('id, tag_type, canonical_name, cluster_id')
     .ilike('canonical_name', `%${safe(trimQ)}%`)
     .limit(15);
-  (byCanonical || []).forEach((row: TagIdentityRecord) => {
+  (byCanonical || []).forEach((row: TagIdentityRecord & { cluster_id: string }) => {
     if (!seen.has(row.id)) {
       seen.add(row.id);
-      out.push(row);
+      out.push(toRecord(row as { id: string; cluster_id: string; tag_type: string; canonical_name: string }));
     }
   });
 
   const { data: byNormalized } = await supabase
     .from('tag_identities')
-    .select('id, tag_type, canonical_name')
+    .select('id, tag_type, canonical_name, cluster_id')
     .like('normalized_name', `%${q}%`)
     .limit(15);
-  (byNormalized || []).forEach((row: TagIdentityRecord) => {
+  (byNormalized || []).forEach((row: TagIdentityRecord & { cluster_id: string }) => {
     if (!seen.has(row.id)) {
       seen.add(row.id);
-      out.push(row);
+      out.push(toRecord(row as { id: string; cluster_id: string; tag_type: string; canonical_name: string }));
     }
   });
 
@@ -228,18 +271,22 @@ export async function searchTagIdentities(query: string): Promise<TagIdentityRec
   if (aliasIds.length > 0) {
     const { data: identities } = await supabase
       .from('tag_identities')
-      .select('id, tag_type, canonical_name')
+      .select('id, tag_type, canonical_name, cluster_id')
       .in('id', aliasIds)
       .limit(15);
-    (identities || []).forEach((row: TagIdentityRecord) => {
+    (identities || []).forEach((row: TagIdentityRecord & { cluster_id: string }) => {
       if (!seen.has(row.id)) {
         seen.add(row.id);
-        out.push(row);
+        out.push(toRecord(row as { id: string; cluster_id: string; tag_type: string; canonical_name: string }));
       }
     });
   }
 
-  return out.slice(0, 15);
+  if (out.length === 0) return [];
+
+  // Keep all matching **rows** (not one per cluster) so every linked spelling stays searchable
+  // and remains visible by its canonical or alias. Filter dedupes by type+value.
+  return out.slice(0, 20);
 }
 
 const EVENT_TAG_COLUMNS: { key: keyof EventTagSource; tagType: TagType }[] = [
@@ -250,6 +297,78 @@ const EVENT_TAG_COLUMNS: { key: keyof EventTagSource; tagType: TagType }[] = [
   { key: 'header_tags', tagType: 'header_tags' },
   { key: 'footer_tags', tagType: 'footer_tags' },
 ];
+
+/** Fields on an event row used to register tag identities + aliases (does not change event text). */
+export interface EventFieldsForIdentitySync {
+  producers?: string[] | null;
+  featured_designers?: string[] | null;
+  models?: string[] | null;
+  hair_makeup?: string[] | null;
+  header_tags?: string[] | null;
+  footer_tags?: string[] | null;
+  location?: string | null;
+  custom_tags?: Record<string, string[]> | null;
+}
+
+/**
+ * For each credit line on the event, ensure a `tag_identities` row exists and the exact spelling is an alias.
+ * Call after a successful create/update so search, filters, and profiles can resolve all spellings to one person.
+ */
+export async function syncTagIdentitiesFromEventFields(
+  fields: EventFieldsForIdentitySync,
+  createdBy?: string | null
+): Promise<void> {
+  for (const { key, tagType } of EVENT_TAG_COLUMNS) {
+    const arr = fields[key] as string[] | null | undefined;
+    if (!Array.isArray(arr)) continue;
+    for (const name of arr) {
+      if (typeof name !== 'string' || !name.trim()) continue;
+      const identity = await ensureIdentity(tagType, name, createdBy || undefined);
+      if (identity) await ensureAlias(identity.id, name, createdBy || undefined);
+    }
+  }
+  const loc = fields.location;
+  if (typeof loc === 'string' && loc.trim()) {
+    const identity = await ensureIdentity('venue', loc, createdBy || undefined);
+    if (identity) await ensureAlias(identity.id, loc, createdBy || undefined);
+  }
+  const ct = fields.custom_tags;
+  if (ct && typeof ct === 'object' && !Array.isArray(ct)) {
+    for (const [slug, vals] of Object.entries(ct)) {
+      if (!Array.isArray(vals)) continue;
+      const tagType = `custom:${slug}` as TagType;
+      for (const name of vals) {
+        if (typeof name !== 'string' || !name.trim()) continue;
+        const identity = await ensureIdentity(tagType, name, createdBy || undefined);
+        if (identity) await ensureAlias(identity.id, name, createdBy || undefined);
+      }
+    }
+  }
+}
+
+/** Link `p_subject_id` → `p_target_id` (same tag type). Reversible via `adminUnlinkTagIdentity`. */
+export async function adminLinkTagIdentities(subjectId: string, targetId: string): Promise<{ error: Error | null }> {
+  const { error } = await supabase.rpc('admin_link_tag_identities', {
+    p_subject_id: subjectId,
+    p_target_id: targetId,
+  });
+  return { error: error as Error | null };
+}
+
+/** Split this name out to its own cluster (admin only). */
+export async function adminUnlinkTagIdentity(identityId: string): Promise<{ error: Error | null }> {
+  const { error } = await supabase.rpc('admin_unlink_tag_identity', { p_identity_id: identityId });
+  return { error: error as Error | null };
+}
+
+/** @deprecated Prefer `adminLinkTagIdentities`; destructive merge (deletes a row). */
+export async function adminMergeTagIdentities(keepId: string, absorbId: string): Promise<{ error: Error | null }> {
+  const { error } = await supabase.rpc('admin_merge_tag_identities', {
+    p_keep_id: keepId,
+    p_absorb_id: absorbId,
+  });
+  return { error: error as Error | null };
+}
 
 interface EventTagSource {
   producers?: string[] | null;

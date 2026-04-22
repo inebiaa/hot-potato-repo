@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 import type { Event } from '../lib/supabase';
-import { eventMatchesVenueTag, type TagResolutionMap } from '../lib/tagDisplayResolution';
-import { sameTagSpelling, tagArrayContainsNormalized } from '../lib/tagIdentity';
+import { effectiveHeaderTags } from '../lib/eventHeaderTags';
+import { eventArrayMatchesFilter, eventMatchesVenueTag, type TagResolutionMap } from '../lib/tagDisplayResolution';
+import { sameTagSpelling } from '../lib/tagIdentity';
 import TagCardRouter from './tagCards/TagCardRouter';
 import ModalShell from './ModalShell';
 import type { EventRating, TagRatingEventSlice } from './tagCards/types';
@@ -110,18 +111,17 @@ export default function TagRatingsModal({
     location?: string | null;
     date?: string;
     header_tags?: string[] | null;
-    genre?: string[] | null;
     footer_tags?: string[] | null;
   }) => {
     switch (tagType) {
       case 'producer':
-        return tagArrayContainsNormalized(e.producers, tagValue);
+        return eventArrayMatchesFilter(tagResolutionMap, 'producer', e.producers, tagValue);
       case 'designer':
-        return tagArrayContainsNormalized(e.featured_designers, tagValue);
+        return eventArrayMatchesFilter(tagResolutionMap, 'designer', e.featured_designers, tagValue);
       case 'model':
-        return tagArrayContainsNormalized(e.models, tagValue);
+        return eventArrayMatchesFilter(tagResolutionMap, 'model', e.models, tagValue);
       case 'hair_makeup':
-        return tagArrayContainsNormalized(e.hair_makeup, tagValue);
+        return eventArrayMatchesFilter(tagResolutionMap, 'hair_makeup', e.hair_makeup, tagValue);
       case 'city':
         return sameTagSpelling(e.city, tagValue);
       case 'venue':
@@ -129,9 +129,9 @@ export default function TagRatingsModal({
       case 'season':
         return getSeasonFromDate(e.date || '') === tagValue;
       case 'header_tags':
-        return tagArrayContainsNormalized(e.header_tags, tagValue);
+        return eventArrayMatchesFilter(tagResolutionMap, 'header_tags', effectiveHeaderTags(e), tagValue);
       case 'footer_tags':
-        return tagArrayContainsNormalized(e.footer_tags, tagValue);
+        return eventArrayMatchesFilter(tagResolutionMap, 'footer_tags', e.footer_tags, tagValue);
       default:
         return false;
     }
@@ -162,7 +162,7 @@ export default function TagRatingsModal({
       } else {
         const { data: allEvents, error: eventsError } = await supabase
           .from('events')
-          .select('id, name, date, producers, featured_designers, models, hair_makeup, city, location, genre, header_tags, footer_tags, custom_tags, custom_tag_meta')
+          .select('id, name, date, producers, featured_designers, models, hair_makeup, city, location, header_tags, footer_tags, custom_tags, custom_tag_meta')
           .order('date', { ascending: false });
 
         if (eventsError) throw eventsError;

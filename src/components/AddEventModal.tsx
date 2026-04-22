@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 import { normalizeExternalUrl } from '../lib/externalUrl';
 import { useAuth } from '../contexts/AuthContext';
+import { normalizeTagName, syncTagIdentitiesFromEventFields } from '../lib/tagIdentity';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
 import CustomPerformerCategoryInput from './CustomPerformerCategoryInput';
@@ -69,28 +70,76 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
     }
 
     try {
+      const resolveTags = (newTags: string[]): string[] => {
+        const seenNorm = new Set<string>();
+        const out: string[] = [];
+        for (const tag of newTags) {
+          const t = String(tag).trim();
+          if (!t) continue;
+          const n = normalizeTagName(t);
+          if (seenNorm.has(n)) continue;
+          seenNorm.add(n);
+          out.push(t);
+        }
+        return out;
+      };
+      const cleanP = (a: string[]) => resolveTags((Array.isArray(a) ? a : []).map((s) => String(s).trim()).filter(Boolean));
+      const resolvedProducers = cleanP(producers);
+      const resolvedDesigners = cleanP(designers);
+      const resolvedModels = cleanP(models);
+      const resolvedHairMakeup = cleanP(hairMakeup);
+      const resolvedHeaderTags = cleanP(headerTags);
+      const resolvedFooterTags = cleanP(footerTags);
+      const resolvedCustomTags: Record<string, string[]> = {};
+      for (const [slug, tags] of Object.entries(customTags)) {
+        const cleaned = (Array.isArray(tags) ? tags : []).map((s) => String(s).trim()).filter(Boolean);
+        if (cleaned.length > 0) {
+          resolvedCustomTags[slug] = resolveTags(cleaned);
+        }
+      }
+      const venueVal = venue[0] || null;
+      if (resolvedProducers.length === 0 || resolvedDesigners.length === 0) {
+        setError('Please add at least one producer and one designer');
+        setLoading(false);
+        return;
+      }
+
       const { error: insertError } = await supabase.from('events').insert({
         name,
         description: description || null,
         date,
         city: (city && city[0]) || '',
         season: date ? getSeasonFromDate(date) : null,
-        location: venue[0] || null,
+        location: venueVal,
         address: address || null,
         image_url: imageUrl || null,
         countdown_link: normalizedCountdownLink,
-        producers: producers.length ? producers : null,
-        featured_designers: designers.length ? designers : null,
-        models: models.length ? models : null,
-        hair_makeup: hairMakeup.length ? hairMakeup : null,
-        header_tags: headerTags.length ? headerTags : null,
-        footer_tags: footerTags.length ? footerTags : null,
-        custom_tags: Object.keys(customTags).length ? customTags : null,
+        producers: resolvedProducers.length ? resolvedProducers : null,
+        featured_designers: resolvedDesigners.length ? resolvedDesigners : null,
+        models: resolvedModels.length ? resolvedModels : null,
+        hair_makeup: resolvedHairMakeup.length ? resolvedHairMakeup : null,
+        header_tags: resolvedHeaderTags.length ? resolvedHeaderTags : null,
+        footer_tags: resolvedFooterTags.length ? resolvedFooterTags : null,
+        custom_tags: Object.keys(resolvedCustomTags).length ? resolvedCustomTags : null,
         custom_tag_meta: inlineCustomTypes.length ? Object.fromEntries(inlineCustomTypes.map((t) => [t.slug, { icon: t.icon || 'Tag' }])) : null,
         created_by: user.id,
       });
 
       if (insertError) throw insertError;
+
+      await syncTagIdentitiesFromEventFields(
+        {
+          producers: resolvedProducers,
+          featured_designers: resolvedDesigners,
+          models: resolvedModels,
+          hair_makeup: resolvedHairMakeup,
+          header_tags: resolvedHeaderTags,
+          footer_tags: resolvedFooterTags,
+          location: venueVal,
+          custom_tags: Object.keys(resolvedCustomTags).length ? resolvedCustomTags : null,
+        },
+        user.id
+      );
 
       onEventAdded();
       onClose();

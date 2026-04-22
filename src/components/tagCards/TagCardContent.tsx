@@ -84,7 +84,7 @@ export default function TagCardContent({
 
       {aliasPills.length > 0 && (
         <div className="mb-3">
-          <div className="text-xs font-semibold text-gray-700 mb-1">Also known as</div>
+          <div className="text-xs font-semibold text-gray-700 mb-1">Also credited as</div>
           <div className="flex flex-wrap gap-1 items-center">
             {aliasPills.map((alias) => (
               <span key={alias} className={aliasPillClass}>

@@ -16,7 +16,7 @@ WITH in_use AS (
   FROM public.events, unnest(COALESCE(hair_makeup, ARRAY[]::text[])) AS u(t)
   UNION
   SELECT 'header_tags', public.fold_tag_normalize(t)
-  FROM public.events, unnest(COALESCE(header_tags, genre, ARRAY[]::text[])) AS u(t)
+  FROM public.events, unnest(COALESCE(header_tags, ARRAY[]::text[])) AS u(t)
   UNION
   SELECT 'footer_tags', public.fold_tag_normalize(t)
   FROM public.events, unnest(COALESCE(footer_tags, ARRAY[]::text[])) AS u(t)
