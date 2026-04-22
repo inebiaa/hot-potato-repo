@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { USER_LISTS_SETUP_SQL, getSupabaseSqlEditorUrl } from '../lib/userListsSetupSql';
 import { TagDisplayProvider } from '../contexts/TagDisplayContext';
 import { fetchTagResolutionForEvents, type TagResolutionMap } from '../lib/tagDisplayResolution';
+import { normalizeEventTagArrays } from '../lib/eventTagArray';
 import { normalizeForSearch } from '../lib/normalize';
 import ProfileReviewsPlaylist from './ProfileReviewsPlaylist';
 
@@ -14,7 +15,7 @@ interface ProfilePageProps {
   userId: string;
   pathname: string;
   onClose: () => void;
-  onTagClick?: (type: string, value: string) => void;
+  onTagClick?: (type: string, value: string, displayLabel?: string) => void;
   onOpenEvent?: (eventId: string, openWithWiggle?: boolean, suggestSection?: keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | 'custom', suggestCustomSlug?: string) => void;
   tagColors?: {
     producer_bg_color?: string;
@@ -158,7 +159,7 @@ export default function ProfilePage({
           : Promise.resolve({ data: [] })
       ]);
 
-      const eventsData = eventsRes.data || [];
+      const eventsData = (eventsRes.data || []).map((e) => normalizeEventTagArrays(e as Event));
       const eventsMap = new Map(eventsData.map((e) => [e.id, e]));
 
       const statsAccumulator = new Map<string, { sum: number; count: number }>();
@@ -229,7 +230,10 @@ export default function ProfilePage({
     const ids = (listEventsData || []).map((e) => e.event_id);
     const cacheMap = cachedEvents?.length ? new Map(cachedEvents.map((e) => [e.id, e])) : null;
     const useCache = cacheMap && ids.length > 0 && ids.every((id) => cacheMap.has(id));
-    const eventsData = useCache ? ids.map((id) => cacheMap!.get(id)!).filter(Boolean) : (await supabase.from('events').select('*').in('id', ids)).data || [];
+    const eventsData = (useCache
+      ? ids.map((id) => cacheMap!.get(id)!).filter(Boolean)
+      : (await supabase.from('events').select('*').in('id', ids)).data || []
+    ).map((e) => normalizeEventTagArrays(e as Event));
     const eventsMap = new Map(eventsData.map((e) => [e.id, e]));
     const eventsList = (listEventsData || [])
       .map((le) => ({
@@ -281,7 +285,7 @@ export default function ProfilePage({
   const openAddEvent = async () => {
     setAddEventError('');
     const { data } = await supabase.from('events').select('*').order('date', { ascending: false });
-    setAllEvents(data || []);
+    setAllEvents((data || []).map((e) => normalizeEventTagArrays(e as Event)));
     setAddEventSearch('');
     setIsAddEventOpen(true);
   };

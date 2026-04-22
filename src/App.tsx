@@ -6,6 +6,8 @@ import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
 import { getSeasonFromDate, getYearFromDate } from './lib/season';
 import { eventSortKey, isEventUpcoming } from './lib/eventDates';
+import { effectiveHeaderTags } from './lib/eventHeaderTags';
+import { normalizeEventTagArrays } from './lib/eventTagArray';
 import { normalizeForSearch } from './lib/normalize';
 import { readableTextForBg } from './lib/colorUtils';
 import EventCard from './components/EventCard';
@@ -17,12 +19,18 @@ import StatisticsPage from './components/StatisticsPage';
 import ProfilePage from './components/ProfilePage';
 import type { AppSettings } from './types/appSettings';
 import { TagDisplayProvider } from './contexts/TagDisplayContext';
-import { eventMatchesVenueTag, fetchTagResolutionForEvents, tagResolutionKey, type TagResolutionMap } from './lib/tagDisplayResolution';
+import {
+  displayLabelForTagFilter,
+  eventArrayMatchesFilter,
+  eventMatchesVenueTag,
+  fetchTagResolutionForEvents,
+  tagResolutionKey,
+  type TagResolutionMap,
+} from './lib/tagDisplayResolution';
 import {
   normalizeTagName,
   sameTagSpelling,
   searchTagIdentities,
-  tagArrayContainsNormalized,
   type TagIdentityRecord,
 } from './lib/tagIdentity';
 import PrimarySearchBar from './components/PrimarySearchBar';
@@ -51,7 +59,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTags, setSelectedTags] = useState<{ type: string; value: string }[]>([]);
+  const [selectedTags, setSelectedTags] = useState<{ type: string; value: string; label: string }[]>([]);
   const [overlayEventId, setOverlayEventId] = useState<string | null>(null);
   const [overlaySource, setOverlaySource] = useState<'tagModal' | 'viewRatings' | null>(null);
   const [, setOverlayOpenWithWiggle] = useState(false);
@@ -261,7 +269,7 @@ function App() {
         }
 
         return {
-          ...event,
+          ...normalizeEventTagArrays(event as Event),
           custom_tags: customTags,
           custom_tag_meta: customTagMeta,
           average_rating: average,
@@ -335,12 +343,13 @@ function App() {
     const map = tagResolutionMap;
     const expandIdentity = (tagType: string, raw: string) => {
       const entry = map?.get(tagResolutionKey(tagType, raw));
-      const canonical = entry?.canonical ?? raw;
-      add(tagType, canonical, canonical);
+      const filterValue = entry?.identityId ?? raw;
+      const label = entry?.display ?? raw;
+      add(tagType, filterValue, label);
       if (entry) {
         entry.searchable.forEach((s) => {
-          if (normalizeTagName(s) !== normalizeTagName(canonical)) {
-            add(tagType, canonical, s);
+          if (normalizeTagName(s) !== normalizeTagName(label)) {
+            add(tagType, filterValue, s);
           }
         });
       }
@@ -350,7 +359,7 @@ function App() {
       (e.featured_designers || []).forEach((v) => expandIdentity('designer', v));
       (e.models || []).forEach((v) => expandIdentity('model', v));
       (e.hair_makeup || []).forEach((v) => expandIdentity('hair_makeup', v));
-      (e.header_tags || []).forEach((v: string) => expandIdentity('header_tags', v));
+      effectiveHeaderTags(e).forEach((v) => expandIdentity('header_tags', v));
       (e.footer_tags || []).forEach((v) => expandIdentity('footer_tags', v));
       if (e.city) add('city', e.city);
       if (e.location) expandIdentity('venue', e.location);
@@ -364,11 +373,12 @@ function App() {
           const tt = `custom:${slug}` as const;
           (vals || []).forEach((v) => {
             const entry = map?.get(tagResolutionKey(tt, v));
-            const canonical = entry?.canonical ?? v;
-            const filterVal = `${slug}\x00${canonical}`;
-            add('custom_performer', filterVal, canonical);
+            const filterPart = entry?.identityId ?? v;
+            const label = entry?.display ?? v;
+            const filterVal = `${slug}\x00${filterPart}`;
+            add('custom_performer', filterVal, label);
             entry?.searchable.forEach((s) => {
-              if (normalizeTagName(s) !== normalizeTagName(canonical)) {
+              if (normalizeTagName(s) !== normalizeTagName(label)) {
                 add('custom_performer', filterVal, s);
               }
             });
@@ -398,15 +408,15 @@ function App() {
     const seen = new Set(fromEvents.map((t) => `${t.type}:${t.value}`));
     const out: { type: string; value: string; label: string }[] = [...fromEvents];
     for (const id of identitySearchHits) {
-      if (!identityIdsInUse.has(id.id)) continue;
+      if (!identityIdsInUse.has(id.clusterId)) continue;
       const sug = id.tag_type.startsWith('custom:')
         ? {
             type: 'custom_performer' as const,
-            value: `${id.tag_type.slice(7)}\x00${id.canonical_name}`,
+            value: `${id.tag_type.slice(7)}\x00${id.clusterId}`,
             label: id.canonical_name,
           }
-        : { type: id.tag_type, value: id.canonical_name, label: id.canonical_name };
-      const key = `${sug.type}:${sug.value}`;
+        : { type: id.tag_type, value: id.clusterId, label: id.canonical_name };
+      const key = `${sug.type}:${sug.value}\x00${sug.label}`;
       if (!seen.has(key)) {
         seen.add(key);
         out.push(sug);
@@ -415,24 +425,26 @@ function App() {
     return out.slice(0, 8);
   }, [searchQuery, searchableTags, identitySearchHits, identityIdsInUse]);
 
-  const handleTagClick = (type: string, value: string) => {
+  const handleTagClick = (type: string, value: string, explicitLabel?: string) => {
     if (overlayEventId) closeEventOverlay();
     else navigate({ pathname: '/', search: '' });
+    const label = displayLabelForTagFilter(type, value, tagResolutionMap, explicitLabel);
     setSelectedTags((prev) => {
       const key = `${type}:${value}`;
       const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
       if (alreadySelected) return prev;
-      return [{ type, value }];
+      return [{ type, value, label }];
     });
     setSearchQuery('');
   };
 
-  const selectTagFilter = (type: string, value: string) => {
+  const selectTagFilter = (type: string, value: string, explicitLabel?: string) => {
+    const label = displayLabelForTagFilter(type, value, tagResolutionMap, explicitLabel);
     setSelectedTags((prev) => {
       const key = `${type}:${value}`;
       const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
       if (alreadySelected) return prev;
-      return [{ type, value }];
+      return [{ type, value, label }];
     });
     setSearchQuery('');
   };
@@ -595,7 +607,7 @@ function App() {
           const designersMatch = event.featured_designers?.some((d) => tagLineMatch('designer', d)) || false;
           const modelsMatch = event.models?.some((m) => tagLineMatch('model', m)) || false;
           const producersMatch = event.producers?.some((p) => tagLineMatch('producer', p)) || false;
-          const headerTagsMatch = event.header_tags?.some((t: string) => tagLineMatch('header_tags', t)) || false;
+          const headerTagsMatch = effectiveHeaderTags(event).some((t) => tagLineMatch('header_tags', t)) || false;
           const footerTagsMatch = event.footer_tags?.some((t) => tagLineMatch('footer_tags', t)) || false;
           const customTagsMatch =
             event.custom_tags && typeof event.custom_tags === 'object'
@@ -637,22 +649,27 @@ function App() {
           case 'year':
             return getYearFromDate(event.date) === tag.value;
           case 'producer':
-            return tagArrayContainsNormalized(event.producers, tag.value);
+            return eventArrayMatchesFilter(tagResolutionMap, 'producer', event.producers, tag.value);
           case 'designer':
-            return tagArrayContainsNormalized(event.featured_designers, tag.value);
+            return eventArrayMatchesFilter(tagResolutionMap, 'designer', event.featured_designers, tag.value);
           case 'model':
-            return tagArrayContainsNormalized(event.models, tag.value);
+            return eventArrayMatchesFilter(tagResolutionMap, 'model', event.models, tag.value);
           case 'hair_makeup':
-            return tagArrayContainsNormalized(event.hair_makeup, tag.value);
+            return eventArrayMatchesFilter(tagResolutionMap, 'hair_makeup', event.hair_makeup, tag.value);
           case 'header_tags':
-            return tagArrayContainsNormalized(event.header_tags, tag.value);
+            return eventArrayMatchesFilter(tagResolutionMap, 'header_tags', effectiveHeaderTags(event), tag.value);
           case 'footer_tags':
-            return tagArrayContainsNormalized(event.footer_tags, tag.value);
+            return eventArrayMatchesFilter(tagResolutionMap, 'footer_tags', event.footer_tags, tag.value);
           case 'custom_performer': {
             const [slug, tagValue] = tag.value.split('\x00');
             if (!slug || !tagValue) return false;
             const vals = event.custom_tags?.[slug];
-            return tagArrayContainsNormalized(Array.isArray(vals) ? vals : null, tagValue);
+            return eventArrayMatchesFilter(
+              tagResolutionMap,
+              `custom:${slug}`,
+              Array.isArray(vals) ? vals : null,
+              tagValue
+            );
           }
           default:
             return true;
@@ -687,7 +704,7 @@ function App() {
       const userRating = user ? eventRatings.find((r: { user_id: string }) => r.user_id === user.id) : undefined;
       if (!cancelled) {
         setOverlayEventFetched({
-          ...data,
+          ...normalizeEventTagArrays(data as Event),
           average_rating: average,
           rating_count: eventRatings.length,
           user_rating: userRating,

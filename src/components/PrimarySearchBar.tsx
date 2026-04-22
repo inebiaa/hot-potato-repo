@@ -8,6 +8,8 @@ export type CustomPerformerTagDef = { slug: string; bg_color: string; text_color
 interface TagFilter {
   type: string;
   value: string;
+  /** Human-readable; `value` may be a tag identity uuid */
+  label: string;
 }
 
 interface TagSuggestion {
@@ -36,7 +38,7 @@ interface PrimarySearchBarProps {
   onSearchFocus: () => void;
   onSearchBlur: () => void;
   onSearchQueryChange: (value: string) => void;
-  onSelectTagFilter: (type: string, value: string) => void;
+  onSelectTagFilter: (type: string, value: string, label?: string) => void;
   onRemoveTagFilter: (type: string, value: string) => void;
   onClearFilters: () => void;
 }
@@ -146,22 +148,21 @@ export default function PrimarySearchBar({
           <Search className="pointer-events-none shrink-0 text-gray-400" size={18} strokeWidth={2} />
           <div className={chipsAndInputRow}>
             {selectedTags.map((selectedTag) => {
-              const { type, value } = selectedTag;
+              const { type, value, label } = selectedTag;
               const { bg, text } = pillColorsForFilter(type, value, appSettings, customPerformerTags);
-              const rawVal = type === 'custom_performer' ? value.split('\x00')[1] ?? value : value;
-              const val = rawVal.replace(/\r\n|\r|\n/g, ' ').trim();
+              const shown = (label || value).replace(/\r\n|\r|\n/g, ' ').trim();
               return (
                 <span
                   key={`${type}:${value}`}
                   className="inline-grid min-w-0 max-w-[min(28rem,100%)] shrink grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 overflow-hidden rounded-md text-xs"
-                  title={`${tagLabel(type)}${val}`}
+                  title={`${tagLabel(type)}${shown}`}
                 >
                   <span
                     className="min-w-0 truncate rounded-md px-2 py-1 text-xs"
                     style={{ backgroundColor: bg, color: text }}
                   >
                     {tagLabel(type)}
-                    {val}
+                    {shown}
                   </span>
                   <button
                     type="button"
@@ -172,7 +173,7 @@ export default function PrimarySearchBar({
                     }}
                     className={`${chipDismissBtn} -mr-0.5`}
                     style={{ color: text }}
-                    aria-label={`Remove ${val} filter`}
+                    aria-label={`Remove ${shown} filter`}
                   >
                     <span className="sr-only">Remove filter</span>
                     <X size={14} strokeWidth={2} aria-hidden />
@@ -214,7 +215,7 @@ export default function PrimarySearchBar({
                   key={`${t.type}:${t.value}:${t.label}`}
                   type="button"
                   role="option"
-                  onMouseDown={(e) => { e.preventDefault(); onSelectTagFilter(t.type, t.value); }}
+                  onMouseDown={(e) => { e.preventDefault(); onSelectTagFilter(t.type, t.value, t.label); }}
                   className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
                 >
                   <span className="shrink-0 text-xs capitalize text-gray-400">

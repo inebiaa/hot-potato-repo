@@ -16,6 +16,8 @@ import { ensureAlias, ensureIdentity, findIdentityByName, normalizeTagName, type
 import { tryNormalizeExternalUrl } from '../lib/externalUrl';
 import { isEventUpcoming } from '../lib/eventDates';
 import EventCountdownPill from './EventCountdownPill';
+import { effectiveHeaderTags } from '../lib/eventHeaderTags';
+import { coalesceTagList } from '../lib/eventTagArray';
 import { buildEventEmailPlainText, buildEventEmailRichHtml } from '../lib/eventEmailRichCard';
 import { formatEventDateDisplay } from '../lib/formatEventDate';
 import { canonicalEventUrl } from '../lib/siteBase';
@@ -35,7 +37,7 @@ interface EventCardProps {
   userRating?: Rating;
   onRatingSubmitted: () => void;
   onEventUpdated: () => void;
-  onTagClick: (type: string, value: string) => void;
+  onTagClick: (type: string, value: string, displayLabel?: string) => void;
   /** When set, the card title links to this URL (e.g. single-event view) */
   viewHref?: string;
   /** When set, clicking the title opens overlay instead of navigating (e.g. openEventOverlay). Second param: open overlay with wiggle mode active. */
@@ -148,12 +150,12 @@ export default function EventCard({
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [expandedTagSections, setExpandedTagSections] = useState<Record<string, boolean>>({});
   const [orderedTags, setOrderedTags] = useState({
-    producers: event.producers || [],
-    featured_designers: event.featured_designers || [],
-    models: event.models || [],
-    hair_makeup: event.hair_makeup || [],
-    header_tags: (event.header_tags || []) as string[],
-    footer_tags: event.footer_tags || []
+    producers: coalesceTagList(event.producers),
+    featured_designers: coalesceTagList(event.featured_designers),
+    models: coalesceTagList(event.models),
+    hair_makeup: coalesceTagList(event.hair_makeup),
+    header_tags: effectiveHeaderTags(event),
+    footer_tags: coalesceTagList(event.footer_tags)
   });
   const [reorderSection, setReorderSection] = useState<keyof typeof orderedTags | null>(
     (initialReorderSection as keyof typeof orderedTags) ?? null
@@ -191,8 +193,10 @@ export default function EventCard({
   const resolveTag = (tagType: string, raw: string) => {
     const entry = tagDisplayMap?.get(tagResolutionKey(tagType, raw));
     return {
-      display: entry?.display ?? raw,
+      /** Always the exact string on the event; identities/aliases must not relabel the card. */
+      display: raw,
       canonical: entry?.canonical ?? raw,
+      identityId: entry?.identityId ?? null,
     };
   };
   const [newTagValue, setNewTagValue] = useState('');
@@ -278,12 +282,12 @@ export default function EventCard({
 
   useEffect(() => {
     const fallbackOrdered = {
-      producers: event.producers || [],
-      featured_designers: event.featured_designers || [],
-      models: event.models || [],
-      hair_makeup: event.hair_makeup || [],
-      header_tags: (event.header_tags || []) as string[],
-      footer_tags: event.footer_tags || []
+      producers: coalesceTagList(event.producers),
+      featured_designers: coalesceTagList(event.featured_designers),
+      models: coalesceTagList(event.models),
+      hair_makeup: coalesceTagList(event.hair_makeup),
+      header_tags: effectiveHeaderTags(event),
+      footer_tags: coalesceTagList(event.footer_tags)
     };
     const fallbackCustom = (event.custom_tags && typeof event.custom_tags === 'object' && !Array.isArray(event.custom_tags))
       ? (event.custom_tags as Record<string, string[]>)
@@ -448,7 +452,7 @@ export default function EventCard({
           eventUpdate.custom_tags = { ...source, [slug]: nextVals };
         }
       } else if (suggestion.section_key === 'header_tags') {
-        const source = (event.header_tags || []) as string[];
+        const source = effectiveHeaderTags(event);
         const nextVals = source.some((x) => normalizeTagName(x) === normalizeTagName(finalName)) ? source : [...source, finalName];
         eventUpdate.header_tags = nextVals;
       } else {
@@ -1112,7 +1116,7 @@ export default function EventCard({
             {event.city && (
                 <button
                 data-tag-pill
-                onClick={(e) => handlePillClick(e, () => { if (!isAnyReorderMode) onTagClick('city', event.city); })}
+                onClick={(e) => handlePillClick(e, () => { if (!isAnyReorderMode) onTagClick('city', event.city, event.city); })}
                 onMouseDown={() => startLongPress('header_tags')}
                 onMouseUp={(e: React.MouseEvent) => clearLongPress(e)}
                 onMouseLeave={(e: React.MouseEvent) => clearLongPress(e)}
@@ -1142,7 +1146,7 @@ export default function EventCard({
               return (
                 <button
                   data-tag-pill
-                  onClick={(e) => handlePillClick(e, () => { if (!isAnyReorderMode) onTagClick('season', season); })}
+                  onClick={(e) => handlePillClick(e, () => { if (!isAnyReorderMode) onTagClick('season', season, season); })}
                   onMouseDown={() => startLongPress('header_tags')}
                   onMouseUp={(e: React.MouseEvent) => clearLongPress(e)}
                   onMouseLeave={(e: React.MouseEvent) => clearLongPress(e)}
@@ -1187,7 +1191,7 @@ export default function EventCard({
                     <button
                       key={idx}
                       onClick={(e) => handlePillClick(e, () => {
-                        if (!isAnyReorderMode) onTagClick('header_tags', resolveTag('header_tags', tag).canonical);
+                        if (!isAnyReorderMode) onTagClick('header_tags', resolveTag('header_tags', tag).identityId || tag, tag);
                       })}
                       data-tag-pill
                       className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
@@ -1330,7 +1334,7 @@ export default function EventCard({
                       <button
                         key={idx}
                         onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) onTagClick('producer', resolveTag('producer', producer).canonical);
+                          if (!isAnyReorderMode) onTagClick('producer', resolveTag('producer', producer).identityId || producer, producer);
                         })}
                         data-tag-pill
                         className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
@@ -1403,7 +1407,7 @@ export default function EventCard({
                       <button
                         key={idx}
                         onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) onTagClick('designer', resolveTag('designer', designer).canonical);
+                          if (!isAnyReorderMode) onTagClick('designer', resolveTag('designer', designer).identityId || designer, designer);
                         })}
                         data-tag-pill
                         className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
@@ -1463,7 +1467,7 @@ export default function EventCard({
                       <button
                         key={idx}
                         onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) onTagClick('model', resolveTag('model', model).canonical);
+                          if (!isAnyReorderMode) onTagClick('model', resolveTag('model', model).identityId || model, model);
                         })}
                         data-tag-pill
                         className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
@@ -1523,7 +1527,7 @@ export default function EventCard({
                       <button
                         key={idx}
                         onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) onTagClick('hair_makeup', resolveTag('hair_makeup', artist).canonical);
+                          if (!isAnyReorderMode) onTagClick('hair_makeup', resolveTag('hair_makeup', artist).identityId || artist, artist);
                         })}
                         data-tag-pill
                         className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
@@ -1611,7 +1615,7 @@ export default function EventCard({
                             onClick={(e) => handlePillClick(e, () => {
                               if (!isAnyReorderMode) {
                                 const r = resolveTag(`custom:${tagDef.slug}`, val);
-                                onTagClick(`custom_performer`, `${tagDef.slug}\x00${r.canonical}`);
+                                onTagClick(`custom_performer`, `${tagDef.slug}\x00${r.identityId || val}`, val);
                               }
                             })}
                             data-tag-pill
@@ -1730,7 +1734,7 @@ export default function EventCard({
                     <button
                       key={idx}
                       onClick={(e) => handlePillClick(e, () => {
-                        if (!isAnyReorderMode) onTagClick('footer_tags', resolveTag('footer_tags', tag).canonical);
+                        if (!isAnyReorderMode) onTagClick('footer_tags', resolveTag('footer_tags', tag).identityId || tag, tag);
                       })}
                       data-tag-pill
                       className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}

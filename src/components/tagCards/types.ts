@@ -12,7 +12,6 @@ export type TagRatingEventSlice = Pick<
   | 'hair_makeup'
   | 'city'
   | 'location'
-  | 'genre'
   | 'header_tags'
   | 'footer_tags'
   | 'custom_tags'

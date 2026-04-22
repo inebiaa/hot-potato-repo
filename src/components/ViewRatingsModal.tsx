@@ -50,7 +50,7 @@ interface ViewRatingsModalProps {
   onViewEvent?: (eventId: string) => void;
   /** When false, ratings are read-only (e.g. show has not occurred yet). Defaults to true. */
   allowRatingEdits?: boolean;
-  onTagClick?: (type: string, value: string) => void;
+  onTagClick?: (type: string, value: string, displayLabel?: string) => void;
 }
 
 export default function ViewRatingsModal({

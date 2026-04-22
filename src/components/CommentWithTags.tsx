@@ -2,6 +2,7 @@ import React from 'react';
 import { findAccentInsensitiveMatch, normalizeTagNameKey } from '../lib/normalize';
 import { Event } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
+import { effectiveHeaderTags } from '../lib/eventHeaderTags';
 import type { CommentTagColors } from '../lib/commentTagParsing';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 
@@ -23,7 +24,7 @@ interface CommentWithTagsProps {
   wiggle?: boolean;
   /** When true, tag pill splits follow the card/tag row width (event card). */
   fitTagPillsToContainer?: boolean;
-  onTagClick?: (type: string, value: string) => void;
+  onTagClick?: (type: string, value: string, displayLabel?: string) => void;
 }
 
 export default function CommentWithTags({
@@ -82,7 +83,7 @@ export default function CommentWithTags({
   (event.featured_designers || []).forEach((v) => add(v, 'designer'));
   (event.models || []).forEach((v) => add(v, 'model'));
   (event.hair_makeup || []).forEach((v) => add(v, 'hair_makeup'));
-  (event.header_tags || []).forEach((v: string) => add(v, 'header_tags'));
+  effectiveHeaderTags(event).forEach((v) => add(v, 'header_tags'));
   (event.footer_tags || []).forEach((v) => add(v, 'footer_tags'));
   if (event.city) add(event.city, 'city');
   if (event.date) add(getSeasonFromDate(event.date), 'season');
@@ -140,10 +141,10 @@ export default function CommentWithTags({
               e.stopPropagation();
               if (!onTagClick) return;
               if (seg.tag.type === 'custom' && seg.tag.slug) {
-                onTagClick('custom_performer', `${seg.tag.slug}\x00${seg.tag.value}`);
+                onTagClick('custom_performer', `${seg.tag.slug}\x00${seg.tag.value}`, seg.value);
                 return;
               }
-              onTagClick(seg.tag.type, seg.tag.value);
+              onTagClick(seg.tag.type, seg.tag.value, seg.value);
             }}
           >
             <TagPillSplitLabel

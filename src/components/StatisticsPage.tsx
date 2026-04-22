@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { supabase, Event } from '../lib/supabase';
 import { getSeasonFromDate, sortSeasonsByDate } from '../lib/season';
-import { sameTagSpelling, tagArrayContainsNormalized } from '../lib/tagIdentity';
-import type { TagResolutionMap } from '../lib/tagDisplayResolution';
+import { sameTagSpelling } from '../lib/tagIdentity';
+import { effectiveHeaderTags } from '../lib/eventHeaderTags';
+import { eventArrayMatchesFilter, type TagResolutionMap } from '../lib/tagDisplayResolution';
 import TagRatingsModal from './TagRatingsModal';
 import { clearAppModalParams, parseAppModal, setAppModalParams } from '../lib/searchParamsModal';
 import type { AppSettings } from '../types/appSettings';
@@ -214,14 +215,14 @@ export default function StatisticsPage({
 
   const matchEventForTag = (e: Event, type: string, value: string) => {
     switch (type) {
-      case 'producer': return tagArrayContainsNormalized(e.producers, value);
-      case 'designer': return tagArrayContainsNormalized(e.featured_designers, value);
-      case 'model': return tagArrayContainsNormalized(e.models, value);
-      case 'hair_makeup': return tagArrayContainsNormalized(e.hair_makeup, value);
+      case 'producer': return eventArrayMatchesFilter(tagResolutionMap, 'producer', e.producers, value);
+      case 'designer': return eventArrayMatchesFilter(tagResolutionMap, 'designer', e.featured_designers, value);
+      case 'model': return eventArrayMatchesFilter(tagResolutionMap, 'model', e.models, value);
+      case 'hair_makeup': return eventArrayMatchesFilter(tagResolutionMap, 'hair_makeup', e.hair_makeup, value);
       case 'city': return sameTagSpelling(e.city, value);
       case 'season': return (e.season || getSeasonFromDate(e.date)) === value;
-      case 'header_tags': return tagArrayContainsNormalized(e.header_tags, value);
-      case 'footer_tags': return tagArrayContainsNormalized(e.footer_tags, value);
+      case 'header_tags': return eventArrayMatchesFilter(tagResolutionMap, 'header_tags', effectiveHeaderTags(e), value);
+      case 'footer_tags': return eventArrayMatchesFilter(tagResolutionMap, 'footer_tags', e.footer_tags, value);
       default: return false;
     }
   };
@@ -232,7 +233,7 @@ export default function StatisticsPage({
     if (selectedCity) filtered = filtered.filter((e) => sameTagSpelling(e.city, selectedCity));
     if (selectedSeason) filtered = filtered.filter(e => (e.season || getSeasonFromDate(e.date)) === selectedSeason);
     return filtered.filter(e => matchEventForTag(e, selectedTag.type, selectedTag.value));
-  }, [events, selectedTag, selectedCity, selectedSeason]);
+  }, [events, selectedTag, selectedCity, selectedSeason, tagResolutionMap]);
 
   if (!isOpen && !asPage) return null;
 
