@@ -10,12 +10,16 @@ function clean(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
 }
 
+/** In the browser Vite injects `import.meta.env`. In the static-site `closeBundle` hook (Node) it can be undefined. */
+function viteEnvString(key: 'VITE_APP_NAME' | 'VITE_APP_DESCRIPTION'): string {
+  const meta = import.meta as { env?: Record<string, string | boolean | undefined> };
+  return clean(meta.env?.[key]);
+}
+
 export function appName(): string {
-  const env = clean(import.meta.env.VITE_APP_NAME);
-  return env || DEFAULT_APP_NAME;
+  return viteEnvString('VITE_APP_NAME') || DEFAULT_APP_NAME;
 }
 
 export function appDescription(): string {
-  const env = clean(import.meta.env.VITE_APP_DESCRIPTION);
-  return env || DEFAULT_APP_DESCRIPTION;
+  return viteEnvString('VITE_APP_DESCRIPTION') || DEFAULT_APP_DESCRIPTION;
 }

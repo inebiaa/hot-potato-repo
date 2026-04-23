@@ -405,7 +405,9 @@ function App() {
     const q = normalizeForSearch(searchQuery);
     if (!q || q.length < 2) return [];
     const fromEvents = searchableTags.filter((t) => normalizeForSearch(t.label).includes(q));
-    const seen = new Set(fromEvents.map((t) => `${t.type}:${t.value}`));
+    const suggestionKey = (t: { type: string; value: string; label: string }) =>
+      `${t.type}:${t.value}\x00${normalizeTagName(t.label)}`;
+    const seen = new Set(fromEvents.map(suggestionKey));
     const out: { type: string; value: string; label: string }[] = [...fromEvents];
     for (const id of identitySearchHits) {
       if (!identityIdsInUse.has(id.clusterId)) continue;
@@ -416,7 +418,7 @@ function App() {
             label: id.canonical_name,
           }
         : { type: id.tag_type, value: id.clusterId, label: id.canonical_name };
-      const key = `${sug.type}:${sug.value}\x00${sug.label}`;
+      const key = suggestionKey(sug);
       if (!seen.has(key)) {
         seen.add(key);
         out.push(sug);
