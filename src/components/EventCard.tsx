@@ -30,6 +30,19 @@ const PENDING_TAG_PILL_COLORS = { backgroundColor: '#d1d5db', color: '#4b5563' }
 const HEADER_ICON_INSIDE_PILL_CLASS =
   'inline-flex max-w-full min-w-0 items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors hover:opacity-80';
 
+function normalizeCustomCategoryKey(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function getCustomCategorySortRank(slug: string, hasPresentedBy: boolean): number {
+  const key = normalizeCustomCategoryKey(slug);
+  if (key === 'hostedby') return 0;
+  if (key === 'performanceby') return 1;
+  if (key === 'benefiting') return hasPresentedBy ? 3 : 999;
+  if (key === 'presentedby') return 1000;
+  return 2;
+}
+
 interface EventCardProps {
   event: Event;
   averageRating: number;
@@ -1592,8 +1605,13 @@ export default function EventCard({
                 bg_color: sharedBg,
                 text_color: sharedText,
               }));
+              const hasPresentedBy = allTagDefs.some((tagDef) => normalizeCustomCategoryKey(tagDef.slug) === 'presentedby');
               return allTagDefs
-                .sort((a, b) => ((a as { sort_order?: number }).sort_order ?? 999) - ((b as { sort_order?: number }).sort_order ?? 999))
+                .sort((a, b) => {
+                  const rankDiff = getCustomCategorySortRank(a.slug, hasPresentedBy) - getCustomCategorySortRank(b.slug, hasPresentedBy);
+                  if (rankDiff !== 0) return rankDiff;
+                  return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
+                })
                 .map((tagDef) => {
                   const tags = ct[tagDef.slug];
                   if (!tags || (tags.length === 0 && pendingForSection('custom', tagDef.slug).length === 0)) return null;
