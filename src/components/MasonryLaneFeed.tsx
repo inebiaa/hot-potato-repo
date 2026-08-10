@@ -21,6 +21,30 @@ type MasonryLaneFeedProps = {
   className?: string;
 };
 
+function distributeToLanes(
+  orderedIds: string[],
+  laneCount: number,
+  heights: ReadonlyMap<string, number>,
+  gapPx: number,
+  defaultHeightPx: number,
+): string[][] {
+  const n = Math.max(1, laneCount);
+  const lanes: string[][] = Array.from({ length: n }, () => []);
+  const laneBottom = Array(n).fill(0);
+
+  for (const id of orderedIds) {
+    let best = 0;
+    for (let i = 1; i < n; i++) {
+      if (laneBottom[i] < laneBottom[best]) best = i;
+    }
+    lanes[best].push(id);
+    const h = heights.get(id) ?? defaultHeightPx;
+    const gap = lanes[best].length > 1 ? gapPx : 0;
+    laneBottom[best] += gap + h;
+  }
+  return lanes;
+}
+
 function ItemMeasure({
   id,
   onHeight,
@@ -55,19 +79,12 @@ function ItemMeasure({
 }
 
 /**
- * Packs children into vertical lanes. Lane assignments stay stable when new items
- * are appended or heights update — only a column-count change or a non-append
- * list change reflows existing cards (avoids scroll jump / empty flashes).
+ * Packs children into vertical lanes using a shortest-column heuristic so uneven
+ * card heights do not leave large empty “row slabs”.
+ * Items are taken in source order; each step picks the shortest lane.
+ * Height updates alone do not reshuffle (avoids mid-scroll column jumping).
  */
 const HEIGHT_EPSILON_PX = 2;
-
-function isPrefixAppend(prev: string[], next: string[]): boolean {
-  if (next.length < prev.length) return false;
-  for (let i = 0; i < prev.length; i++) {
-    if (prev[i] !== next[i]) return false;
-  }
-  return true;
-}
 
 export default function MasonryLaneFeed({
   items,
@@ -80,79 +97,14 @@ export default function MasonryLaneFeed({
   const containerRef = useRef<HTMLDivElement>(null);
   const [laneCount, setLaneCount] = useState(1);
   const heightsRef = useRef<Map<string, number>>(new Map());
-  const assignmentsRef = useRef<Map<string, number>>(new Map());
-  const prevIdsRef = useRef<string[]>([]);
-  const prevLaneCountRef = useRef(1);
   const [lanes, setLanes] = useState<string[][]>([]);
 
   const orderedIds = useMemo(() => items.map((i) => i.id), [items]);
-
-  const rebuildLanesFromAssignments = useCallback((ids: string[], n: number) => {
-    const nextLanes: string[][] = Array.from({ length: n }, () => []);
-    for (const id of ids) {
-      const lane = Math.min(Math.max(0, assignmentsRef.current.get(id) ?? 0), n - 1);
-      assignmentsRef.current.set(id, lane);
-      nextLanes[lane].push(id);
-    }
-    return nextLanes;
-  }, []);
-
-  const fullDistribute = useCallback(
-    (ids: string[], n: number) => {
-      const nextLanes: string[][] = Array.from({ length: n }, () => []);
-      const bottoms = Array(n).fill(0);
-      const nextAssign = new Map<string, number>();
-      for (const id of ids) {
-        let best = 0;
-        for (let i = 1; i < n; i++) {
-          if (bottoms[i] < bottoms[best]) best = i;
-        }
-        nextLanes[best].push(id);
-        nextAssign.set(id, best);
-        const h = heightsRef.current.get(id) ?? defaultItemHeightPx;
-        const gap = nextLanes[best].length > 1 ? gapPx : 0;
-        bottoms[best] += gap + h;
-      }
-      assignmentsRef.current = nextAssign;
-      return nextLanes;
-    },
-    [defaultItemHeightPx, gapPx],
-  );
-
-  const appendNewIds = useCallback(
-    (prevIds: string[], allIds: string[], n: number) => {
-      const nextLanes = rebuildLanesFromAssignments(prevIds, n);
-      const bottoms = nextLanes.map((laneIds) => {
-        let total = 0;
-        laneIds.forEach((id, i) => {
-          const h = heightsRef.current.get(id) ?? defaultItemHeightPx;
-          total += h + (i > 0 ? gapPx : 0);
-        });
-        return total;
-      });
-      for (const id of allIds.slice(prevIds.length)) {
-        let best = 0;
-        for (let i = 1; i < n; i++) {
-          if (bottoms[i] < bottoms[best]) best = i;
-        }
-        assignmentsRef.current.set(id, best);
-        nextLanes[best].push(id);
-        const h = heightsRef.current.get(id) ?? defaultItemHeightPx;
-        const gap = nextLanes[best].length > 1 ? gapPx : 0;
-        bottoms[best] += gap + h;
-      }
-      return nextLanes;
-    },
-    [defaultItemHeightPx, gapPx, rebuildLanesFromAssignments],
-  );
 
   useLayoutEffect(() => {
     const allowed = new Set(orderedIds);
     for (const k of heightsRef.current.keys()) {
       if (!allowed.has(k)) heightsRef.current.delete(k);
-    }
-    for (const k of assignmentsRef.current.keys()) {
-      if (!allowed.has(k)) assignmentsRef.current.delete(k);
     }
   }, [orderedIds]);
 
@@ -188,30 +140,25 @@ export default function MasonryLaneFeed({
     };
   }, [columnMinWidthPx, gapPx]);
 
+  // Redistribute whenever the item list or column count changes so paging keeps
+  // chronological packing. Do not reshuffle on height-only updates.
   useLayoutEffect(() => {
     if (orderedIds.length === 0) {
-      prevIdsRef.current = [];
-      assignmentsRef.current = new Map();
-      prevLaneCountRef.current = laneCount;
       setLanes([]);
       return;
     }
-
     const n = Math.min(Math.max(1, laneCount), orderedIds.length);
-    const prevIds = prevIdsRef.current;
-    const laneCountChanged = prevLaneCountRef.current !== n;
-    const canAppend = !laneCountChanged && isPrefixAppend(prevIds, orderedIds);
+    setLanes(
+      distributeToLanes(
+        orderedIds,
+        n,
+        heightsRef.current,
+        gapPx,
+        defaultItemHeightPx,
+      ),
+    );
+  }, [orderedIds, laneCount, gapPx, defaultItemHeightPx]);
 
-    const nextLanes = canAppend && prevIds.length > 0
-      ? appendNewIds(prevIds, orderedIds, n)
-      : fullDistribute(orderedIds, n);
-
-    prevIdsRef.current = orderedIds;
-    prevLaneCountRef.current = n;
-    setLanes(nextLanes);
-  }, [orderedIds, laneCount, appendNewIds, fullDistribute]);
-
-  // Heights update packing math for future appends only — do not move existing cards.
   const onHeight = useCallback((id: string, height: number) => {
     const prev = heightsRef.current.get(id);
     if (prev !== undefined && Math.abs(prev - height) < HEIGHT_EPSILON_PX) return;

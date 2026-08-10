@@ -1,3 +1,4 @@
+import { eventSortKey } from './eventDates';
 import { normalizeEventTagArrays } from './eventTagArray';
 import type { Event } from './eventTypes';
 import type { EventRatingStatRow } from './eventRatingStats';
@@ -8,6 +9,27 @@ export const FEED_PAGE_SIZE = 24;
 
 /** Keep about this many viewports of content below the fold before pausing prefetch. */
 export const FEED_PREFETCH_VIEWPORTS = 3;
+
+/** Stable feed order: newest date first, then id (so pages never reshuffle same-day rows). */
+export function compareEventsForFeed(
+  a: Pick<Event, 'id' | 'date'>,
+  b: Pick<Event, 'id' | 'date'>,
+): number {
+  const byDate = eventSortKey(b.date) - eventSortKey(a.date);
+  if (byDate !== 0) return byDate;
+  return b.id.localeCompare(a.id);
+}
+
+export function mergeEventsByFeedOrder<T extends Pick<Event, 'id' | 'date'>>(
+  existing: T[],
+  incoming: T[],
+): T[] {
+  if (incoming.length === 0) return existing;
+  const byId = new Map<string, T>();
+  for (const row of existing) byId.set(row.id, row);
+  for (const row of incoming) byId.set(row.id, row);
+  return [...byId.values()].sort(compareEventsForFeed);
+}
 
 /** Columns needed for cards / search — avoid select('*'). */
 export const EVENT_FEED_COLUMNS =
