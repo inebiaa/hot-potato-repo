@@ -3,7 +3,7 @@ import { Calendar, MapPin, Star, Edit, Trash2, Share2, Mail, MoreVertical } from
 import { Event, Rating, supabase } from '../lib/supabase';
 import { getIcon } from '../lib/eventCardIcons';
 import { getSeasonFromDate } from '../lib/season';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import RatingModal from './RatingModal';
 import EditEventModal from './EditEventModal';
 import ViewRatingsModal from './ViewRatingsModal';
@@ -118,6 +118,7 @@ export default function EventCard({
   const location = useLocation();
   const params = useParams();
   const [searchParams] = useSearchParams();
+  const { user, isAdmin } = useAuth();
   const parsedModal = useMemo(() => parseAppModal(searchParams), [searchParams]);
   const panelEventId = params.eventId ?? parsedModal.targetEventId ?? '';
   const isRatingModalOpen = parsedModal.modal === 'rate' && panelEventId === event.id;
@@ -130,11 +131,35 @@ export default function EventCard({
   };
 
   const openEventPanel = (m: 'rate' | 'view-ratings' | 'edit-event') => {
+    if (m === 'rate' && !user) {
+      navigate({
+        pathname: location.pathname,
+        search: setAppModalParams(searchParams, 'auth', {
+          authMode: 'signin',
+          authPrompt: t('auth.prompt.leaveReview'),
+        }),
+      });
+      return;
+    }
     navigate({
       pathname: location.pathname,
       search: setAppModalParams(searchParams, m, { targetEventId: event.id }),
     });
   };
+
+  // Signed-out deep link ?modal=rate → auth (once; do not depend on searchParams or it loops).
+  useEffect(() => {
+    if (!isRatingModalOpen || user) return;
+    navigate({
+      pathname: location.pathname,
+      search: setAppModalParams(searchParams, 'auth', {
+        authMode: 'signin',
+        authPrompt: t('auth.prompt.leaveReview'),
+      }),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react when rate modal opens while signed out
+  }, [isRatingModalOpen, user]);
+
   const [isDeleting, setIsDeleting] = useState(false);
   const [shareCopied, setShareCopied] = useState<'link' | 'embed' | 'embedcode' | 'email' | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
@@ -170,7 +195,6 @@ export default function EventCard({
   const toggleTagSection = (key: string) => {
     setExpandedTagSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
-  const { user, isAdmin } = useAuth();
   const tagDisplayMap = useTagDisplayMap();
   const resolveTag = (tagType: string, raw: string) => {
     const entry = tagDisplayMap?.get(tagResolutionKey(tagType, raw));
@@ -910,7 +934,7 @@ export default function EventCard({
       </div>
 
       <RatingModal
-        isOpen={isRatingModalOpen && ratingAllowed}
+        isOpen={isRatingModalOpen && ratingAllowed && !!user}
         onClose={closeEventPanels}
         event={event}
         existingRating={userRating}

@@ -1,4 +1,9 @@
-import { eventSortKey, isEventUpcoming } from './eventDates';
+import {
+  addCalendarMonthsYmd,
+  eventSortKey,
+  isEventUpcoming,
+  localCalendarYmd,
+} from './eventDates';
 import { normalizeEventTagArrays } from './eventTagArray';
 import type { Event } from './eventTypes';
 import type { EventRatingStatRow } from './eventRatingStats';
@@ -9,6 +14,13 @@ export const FEED_PAGE_SIZE = 24;
 
 /** Keep about this many viewports of content below the fold before pausing prefetch. */
 export const FEED_PREFETCH_VIEWPORTS = 3;
+
+/** Browse feed only lists upcoming shows within this many months; farther dates stay searchable. */
+export const FEED_UPCOMING_HORIZON_MONTHS = 6;
+
+export function feedUpcomingHorizonYmd(todayYmd: string = localCalendarYmd()): string {
+  return addCalendarMonthsYmd(todayYmd, FEED_UPCOMING_HORIZON_MONTHS);
+}
 
 /** Columns needed for cards / search — avoid select('*'). */
 export const EVENT_FEED_COLUMNS =
@@ -118,9 +130,46 @@ export function mapEventsWithStats(
 
 type FeedQueryResult = { data: Event[]; error: Error | null };
 
-/** All upcoming shows, soonest first (what belongs at the top of the home feed). */
-export async function fetchUpcomingEvents(): Promise<FeedQueryResult> {
+/**
+ * Upcoming shows for the home browse feed: soonest first, capped at the 6-month horizon.
+ * Pass `{ withinHorizon: false }` to load every future date (search/tag catalog).
+ */
+export async function fetchUpcomingEvents(opts?: {
+  withinHorizon?: boolean;
+}): Promise<FeedQueryResult> {
+  const withinHorizon = opts?.withinHorizon ?? true;
   const fromYmd = upcomingFromYmd();
+  const horizonYmd = feedUpcomingHorizonYmd();
+  const pageSize = 100;
+  const all: Event[] = [];
+  let from = 0;
+
+  for (;;) {
+    let query = supabase
+      .from('events')
+      .select(EVENT_FEED_COLUMNS)
+      .gte('date', fromYmd)
+      .order('date', { ascending: true })
+      .order('id', { ascending: true });
+    if (withinHorizon) {
+      query = query.lte('date', horizonYmd);
+    }
+
+    const { data, error } = await query.range(from, from + pageSize - 1);
+
+    if (error) return { data: [], error: new Error(error.message) };
+    const rows = (data || []) as Event[];
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return { data: all, error: null };
+}
+
+/** Upcoming shows after the browse horizon (for search/tag hydration). */
+export async function fetchBeyondHorizonUpcomingEvents(): Promise<FeedQueryResult> {
+  const horizonYmd = feedUpcomingHorizonYmd();
   const pageSize = 100;
   const all: Event[] = [];
   let from = 0;
@@ -129,7 +178,7 @@ export async function fetchUpcomingEvents(): Promise<FeedQueryResult> {
     const { data, error } = await supabase
       .from('events')
       .select(EVENT_FEED_COLUMNS)
-      .gte('date', fromYmd)
+      .gt('date', horizonYmd)
       .order('date', { ascending: true })
       .order('id', { ascending: true })
       .range(from, from + pageSize - 1);

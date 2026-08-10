@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Star, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase, Event } from '../lib/supabase';
 import RatingModal from './RatingModal';
 import CommentWithTags from './CommentWithTags';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
+import { useT } from '../contexts/CopyContext';
+import { setAppModalParams } from '../lib/searchParamsModal';
 
 interface Rating {
   id: string;
@@ -69,11 +72,25 @@ export default function ViewRatingsModal({
   allowRatingEdits = true,
   onTagClick,
 }: ViewRatingsModalProps) {
+  const t = useT();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedRatingId, setExpandedRatingId] = useState<string | null>(null);
   const [editingRating, setEditingRating] = useState<Rating | null>(null);
   const [isCreatingRating, setIsCreatingRating] = useState(false);
+
+  const promptSignInToReview = () => {
+    navigate({
+      pathname: location.pathname,
+      search: setAppModalParams(searchParams, 'auth', {
+        authMode: 'signin',
+        authPrompt: t('auth.prompt.leaveReview'),
+      }),
+    });
+  };
 
   const fetchRatings = useCallback(async () => {
     setLoading(true);
@@ -306,13 +323,17 @@ export default function ViewRatingsModal({
           </div>
         )}
 
-        {(onViewEvent || (allowRatingEdits && currentUserId && event)) && !singleUserId ? (
+        {(onViewEvent || (allowRatingEdits && event)) && !singleUserId ? (
           <div className="flex shrink-0 gap-2 border-t border-border bg-muted p-4">
-            {allowRatingEdits && currentUserId && event ? (
+            {allowRatingEdits && event ? (
               <Button
                 type="button"
                 className="min-h-[44px] flex-1"
                 onClick={() => {
+                  if (!currentUserId) {
+                    promptSignInToReview();
+                    return;
+                  }
                   if (currentUserRating) {
                     setEditingRating(currentUserRating);
                     return;

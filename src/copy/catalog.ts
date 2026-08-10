@@ -3,12 +3,13 @@
  * Add keys here, then render with `useT()` / `t(key)`.
  */
 
-export type CopyGroup = 'home' | 'search' | 'nav' | 'event' | 'form' | 'empty' | 'modals';
+export type CopyGroup = 'home' | 'search' | 'nav' | 'event' | 'form' | 'empty' | 'modals' | 'auth';
 
 export type CopyKey =
   | 'home.title'
   | 'home.subtitleSignedIn'
   | 'home.subtitleSignedOut'
+  | 'auth.prompt.leaveReview'
   | 'search.placeholder'
   | 'nav.home'
   | 'nav.stats'
@@ -78,6 +79,11 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     default: 'Sign in to rate shows and add your own!',
     label: 'Home subtitle (signed out)',
     group: 'home',
+  },
+  'auth.prompt.leaveReview': {
+    default: 'Sign in to leave a review',
+    label: 'Auth prompt: leave a review',
+    group: 'auth',
   },
   'search.placeholder': {
     default: 'Search shows, designers, artists, models...',
@@ -269,6 +275,7 @@ export const COPY_GROUP_LABELS: Record<CopyGroup, string> = {
   form: 'Add / Edit forms',
   empty: 'Empty states',
   modals: 'Other',
+  auth: 'Auth',
 };
 
 /**

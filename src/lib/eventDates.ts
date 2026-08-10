@@ -76,3 +76,42 @@ export function eventSortKey(dateStr: string): number {
   if (ymd) return startOfListedLocalDay(ymd).getTime();
   return new Date(s).getTime();
 }
+
+/** Local calendar `YYYY-MM-DD` (matches upcoming/past split used by the home feed). */
+export function localCalendarYmd(now: Date = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Add calendar months to a `YYYY-MM-DD`, clamping the day to the target month. */
+export function addCalendarMonthsYmd(ymd: string, months: number): string {
+  const p = parseYmdParts(ymd);
+  if (!p) return ymd;
+  const [y, m, d] = p;
+  const total = y * 12 + (m - 1) + months;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  const lastDay = new Date(ny, nm, 0).getDate();
+  const nd = Math.min(d, lastDay);
+  return `${ny}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}`;
+}
+
+/** Calendar `YYYY-MM-DD` for an event date string (falls back to local date of the instant). */
+export function eventCalendarYmd(dateStr: string): string | null {
+  const s = (dateStr || '').trim();
+  if (!s) return null;
+  const ymd = getCalendarYmd(s);
+  if (ymd) return ymd;
+  const t = new Date(s);
+  if (Number.isNaN(t.getTime())) return null;
+  return localCalendarYmd(t);
+}
+
+/** True when the show is after the browse upcoming horizon (still searchable). */
+export function isUpcomingBeyondHorizon(dateStr: string, horizonYmd: string): boolean {
+  const ymd = eventCalendarYmd(dateStr);
+  if (!ymd) return false;
+  return ymd > horizonYmd;
+}

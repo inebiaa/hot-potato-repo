@@ -60,7 +60,7 @@ export default function RatingModal({
   const { user } = useAuth();
 
   const eventTags = useMemo(
-    () => getEventTagStyles(event, tagColors, customPerformerTags).map((t) => t.value),
+    () => getEventTagStyles(event, tagColors, customPerformerTags).map((tag) => tag.value),
     [event, tagColors, customPerformerTags]
   );
 
@@ -72,18 +72,13 @@ export default function RatingModal({
     editorRef.current?.insertAtCursor(tag);
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !user) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (rating === 0) {
       setError('Please select a rating');
-      return;
-    }
-
-    if (!user) {
-      setError('You must be logged in to rate events');
       return;
     }
 

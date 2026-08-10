@@ -6,7 +6,7 @@ import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
 import { eventDateFilterValue, eventDateMatchesSearch, formatEventDateDisplay } from './lib/formatEventDate';
 import { getSeasonFromDate, getYearFromDate } from './lib/season';
-import { isEventUpcoming } from './lib/eventDates';
+import { isEventUpcoming, isUpcomingBeyondHorizon } from './lib/eventDates';
 import { effectiveHeaderTags } from './lib/eventHeaderTags';
 import { normalizeForSearch } from './lib/normalize';
 import { normalizeShowType, showTypeLabel } from './lib/showType';
@@ -54,6 +54,8 @@ import {
   FEED_PAGE_SIZE,
   FEED_PREFETCH_VIEWPORTS,
   compareEventsForFeed,
+  feedUpcomingHorizonYmd,
+  fetchBeyondHorizonUpcomingEvents,
   fetchPastEventsPage,
   fetchUpcomingEvents,
   mapEventsWithStats,
@@ -95,6 +97,7 @@ function App() {
   const hasMoreEventsRef = useRef(true);
   const loadingMoreRef = useRef(false);
   const ensuringCatalogRef = useRef(false);
+  const beyondHorizonLoadedRef = useRef(false);
   const [hasMoreEvents, setHasMoreEvents] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [deepLinkFailed, setDeepLinkFailed] = useState(false);
@@ -257,6 +260,7 @@ function App() {
       eventsOffsetRef.current = 0;
       hasMoreEventsRef.current = true;
       setHasMoreEvents(true);
+      beyondHorizonLoadedRef.current = false;
       tagResolvedEventIdsRef.current = new Set();
     }
 
@@ -421,11 +425,26 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMoreEvents, loadingMore, loading, events.length, selectedTags.length, searchQuery]);
 
-  /** Search/tag filters need the full catalog; pull remaining pages once. */
+  /** Search/tag filters need the full catalog; pull beyond-horizon + remaining past once. */
   const ensureFullCatalog = useCallback(async () => {
     if (ensuringCatalogRef.current) return;
     ensuringCatalogRef.current = true;
     try {
+      if (!beyondHorizonLoadedRef.current) {
+        const beyondRes = await fetchBeyondHorizonUpcomingEvents();
+        if (!beyondRes.error && beyondRes.data.length > 0) {
+          const statsRes = await fetchEventRatingStats(beyondRes.data.map((e) => e.id));
+          if (!statsRes.error) {
+            const mapped = mapEventsWithStats(
+              beyondRes.data,
+              statsRes.data,
+              userRatingsCacheRef.current,
+            );
+            setEvents((prev) => mergeEventsByFeedOrder(prev, mapped));
+          }
+        }
+        beyondHorizonLoadedRef.current = true;
+      }
       while (hasMoreEventsRef.current) {
         await fetchEvents({ append: true });
       }
@@ -812,6 +831,13 @@ function App() {
 
   useEffect(() => {
     let filtered = [...events];
+
+    // Browse feed: hide upcoming shows past the 6-month horizon (still in catalog for search/tags).
+    const browsing = selectedTags.length === 0 && searchQuery.trim().length < 2;
+    if (browsing) {
+      const horizonYmd = feedUpcomingHorizonYmd();
+      filtered = filtered.filter((event) => !isUpcomingBeyondHorizon(event.date || '', horizonYmd));
+    }
 
     if (searchQuery.trim()) {
       const queryNorm = normalizeForSearch(searchQuery);
