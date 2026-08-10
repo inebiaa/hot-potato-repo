@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { Plus, LogOut, LogIn, Sparkles, BarChart3, User, Settings, Home, MoreVertical } from 'lucide-react';
 import type { AppSettings } from '../types/appSettings';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { useT } from '../contexts/CopyContext';
 
 export type AppHeaderActiveView = 'home' | 'stats' | 'profile' | 'settings';
 
@@ -47,6 +48,7 @@ export default function AppHeader({
   onSignOut,
   searchBar,
 }: AppHeaderProps) {
+  const t = useT();
   const menuId = useId();
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const drawerPanelRef = useRef<HTMLDivElement>(null);
@@ -203,16 +205,16 @@ export default function AppHeader({
         <div className="mx-auto flex max-w-lg items-stretch justify-around">
           <button type="button" className={navItemClass(activeView === 'home')} onClick={onGoHome}>
             <Home size={22} strokeWidth={activeView === 'home' ? 2.5 : 2} />
-            <span>Home</span>
+            <span>{t('nav.home')}</span>
           </button>
           <button type="button" className={navItemClass(activeView === 'stats')} onClick={onOpenStats}>
             <BarChart3 size={22} strokeWidth={activeView === 'stats' ? 2.5 : 2} />
-            <span>Stats</span>
+            <span>{t('nav.stats')}</span>
           </button>
           {user ? (
             <button type="button" className={navItemClass(activeView === 'profile')} onClick={onOpenProfile}>
               <User size={22} strokeWidth={activeView === 'profile' ? 2.5 : 2} />
-              <span>Profile</span>
+              <span>{t('nav.profile')}</span>
             </button>
           ) : (
             <button type="button" className={navItemClass(false)} onClick={onSignIn}>
@@ -222,7 +224,7 @@ export default function AppHeader({
           )}
           <button type="button" className={navItemClass(false)} onClick={onAddEvent}>
             <Plus size={22} />
-            <span>Add</span>
+            <span>{t('nav.add')}</span>
           </button>
         </div>
       </nav>

@@ -38,19 +38,24 @@ export default function EventComments({ eventId, isExpanded }: EventCommentsProp
 
       if (commentsError) throw commentsError;
 
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('user_profiles')
-        .select('user_id, username');
+      const userIds = [...new Set((commentsData || []).map((c) => c.user_id).filter(Boolean))];
+      const profilesByUserId = new Map<string, string>();
+      if (userIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('user_profiles')
+          .select('user_id, username')
+          .in('user_id', userIds);
 
-      if (profilesError) throw profilesError;
+        if (profilesError) throw profilesError;
+        for (const p of profilesData || []) {
+          if (p.user_id) profilesByUserId.set(p.user_id, p.username || 'Unknown User');
+        }
+      }
 
-      const commentsWithUsernames = (commentsData || []).map((comment) => {
-        const profile = profilesData?.find((p) => p.user_id === comment.user_id);
-        return {
-          ...comment,
-          username: profile?.username || 'Unknown User'
-        };
-      });
+      const commentsWithUsernames = (commentsData || []).map((comment) => ({
+        ...comment,
+        username: profilesByUserId.get(comment.user_id) || 'Unknown User',
+      }));
 
       setComments(commentsWithUsernames);
     } catch (error) {

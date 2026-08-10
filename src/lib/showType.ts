@@ -40,12 +40,6 @@ export function featuredCreditPlaceholder(value: unknown): string {
     : 'e.g., Valentino, Gucci, Alexander McQueen';
 }
 
-export function featuredCreditHint(value: unknown): string {
-  return normalizeShowType(value) === 'music'
-    ? 'Add the performing artist(s); type and press Enter'
-    : 'Type and press Enter to add; suggestions appear as you type';
-}
-
 /** Event column used for Starring, by show type. */
 export function starringColumn(value: unknown): 'featured_artists' | 'featured_designers' {
   return normalizeShowType(value) === 'music' ? 'featured_artists' : 'featured_designers';

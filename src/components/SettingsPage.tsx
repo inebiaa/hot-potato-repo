@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Save, Image, Users, Tags, User } from 'lucide-react';
+import { Save, Image, Users, Tags, User, Type } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { readableTextForBg } from '../lib/colorUtils';
@@ -19,10 +19,12 @@ import {
 import { loadAdminTagGroupMembers } from '../lib/adminTagGroupMembers';
 import type { AppSettings } from '../types/appSettings';
 import BrandingTab from './settings/BrandingTab';
+import CopyTab from './settings/CopyTab';
 import AccountTab, { type CreditRow } from './settings/AccountTab';
 import AdminsTab from './settings/AdminsTab';
 import TagsTab, { BRIGHT_TAG_DEFAULTS, FADED_TAG_DEFAULTS } from './settings/TagsTab';
 import { Button } from './ui';
+import { COPY_OVERRIDES_SETTING_KEY } from '../copy';
 
 const PALETTE_STORAGE_KEY = 'tag_settings_palette_v1';
 const COLLECTIONS_STORAGE_KEY = 'tag_color_collections_v1';
@@ -83,7 +85,7 @@ interface AdminUser {
   user_id_public?: string;
 }
 
-type TabId = 'branding' | 'admins' | 'tags' | 'account';
+type TabId = 'branding' | 'copy' | 'admins' | 'tags' | 'account';
 type CoreTagKey = 'producer' | 'designer' | 'model' | 'hair_makeup' | 'city' | 'season' | 'header_tags' | 'footer_tags' | 'special_guests';
 type SwatchColorKey = CoreTagKey | 'optional_tags' | 'countdown';
 
@@ -95,7 +97,8 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
     app_icon_url: '',
     app_logo_url: '',
     app_favicon_url: '',
-    tagline: 'Fashion Show Reviews',
+    tagline: 'Fashion & Music Show Reviews',
+    copy_overrides: '',
     color_scheme: 'custom',
     collapsible_cards_enabled: 'true',
     producer_bg_color: '#fef08a',
@@ -823,7 +826,8 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
         app_icon_url: settingsObj.app_icon_url || '',
         app_logo_url: settingsObj.app_logo_url || '',
         app_favicon_url: settingsObj.app_favicon_url || '',
-        tagline: settingsObj.tagline || 'Fashion Show Reviews',
+        tagline: settingsObj.tagline || 'Fashion & Music Show Reviews',
+        copy_overrides: settingsObj.copy_overrides || settingsObj[COPY_OVERRIDES_SETTING_KEY] || '',
         color_scheme,
         collapsible_cards_enabled: settingsObj.collapsible_cards_enabled || 'true',
         producer_bg_color: settingsObj.producer_bg_color || '#fef08a',
@@ -1315,6 +1319,7 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
         { key: 'app_logo_url', value: settings.app_logo_url },
         { key: 'app_favicon_url', value: settings.app_favicon_url },
         { key: 'tagline', value: settings.tagline },
+        { key: COPY_OVERRIDES_SETTING_KEY, value: settings.copy_overrides || '' },
         { key: 'color_scheme', value: settings.color_scheme },
         { key: 'collapsible_cards_enabled', value: settings.collapsible_cards_enabled },
         { key: 'producer_bg_color', value: settings.producer_bg_color },
@@ -1369,6 +1374,7 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     ...(isAdmin ? [
       { id: 'branding' as const, label: 'Branding', icon: <Image size={18} /> },
+      { id: 'copy' as const, label: 'Copy', icon: <Type size={18} /> },
       { id: 'admins' as const, label: 'Admins', icon: <Users size={18} /> },
       { id: 'tags' as const, label: 'Tags', icon: <Tags size={18} /> },
     ] : []),
@@ -1399,7 +1405,20 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
             {activeTab === 'branding' && (
               <BrandingTab
                 settings={settings}
-                onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
+                onChange={(patch) => {
+                  setSettings((s) => ({ ...s, ...patch }));
+                  onSettingsPreview?.({ ...settings, ...patch });
+                }}
+              />
+            )}
+
+            {activeTab === 'copy' && (
+              <CopyTab
+                settings={settings}
+                onChange={(patch) => {
+                  setSettings((s) => ({ ...s, ...patch }));
+                  onSettingsPreview?.({ ...settings, ...patch });
+                }}
               />
             )}
 

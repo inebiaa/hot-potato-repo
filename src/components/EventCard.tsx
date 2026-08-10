@@ -22,9 +22,9 @@ import { buildEventEmailPlainText, buildEventEmailRichHtml } from '../lib/eventE
 import { formatEventDateDisplay } from '../lib/formatEventDate';
 import { canonicalEventUrl } from '../lib/siteBase';
 import { clearAppModalParams, parseAppModal, setAppModalParams } from '../lib/searchParamsModal';
-import { featuredCreditLabel, normalizeShowType, starringColumn, starringTagType } from '../lib/showType';
+import { normalizeShowType, starringColumn, starringTagType } from '../lib/showType';
+import { useT } from '../contexts/CopyContext';
 import {
-  SPECIAL_GUESTS_LABEL,
   getSpecialGuests,
   isSpecialGuestsSlug,
 } from '../lib/specialGuests';
@@ -113,6 +113,7 @@ export default function EventCard({
   stackPhotoOnly = false,
   imageOpacity,
 }: EventCardProps) {
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
@@ -165,7 +166,7 @@ export default function EventCard({
     [event.custom_tags]
   );
 
-  const TAG_LIMIT = 8; // ~2 lines of tags; beyond this show "View more"
+  const TAG_LIMIT = 3; // show 3 pills, then +N
   const toggleTagSection = (key: string) => {
     setExpandedTagSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -302,6 +303,8 @@ export default function EventCard({
           <img
             src={event.image_url}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover"
             style={imageOpacity !== undefined ? { opacity: imageOpacity } : undefined}
           />
@@ -324,6 +327,8 @@ export default function EventCard({
             <img
               src={event.image_url}
               alt={event.name}
+              loading="lazy"
+              decoding="async"
               className="w-full h-48 object-cover flex-shrink-0 rounded-t-lg"
               style={imageOpacity !== undefined ? { opacity: imageOpacity } : undefined}
             />
@@ -554,7 +559,7 @@ export default function EventCard({
                   <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
                     <div className="flex items-center">
                       <DesignerIcon size={14} className="mr-1" />
-                      {featuredCreditLabel(event.show_type)}
+                      {t('event.starring')}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1 items-center">
@@ -599,7 +604,7 @@ export default function EventCard({
                   <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
                     <div className="flex items-center">
                       <SpecialGuestsIcon size={14} className="mr-1" />
-                      {SPECIAL_GUESTS_LABEL}
+                      {t(tags.length === 1 ? 'event.specialGuest' : 'event.specialGuests')}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1 items-center">
@@ -639,7 +644,7 @@ export default function EventCard({
                   <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
                     <div className="flex items-center">
                       <ProducerIcon size={14} className="mr-1" />
-                      Produced By
+                      {t('event.producedBy')}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1 items-center">
@@ -679,7 +684,7 @@ export default function EventCard({
                   <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
                     <div className="flex items-center">
                       <ModelIcon size={14} className="mr-1" />
-                      Featured Models
+                      {t('event.featuredModels')}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1 items-center">
@@ -719,7 +724,7 @@ export default function EventCard({
                   <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
                     <div className="flex items-center">
                       <HairMakeupIcon size={14} className="mr-1" />
-                      Hair & Makeup
+                      {t('event.hairMakeup')}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1 items-center">

@@ -5,6 +5,8 @@ export interface AppSettings {
   app_logo_url?: string;
   app_favicon_url?: string;
   tagline?: string;
+  /** JSON map of CopyKey → string overrides (see src/copy). */
+  copy_overrides?: string;
   color_scheme?: string;
   collapsible_cards_enabled?: string;
   producer_bg_color?: string;

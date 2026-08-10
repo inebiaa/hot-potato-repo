@@ -127,7 +127,7 @@ export default function AccountTab(p: AccountTabProps) {
                         value={connectName}
                         onChange={(e) => setConnectName(e.target.value)}
                         onKeyDown={handleConnectSearchKeyDown}
-                        placeholder="Search shows, designers, models…"
+                        placeholder="Search shows, designers, artists, models…"
                         className="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
                         aria-autocomplete="list"
                         aria-controls="connect-tag-results"

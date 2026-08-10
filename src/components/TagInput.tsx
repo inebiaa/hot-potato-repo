@@ -23,7 +23,6 @@ interface TagInputProps {
   required?: boolean;
   id?: string;
   label?: string;
-  hint?: string;
   /**
    * Compact row: label + small + box. Expands to the full tag field when pressed
    * (or when tags already exist).
@@ -43,11 +42,10 @@ export default function TagInput({
   useCitySuggestions = false,
   useVenueSuggestions = false,
   maxTags,
-  placeholder = 'Type and press Enter to add',
+  placeholder = '',
   required = false,
   id,
   label,
-  hint,
   expandable = false,
   headerAction,
   expandedExtras,
@@ -403,7 +401,6 @@ export default function TagInput({
           ))}
         </div>
       )}
-      {hint && !expandable && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
       {useCitySuggestions && citySearchLoading && inputValue.trim() && (
         <p className="mt-1 text-xs text-muted-foreground">Searching cities…</p>
       )}

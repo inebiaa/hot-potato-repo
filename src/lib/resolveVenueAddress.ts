@@ -130,7 +130,10 @@ export async function resolveVenueFormattedAddress(
 
   let features: PhotonFeature[] = [];
   try {
-    const res = await fetch(url);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(url, { signal: controller.signal });
+    window.clearTimeout(timeoutId);
     if (!res.ok) return null;
     const data = (await res.json()) as { features?: PhotonFeature[] };
     features = Array.isArray(data.features) ? data.features : [];
