@@ -15,6 +15,10 @@ dist
 dist-ssr
 *.local
 
+# Scratch downloads from agents / research (never commit)
+.tmp-*/
+.tmp*/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
