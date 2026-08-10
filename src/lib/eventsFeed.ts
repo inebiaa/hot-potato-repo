@@ -1,20 +1,58 @@
-import { eventSortKey } from './eventDates';
+import { eventSortKey, isEventUpcoming } from './eventDates';
 import { normalizeEventTagArrays } from './eventTagArray';
 import type { Event } from './eventTypes';
 import type { EventRatingStatRow } from './eventRatingStats';
-import type { Rating } from './supabase';
+import { supabase, type Rating } from './supabase';
 
-/** How many shows to pull per home-feed request. */
+/** How many past shows to pull per home-feed request. */
 export const FEED_PAGE_SIZE = 24;
 
 /** Keep about this many viewports of content below the fold before pausing prefetch. */
 export const FEED_PREFETCH_VIEWPORTS = 3;
 
-/** Stable feed order: newest date first, then id (so pages never reshuffle same-day rows). */
+/** Columns needed for cards / search — avoid select('*'). */
+export const EVENT_FEED_COLUMNS =
+  'id, name, date, city, season, show_type, location, formatted_address, image_url, countdown_link, producers, featured_designers, featured_artists, models, hair_makeup, header_tags, footer_tags, custom_tags, custom_tag_meta, created_by, created_at';
+
+export type EventWithStats = Event & {
+  average_rating: number;
+  rating_count: number;
+  user_rating?: Rating;
+};
+
+/** Local calendar YYYY-MM-DD (matches `isEventUpcoming` day math). */
+export function localYmd(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** First calendar day that counts as upcoming (tomorrow). */
+export function upcomingFromYmd(now: Date = new Date()): string {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() + 1);
+  return localYmd(start);
+}
+
+/**
+ * Same order as the home masonry:
+ * upcoming (soonest first), then past (newest past first).
+ */
 export function compareEventsForFeed(
   a: Pick<Event, 'id' | 'date'>,
   b: Pick<Event, 'id' | 'date'>,
+  now: Date = new Date(),
 ): number {
+  const aUp = isEventUpcoming(a.date, now);
+  const bUp = isEventUpcoming(b.date, now);
+  if (aUp !== bUp) return aUp ? -1 : 1;
+  if (aUp) {
+    const byDate = eventSortKey(a.date) - eventSortKey(b.date);
+    if (byDate !== 0) return byDate;
+    return a.id.localeCompare(b.id);
+  }
   const byDate = eventSortKey(b.date) - eventSortKey(a.date);
   if (byDate !== 0) return byDate;
   return b.id.localeCompare(a.id);
@@ -28,18 +66,8 @@ export function mergeEventsByFeedOrder<T extends Pick<Event, 'id' | 'date'>>(
   const byId = new Map<string, T>();
   for (const row of existing) byId.set(row.id, row);
   for (const row of incoming) byId.set(row.id, row);
-  return [...byId.values()].sort(compareEventsForFeed);
+  return [...byId.values()].sort((a, b) => compareEventsForFeed(a, b));
 }
-
-/** Columns needed for cards / search — avoid select('*'). */
-export const EVENT_FEED_COLUMNS =
-  'id, name, date, city, season, show_type, location, formatted_address, image_url, countdown_link, producers, featured_designers, featured_artists, models, hair_makeup, header_tags, footer_tags, custom_tags, custom_tag_meta, created_by, created_at';
-
-export type EventWithStats = Event & {
-  average_rating: number;
-  rating_count: number;
-  user_rating?: Rating;
-};
 
 function parseJsonObjectField<T extends object>(value: unknown, fallback: T): T {
   let parsed: unknown = value ?? null;
@@ -86,4 +114,49 @@ export function mapEventsWithStats(
   return rows.map((event) =>
     toEventWithStats(event, statsByEventId.get(event.id), userRatingsByEventId.get(event.id)),
   );
+}
+
+type FeedQueryResult = { data: Event[]; error: Error | null };
+
+/** All upcoming shows, soonest first (what belongs at the top of the home feed). */
+export async function fetchUpcomingEvents(): Promise<FeedQueryResult> {
+  const fromYmd = upcomingFromYmd();
+  const pageSize = 100;
+  const all: Event[] = [];
+  let from = 0;
+
+  for (;;) {
+    const { data, error } = await supabase
+      .from('events')
+      .select(EVENT_FEED_COLUMNS)
+      .gte('date', fromYmd)
+      .order('date', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) return { data: [], error: new Error(error.message) };
+    const rows = (data || []) as Event[];
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return { data: all, error: null };
+}
+
+/** One page of past/today shows, newest first. */
+export async function fetchPastEventsPage(offset: number, pageSize = FEED_PAGE_SIZE): Promise<FeedQueryResult & { hasMore: boolean }> {
+  const fromYmd = upcomingFromYmd();
+  const to = offset + pageSize - 1;
+  const { data, error } = await supabase
+    .from('events')
+    .select(EVENT_FEED_COLUMNS)
+    .lt('date', fromYmd)
+    .order('date', { ascending: false })
+    .order('id', { ascending: false })
+    .range(offset, to);
+
+  if (error) return { data: [], error: new Error(error.message), hasMore: false };
+  const rows = (data || []) as Event[];
+  return { data: rows, error: null, hasMore: rows.length === pageSize };
 }
