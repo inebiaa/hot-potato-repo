@@ -43,6 +43,11 @@ import { eventPagePath } from './lib/siteBase';
 import { clearAppModalParams, parseAppModal, setAppModalParams } from './lib/searchParamsModal';
 import { useBodyScrollLock } from './hooks/useBodyScrollLock';
 import { useDesktopLikePointer } from './hooks/useDesktopLikePointer';
+import {
+  fetchEventRatingStats,
+  fetchRatingBundleForEvent,
+  fetchUserRatingsByEventId,
+} from './lib/eventRatingStats';
 
 interface EventWithStats extends Event {
   average_rating: number;
@@ -225,10 +230,21 @@ function App() {
     if (!silent) setLoading(true);
     setEventsError(null);
     try {
-      const { data: eventsData, error: eventsErr } = await supabase
+      const eventsPromise = supabase
         .from('events')
         .select('*')
         .order('date', { ascending: false });
+
+      const statsPromise = fetchEventRatingStats();
+      const userRatingsPromise = user?.id
+        ? fetchUserRatingsByEventId(user.id)
+        : Promise.resolve({ data: new Map<string, Rating>(), error: null as Error | null });
+
+      const [{ data: eventsData, error: eventsErr }, statsRes, userRatingsRes] = await Promise.all([
+        eventsPromise,
+        statsPromise,
+        userRatingsPromise,
+      ]);
 
       if (eventsErr) {
         setEventsError(eventsErr.message || String(eventsErr));
@@ -236,25 +252,22 @@ function App() {
         setFilteredEvents([]);
         return;
       }
-
-      const { data: ratingsData, error: ratingsErr } = await supabase
-        .from('ratings')
-        .select('*');
-
-      if (ratingsErr) {
-        setEventsError(ratingsErr.message || String(ratingsErr));
+      if (statsRes.error) {
+        setEventsError(statsRes.error.message);
+        setEvents([]);
+        setFilteredEvents([]);
+        return;
+      }
+      if (userRatingsRes.error) {
+        setEventsError(userRatingsRes.error.message);
         setEvents([]);
         setFilteredEvents([]);
         return;
       }
 
       const eventsWithStats: EventWithStats[] = (eventsData || []).map((event) => {
-        const eventRatings = (ratingsData || []).filter((r) => r.event_id === event.id);
-        const total = eventRatings.reduce((sum, r) => sum + r.rating, 0);
-        const average = eventRatings.length > 0 ? total / eventRatings.length : 0;
-        const userRating = user
-          ? eventRatings.find((r) => r.user_id === user.id)
-          : undefined;
+        const stats = statsRes.data.get(event.id);
+        const userRating = userRatingsRes.data.get(event.id);
 
         let customTags: Record<string, string[]> | null = event.custom_tags ?? null;
         if (typeof customTags === 'string') {
@@ -283,8 +296,8 @@ function App() {
           ...normalizeEventTagArrays(event as Event),
           custom_tags: customTags,
           custom_tag_meta: customTagMeta,
-          average_rating: average,
-          rating_count: eventRatings.length,
+          average_rating: stats?.average_rating ?? 0,
+          rating_count: stats?.rating_count ?? 0,
           user_rating: userRating,
         };
       });
@@ -771,19 +784,14 @@ function App() {
         .eq('id', overlayEventId)
         .maybeSingle();
       if (cancelled || error || !data) return;
-      const { data: ratingsData } = await supabase.from('ratings').select('*').eq('event_id', data.id);
-      const eventRatings = (ratingsData || []).filter((r: { event_id: string }) => r.event_id === data.id);
-      const total = eventRatings.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0);
-      const average = eventRatings.length > 0 ? total / eventRatings.length : 0;
-      const userRating = user ? eventRatings.find((r: { user_id: string }) => r.user_id === user.id) : undefined;
-      if (!cancelled) {
-        setOverlayEventFetched({
-          ...normalizeEventTagArrays(data as Event),
-          average_rating: average,
-          rating_count: eventRatings.length,
-          user_rating: userRating,
-        } as EventWithStats);
-      }
+      const bundle = await fetchRatingBundleForEvent(data.id, user?.id);
+      if (cancelled || bundle.error) return;
+      setOverlayEventFetched({
+        ...normalizeEventTagArrays(data as Event),
+        average_rating: bundle.average_rating,
+        rating_count: bundle.rating_count,
+        user_rating: bundle.user_rating,
+      } as EventWithStats);
     })();
     return () => { cancelled = true; };
     // user referenced for user_rating; including full user would over-fetch on profile edits
