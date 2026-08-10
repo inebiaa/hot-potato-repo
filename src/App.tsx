@@ -53,7 +53,9 @@ import {
   EVENT_FEED_COLUMNS,
   FEED_PAGE_SIZE,
   FEED_PREFETCH_VIEWPORTS,
+  compareEventsForFeed,
   mapEventsWithStats,
+  mergeEventsByFeedOrder,
   toEventWithStats,
   type EventWithStats,
 } from './lib/eventsFeed';
@@ -264,6 +266,7 @@ function App() {
         .from('events')
         .select(EVENT_FEED_COLUMNS)
         .order('date', { ascending: false })
+        .order('id', { ascending: false })
         .range(from, to);
 
       // User ratings rarely change mid-scroll; reuse the first fetch while appending.
@@ -319,14 +322,7 @@ function App() {
       const pageMapped = mapEventsWithStats(pageRows, statsRes.data, userRatingsCacheRef.current);
 
       if (append) {
-        setEvents((prev) => {
-          const seen = new Set(prev.map((e) => e.id));
-          const merged = [...prev];
-          for (const row of pageMapped) {
-            if (!seen.has(row.id)) merged.push(row);
-          }
-          return merged;
-        });
+        setEvents((prev) => mergeEventsByFeedOrder(prev, pageMapped));
       } else {
         setEvents(pageMapped);
         setFilteredEvents(pageMapped);
@@ -961,7 +957,7 @@ function App() {
       );
       setOverlayEventFetched(mapped);
       // Keep deep-linked shows in the in-memory list so rating refresh stays local.
-      setEvents((prev) => (prev.some((e) => e.id === mapped.id) ? prev : [...prev, mapped]));
+      setEvents((prev) => mergeEventsByFeedOrder(prev, [mapped]));
     })();
     return () => { cancelled = true; };
     // user referenced for user_rating; including full user would over-fetch on profile edits
@@ -1005,7 +1001,7 @@ function App() {
         },
         bundle.user_rating,
       );
-      setEvents((prev) => (prev.some((e) => e.id === mapped.id) ? prev : [...prev, mapped]));
+      setEvents((prev) => mergeEventsByFeedOrder(prev, [mapped]));
     })();
     return () => {
       cancelled = true;
@@ -1649,12 +1645,16 @@ function App() {
             </div>
           </div>
         ) : (() => {
-          const byDateDesc = (a: EventWithStats, b: EventWithStats) => eventSortKey(b.date) - eventSortKey(a.date);
+          const byDateDesc = compareEventsForFeed;
           const sortedByDate = [...filteredEvents].sort(byDateDesc);
           const pastEvents = sortedByDate.filter((e) => !isEventUpcoming(e.date));
           const upcoming = sortedByDate
             .filter((e) => isEventUpcoming(e.date))
-            .sort((a, b) => eventSortKey(a.date) - eventSortKey(b.date));
+            .sort((a, b) => {
+              const byDate = eventSortKey(a.date) - eventSortKey(b.date);
+              if (byDate !== 0) return byDate;
+              return a.id.localeCompare(b.id);
+            });
           const ungroupedPast = [...pastEvents].sort(byDateDesc);
 
           const CARD_TOP_SPACER = 'h-6 shrink-0';
