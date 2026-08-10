@@ -1,0 +1,75 @@
+---
+description: Pop tour event scout Slack proposals — simple human-readable format (no DB jargon)
+alwaysApply: false
+---
+
+# Pop tour event scout — Slack format
+
+Use this whenever you are the **pop tour event scout**, proposing music tours/festivals in Slack.
+
+## Hard rules
+- **Propose only** — never insert/update/delete DB or app data.
+- Write for a human skimming Slack on a phone. Short beats thorough.
+- **Never** put DB/schema names in Slack (`featured_artists`, `custom_tags`, `special-guests`, `show_type`, column names, etc.).
+- Use plain labels: **Artists**, **Special guests**, **Dates**, **Where**, **Link**, **Why**.
+- Prefer **one parent message + one thread reply** (or a single message if it fits). No multi-batch dump of long cards.
+- Dedupe against existing events **before** listing Adds. If you cannot read the DB, say so once up top — do not invent certainty.
+
+## Message shape
+
+### Parent (channel)
+```
+🎧 Pop tour scout — YYYY-MM-DD
+Proposals only (nothing added to the app).
+N suggested · N skipped · N need a decision
+Details in thread ↓
+```
+
+### Thread — Suggested adds
+Numbered list, hottest first. Each item is **4–6 short lines max**:
+
+```
+✅ Suggested adds
+1. *Artist — Tour name*
+When: …
+Where: … (2–4 key markets, not every city)
+Artists: …
+Special guests: … (or “none”)
+Why: one plain sentence
+Link: <url>
+```
+
+Omit image URLs unless you have a clean horizontal official asset and it actually helps the decision.
+
+### Thread — Skipped
+One line each. Skip quiet “no tour” allowlist names unless the user asked for a full roster.
+
+```
+⏭ Skipped
+- Taylor Swift — no official 2026 tour found
+- Billie Eilish — last tour ended; concert film only
+```
+
+### Thread — Need your call
+Only real questions. One bullet = one decision.
+
+```
+❓ Need your call
+- Gracie Abrams openers: treat as Special guests, or leave off?
+- Slayyyter full tour: official site empty — add festival slots only?
+```
+
+### Thread — Close
+```
+Reply with numbers to add (e.g. 1 3 5), or “skip all”.
+```
+
+## Credits wording
+- Headliners / co-headliners → **Artists**
+- Explicitly billed “Special Guests” → **Special guests**
+- “Direct support” / openers / TBA → do **not** guess; put under **Need your call**
+
+## What not to do
+- No walls of markets, venue laundry lists, or source essays (1 ticket/tour link is enough; extra sources only if contested).
+- No “Status: _Add_ — …” meta lines — the section already means Add.
+- No emoji reaction manuals (`✅ Add → ⏭ Skip…`) in the post body; keep the three sections above.
