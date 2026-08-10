@@ -1,12 +1,15 @@
 import { useEffect } from 'react';
 import type { Event } from '../lib/supabase';
 import { eventJsonLdScriptContent } from '../lib/eventJsonLd';
-import { buildEventSocialMetaTagSpecs } from '../lib/eventSocialMeta';
+import {
+  EVENT_SOCIAL_ATTR,
+  SITE_SOCIAL_ATTR,
+  buildEventSocialMetaTagSpecs,
+} from '../lib/eventSocialMeta';
 import { canonicalEventUrl } from '../lib/siteBase';
 import { appName } from '../lib/brandMeta';
 
 const SCRIPT_ID = 'secret-blogger-event-jsonld';
-const SOCIAL_META_ATTR = 'data-secret-blogger-event-social';
 
 interface EventJsonLdProps {
   event: Event;
@@ -14,14 +17,20 @@ interface EventJsonLdProps {
 
 /**
  * Injects Event JSON-LD, canonical, Open Graph meta, and document title for the event page.
- * Removes injected head nodes on unmount.
+ * Removes homepage OG tags while mounted so scrapers don't see `og-default.png` first.
  */
 export default function EventJsonLd({ event }: EventJsonLdProps) {
   useEffect(() => {
     const prevTitle = document.title;
     document.title = `${event.name} | ${appName()}`;
 
-    document.querySelectorAll(`meta[${SOCIAL_META_ATTR}]`).forEach((el) => el.remove());
+    document.querySelectorAll(`meta[${EVENT_SOCIAL_ATTR}]`).forEach((el) => el.remove());
+
+    const parkedSiteSocial: Node[] = [];
+    document.querySelectorAll(`meta[${SITE_SOCIAL_ATTR}]`).forEach((el) => {
+      parkedSiteSocial.push(el.cloneNode(true));
+      el.remove();
+    });
 
     const existing = document.getElementById(SCRIPT_ID);
     if (existing) existing.remove();
@@ -33,6 +42,15 @@ export default function EventJsonLd({ event }: EventJsonLdProps) {
     document.head.appendChild(script);
 
     const linkId = 'secret-blogger-event-canonical';
+    const homeCanonical = document.querySelector<HTMLLinkElement>(
+      `link[rel="canonical"]:not(#${linkId})`,
+    );
+    let parkedHomeCanonical: Node | null = null;
+    if (homeCanonical) {
+      parkedHomeCanonical = homeCanonical.cloneNode(true);
+      homeCanonical.remove();
+    }
+
     let link = document.querySelector<HTMLLinkElement>(`link#${linkId}`);
     if (!link) {
       link = document.createElement('link');
@@ -44,7 +62,7 @@ export default function EventJsonLd({ event }: EventJsonLdProps) {
 
     for (const spec of buildEventSocialMetaTagSpecs(event)) {
       const meta = document.createElement('meta');
-      meta.setAttribute(SOCIAL_META_ATTR, '');
+      meta.setAttribute(EVENT_SOCIAL_ATTR, '');
       if (spec.kind === 'property') {
         meta.setAttribute('property', spec.key);
       } else {
@@ -58,7 +76,9 @@ export default function EventJsonLd({ event }: EventJsonLdProps) {
       document.title = prevTitle;
       document.getElementById(SCRIPT_ID)?.remove();
       document.getElementById(linkId)?.remove();
-      document.querySelectorAll(`meta[${SOCIAL_META_ATTR}]`).forEach((el) => el.remove());
+      document.querySelectorAll(`meta[${EVENT_SOCIAL_ATTR}]`).forEach((el) => el.remove());
+      for (const node of parkedSiteSocial) document.head.appendChild(node);
+      if (parkedHomeCanonical) document.head.appendChild(parkedHomeCanonical);
     };
   }, [event]);
 

@@ -59,6 +59,20 @@ function validateOgMeta(html) {
   if (!/<meta\s[^>]*property=["']og:url["'][^>]*>/i.test(html)) {
     throw new Error('missing og:url meta');
   }
+  const images = [...html.matchAll(/<meta\s[^>]*property=["']og:image["'][^>]*>/gi)];
+  if (images.length === 0) {
+    throw new Error('missing og:image meta');
+  }
+  if (images.length > 1) {
+    throw new Error(`expected one og:image, found ${images.length} (homepage default must be stripped)`);
+  }
+  if (/og-default\.png/i.test(images[0][0]) && /data-secret-blogger-event-social/i.test(html)) {
+    // Event pages may fall back to og-default only when the event has no image_url.
+    // If event social attrs exist alongside default in the same tag content, that's fine.
+  }
+  if (/data-secret-blogger-site-social/i.test(html)) {
+    throw new Error('homepage site-social OG tags must be stripped on event pages');
+  }
 }
 
 async function discoverEventUrl() {
