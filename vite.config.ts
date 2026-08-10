@@ -10,6 +10,10 @@ import type { Event } from './src/lib/eventTypes'
 import { canonicalEventUrlFromParts } from './src/lib/siteBase'
 import { eventJsonLdScriptContentPrerender } from './src/lib/eventJsonLd'
 import { buildEventSocialMetaTagsHtml, stripSiteSocialFromHtml } from './src/lib/eventSocialMeta'
+import {
+  applyBrandShareImageToSiteHtml,
+  brandShareImageUrl,
+} from './src/lib/brandSocial'
 
 const APP_NAME = (process.env.VITE_APP_NAME || 'Secret Blogger').trim() || 'Secret Blogger'
 const APP_DESCRIPTION =
@@ -36,13 +40,19 @@ function jsonLdForHtml(json: string): string {
   return json.replace(/</g, '\\u003c')
 }
 
-function injectEventSeoShell(indexHtml: string, event: Event, site: string, viteBase: string): string {
-  const prerender = { siteOrigin: site, viteBase }
+function injectEventSeoShell(
+  indexHtml: string,
+  event: Event,
+  site: string,
+  viteBase: string,
+  brandImageUrl?: string,
+): string {
+  const prerender = { siteOrigin: site, viteBase, brandImageUrl }
   const canonical = canonicalEventUrlFromParts(event.id, site, viteBase)
   const jsonLd = jsonLdForHtml(eventJsonLdScriptContentPrerender(event, prerender))
   const socialMeta = buildEventSocialMetaTagsHtml(event, prerender)
   const title = `${event.name} | ${APP_NAME}`
-  // Drop homepage OG + canonical so scrapers only see the event poster (not og-default.png first).
+  // Drop homepage OG + canonical so scrapers only see the event poster (not brand image first).
   let html = stripSiteSocialFromHtml(indexHtml)
   html = html.replace(/<title>.*?<\/title>/s, `<title>${escapeTitleText(title)}</title>`)
   const block = `  <link rel="canonical" href="${escapeHtmlAttr(canonical)}" />\n${socialMeta}\n  <script id="secret-blogger-event-jsonld" type="application/ld+json">${jsonLd}</script>\n`
@@ -90,8 +100,26 @@ function staticSitePlugin(): Plugin {
       try {
         const client = createClient(url, key)
         const viteBase = env.VITE_BASE || process.env.VITE_BASE || '/'
-        const { data, error } = await client.from('events').select('*')
+        const [{ data, error }, settingsRes] = await Promise.all([
+          client.from('events').select('*'),
+          client
+            .from('app_settings')
+            .select('key, value')
+            .in('key', ['app_logo_url', 'app_icon_url', 'app_favicon_url', 'app_name']),
+        ])
         if (error) throw error
+        if (settingsRes.error) throw settingsRes.error
+
+        const settingsMap: Record<string, string> = {}
+        for (const row of settingsRes.data || []) {
+          if (row?.key && typeof row.value === 'string') settingsMap[row.key] = row.value
+        }
+        const brandImage = brandShareImageUrl({
+          app_logo_url: settingsMap.app_logo_url,
+          app_icon_url: settingsMap.app_icon_url,
+          app_favicon_url: settingsMap.app_favicon_url,
+        })
+        const brandAlt = (settingsMap.app_name || APP_NAME).trim() || APP_NAME
 
         const rows = (data || []) as Event[]
         const urls = [site + '/', ...rows.map((row) => `${site}/event/${row.id}`)]
@@ -103,14 +131,22 @@ ${urls.map((loc) => `  <url><loc>${escapeXml(loc)}</loc><changefreq>weekly</chan
         writeFileSync(resolve(distDir, 'sitemap.xml'), xml, 'utf8')
         console.log('[static-site] Wrote sitemap.xml', `(${urls.length} URLs)`)
 
-        const indexHtml = readFileSync(rootIndex, 'utf8')
+        let indexHtml = readFileSync(rootIndex, 'utf8')
+        if (brandImage) {
+          indexHtml = applyBrandShareImageToSiteHtml(indexHtml, brandImage, brandAlt)
+          writeFileSync(rootIndex, indexHtml, 'utf8')
+          console.log('[static-site] Homepage OG image set from brand settings')
+        } else {
+          console.warn('[static-site] No app_logo_url / app_icon_url / app_favicon_url — homepage OG image unchanged')
+        }
+
         let eventPages = 0
         for (const row of rows) {
           const id = row?.id
           if (!id || typeof id !== 'string') continue
           const dir = resolve(distDir, 'event', id)
           mkdirSync(dir, { recursive: true })
-          const html = injectEventSeoShell(indexHtml, row, site, viteBase)
+          const html = injectEventSeoShell(indexHtml, row, site, viteBase, brandImage)
           writeFileSync(resolve(dir, 'index.html'), html, 'utf8')
           eventPages += 1
         }
@@ -155,7 +191,7 @@ export default defineConfig({
     VitePWA({
       // Prompt instead of auto-reload — autoUpdate hard-refreshes the tab whenever a new SW ships.
       registerType: 'prompt',
-      includeAssets: ['og-default.png', 'robots.txt', 'CNAME'],
+      includeAssets: ['robots.txt', 'CNAME'],
       manifest: {
         name: APP_NAME,
         short_name: APP_NAME,
