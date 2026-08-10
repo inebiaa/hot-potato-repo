@@ -1,25 +1,18 @@
 import type { Event } from './eventTypes';
-import { canonicalEventUrl, canonicalEventUrlFromParts, publicSiteOrigin } from './siteBase';
+import { canonicalEventUrl, canonicalEventUrlFromParts } from './siteBase';
 import type { EventJsonLdPrerender } from './eventJsonLd';
 import { eventAbsoluteImageUrl } from './eventJsonLd';
 import { formatEventDateDisplay } from './formatEventDate';
 import { appName } from './brandMeta';
+import { getRuntimeBrandShareImage, ogImageMimeFromUrl } from './brandSocial';
+
+export { ogImageMimeFromUrl } from './brandSocial';
 
 export const SITE_SOCIAL_ATTR = 'data-secret-blogger-site-social';
 export const EVENT_SOCIAL_ATTR = 'data-secret-blogger-event-social';
 
 function escapeHtmlAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-}
-
-/** Guess OG image MIME from URL extension (omit when unknown — don't lie as PNG). */
-export function ogImageMimeFromUrl(url: string): string | undefined {
-  const path = url.split('?')[0]?.toLowerCase() ?? '';
-  if (path.endsWith('.jpg') || path.endsWith('.jpeg')) return 'image/jpeg';
-  if (path.endsWith('.png')) return 'image/png';
-  if (path.endsWith('.webp')) return 'image/webp';
-  if (path.endsWith('.gif')) return 'image/gif';
-  return undefined;
 }
 
 export function buildEventOgDescription(event: Event, maxLen = 200): string {
@@ -32,16 +25,20 @@ export function buildEventOgDescription(event: Event, maxLen = 200): string {
   return `${line.slice(0, Math.max(1, maxLen - 1))}…`;
 }
 
-function eventShareImageUrl(event: Event, prerender?: EventJsonLdPrerender): string | undefined {
+function eventShareImageUrl(
+  event: Event,
+  prerender?: EventJsonLdPrerender & { brandImageUrl?: string },
+): string | undefined {
   const fromEvent = eventAbsoluteImageUrl(event.image_url, prerender);
   if (fromEvent) return fromEvent;
-  const origin = prerender ? prerender.siteOrigin.replace(/\/$/, '') : publicSiteOrigin();
-  return `${origin}/og-default.png`;
+  const brand = prerender?.brandImageUrl?.trim() || getRuntimeBrandShareImage();
+  if (brand) return brand;
+  return undefined;
 }
 
 /**
  * Strip homepage Open Graph tags from prerendered HTML so event pages don't ship
- * both `og-default.png` and the event poster (scrapers often take the first image).
+ * both the site brand image and the event poster (scrapers often take the first image).
  */
 export function stripSiteSocialFromHtml(html: string): string {
   return html
@@ -54,7 +51,10 @@ export function stripSiteSocialFromHtml(html: string): string {
  * Open Graph tags for link previews (email, Slack, iMessage, etc.).
  * Safe to inject in `<head>` when attribute values are escaped.
  */
-export function buildEventSocialMetaTagsHtml(event: Event, prerender?: EventJsonLdPrerender): string {
+export function buildEventSocialMetaTagsHtml(
+  event: Event,
+  prerender?: EventJsonLdPrerender & { brandImageUrl?: string },
+): string {
   const canonical = prerender
     ? canonicalEventUrlFromParts(event.id, prerender.siteOrigin, prerender.viteBase)
     : canonicalEventUrl(event.id);
@@ -91,7 +91,10 @@ export type SocialMetaTagSpec =
   | { kind: 'name'; key: string; content: string };
 
 /** DOM-friendly list for runtime injection (same fields as HTML string). */
-export function buildEventSocialMetaTagSpecs(event: Event, prerender?: EventJsonLdPrerender): SocialMetaTagSpec[] {
+export function buildEventSocialMetaTagSpecs(
+  event: Event,
+  prerender?: EventJsonLdPrerender & { brandImageUrl?: string },
+): SocialMetaTagSpec[] {
   const canonical = prerender
     ? canonicalEventUrlFromParts(event.id, prerender.siteOrigin, prerender.viteBase)
     : canonicalEventUrl(event.id);

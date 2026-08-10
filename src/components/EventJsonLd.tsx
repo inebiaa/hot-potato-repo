@@ -17,7 +17,7 @@ interface EventJsonLdProps {
 
 /**
  * Injects Event JSON-LD, canonical, Open Graph meta, and document title for the event page.
- * Removes homepage OG tags while mounted so scrapers don't see `og-default.png` first.
+ * Removes homepage OG tags while mounted so scrapers don't see the site brand image first.
  */
 export default function EventJsonLd({ event }: EventJsonLdProps) {
   useEffect(() => {

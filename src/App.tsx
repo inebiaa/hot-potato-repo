@@ -50,6 +50,11 @@ import {
   fetchUserRatingsByEventId,
 } from './lib/eventRatingStats';
 import {
+  brandShareImageUrl,
+  setRuntimeBrandShareImage,
+  syncSiteSocialOgImageInDocument,
+} from './lib/brandSocial';
+import {
   EVENT_FEED_COLUMNS,
   FEED_PAGE_SIZE,
   FEED_PREFETCH_VIEWPORTS,
@@ -537,6 +542,13 @@ function App() {
       }
     }
   }, [appSettings?.app_favicon_url]);
+
+  useEffect(() => {
+    if (!appSettings) return;
+    const image = brandShareImageUrl(appSettings);
+    setRuntimeBrandShareImage(image);
+    syncSiteSocialOgImageInDocument(image, appSettings.app_name || 'Secret Blogger');
+  }, [appSettings]);
 
   const identityIdsInUse = useMemo(() => {
     const s = new Set<string>();
