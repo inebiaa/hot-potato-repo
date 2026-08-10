@@ -6,7 +6,7 @@ import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
 import { eventDateFilterValue, eventDateMatchesSearch, formatEventDateDisplay } from './lib/formatEventDate';
 import { getSeasonFromDate, getYearFromDate } from './lib/season';
-import { eventSortKey, isEventUpcoming } from './lib/eventDates';
+import { isEventUpcoming } from './lib/eventDates';
 import { effectiveHeaderTags } from './lib/eventHeaderTags';
 import { normalizeForSearch } from './lib/normalize';
 import { normalizeShowType, showTypeLabel } from './lib/showType';
@@ -54,6 +54,8 @@ import {
   FEED_PAGE_SIZE,
   FEED_PREFETCH_VIEWPORTS,
   compareEventsForFeed,
+  fetchPastEventsPage,
+  fetchUpcomingEvents,
   mapEventsWithStats,
   mergeEventsByFeedOrder,
   toEventWithStats,
@@ -259,17 +261,8 @@ function App() {
     }
 
     try {
-      const from = append ? eventsOffsetRef.current : 0;
-      const to = from + FEED_PAGE_SIZE - 1;
-
-      const eventsPromise = supabase
-        .from('events')
-        .select(EVENT_FEED_COLUMNS)
-        .order('date', { ascending: false })
-        .order('id', { ascending: false })
-        .range(from, to);
-
-      // User ratings rarely change mid-scroll; reuse the first fetch while appending.
+      // Home UI order: soonest upcoming first, then newest past.
+      // Load all upcoming on first paint; page only the past catalog afterward.
       const userRatingsPromise =
         append && userRatingsCacheRef.current.size > 0
           ? Promise.resolve({ data: userRatingsCacheRef.current, error: null as Error | null })
@@ -277,55 +270,69 @@ function App() {
             ? fetchUserRatingsByEventId(user.id)
             : Promise.resolve({ data: new Map<string, Rating>(), error: null as Error | null });
 
-      const [{ data: eventsData, error: eventsErr }, userRatingsRes] = await Promise.all([
-        eventsPromise,
-        userRatingsPromise,
-      ]);
-
-      if (eventsErr) {
-        setEventsError(eventsErr.message || String(eventsErr));
-        if (!append) {
-          setEvents([]);
-          setFilteredEvents([]);
-        }
-        return;
-      }
-      if (userRatingsRes.error) {
-        setEventsError(userRatingsRes.error.message);
-        if (!append) {
-          setEvents([]);
-          setFilteredEvents([]);
-        }
-        return;
-      }
-
       if (!append) {
-        userRatingsCacheRef.current = userRatingsRes.data;
-      }
+        const [upcomingRes, pastRes, userRatingsRes] = await Promise.all([
+          fetchUpcomingEvents(),
+          fetchPastEventsPage(0, FEED_PAGE_SIZE),
+          userRatingsPromise,
+        ]);
 
-      const pageRows = (eventsData || []) as Event[];
-      const more = pageRows.length === FEED_PAGE_SIZE;
-      eventsOffsetRef.current = from + pageRows.length;
-      hasMoreEventsRef.current = more;
-      setHasMoreEvents(more);
-
-      const statsRes = await fetchEventRatingStats(pageRows.map((e) => e.id));
-      if (statsRes.error) {
-        setEventsError(statsRes.error.message);
-        if (!append) {
+        if (upcomingRes.error) {
+          setEventsError(upcomingRes.error.message);
           setEvents([]);
           setFilteredEvents([]);
+          return;
         }
-        return;
-      }
+        if (pastRes.error) {
+          setEventsError(pastRes.error.message);
+          setEvents([]);
+          setFilteredEvents([]);
+          return;
+        }
+        if (userRatingsRes.error) {
+          setEventsError(userRatingsRes.error.message);
+          setEvents([]);
+          setFilteredEvents([]);
+          return;
+        }
 
-      const pageMapped = mapEventsWithStats(pageRows, statsRes.data, userRatingsCacheRef.current);
+        userRatingsCacheRef.current = userRatingsRes.data;
+        const pageRows = [...upcomingRes.data, ...pastRes.data];
+        eventsOffsetRef.current = pastRes.data.length;
+        hasMoreEventsRef.current = pastRes.hasMore;
+        setHasMoreEvents(pastRes.hasMore);
 
-      if (append) {
-        setEvents((prev) => mergeEventsByFeedOrder(prev, pageMapped));
+        const statsRes = await fetchEventRatingStats(pageRows.map((e) => e.id));
+        if (statsRes.error) {
+          setEventsError(statsRes.error.message);
+          setEvents([]);
+          setFilteredEvents([]);
+          return;
+        }
+
+        const mapped = mapEventsWithStats(pageRows, statsRes.data, userRatingsCacheRef.current)
+          .sort((a, b) => compareEventsForFeed(a, b));
+        setEvents(mapped);
+        setFilteredEvents(mapped);
       } else {
-        setEvents(pageMapped);
-        setFilteredEvents(pageMapped);
+        const pastRes = await fetchPastEventsPage(eventsOffsetRef.current, FEED_PAGE_SIZE);
+        if (pastRes.error) {
+          setEventsError(pastRes.error.message);
+          return;
+        }
+
+        eventsOffsetRef.current += pastRes.data.length;
+        hasMoreEventsRef.current = pastRes.hasMore;
+        setHasMoreEvents(pastRes.hasMore);
+
+        const statsRes = await fetchEventRatingStats(pastRes.data.map((e) => e.id));
+        if (statsRes.error) {
+          setEventsError(statsRes.error.message);
+          return;
+        }
+
+        const pageMapped = mapEventsWithStats(pastRes.data, statsRes.data, userRatingsCacheRef.current);
+        setEvents((prev) => mergeEventsByFeedOrder(prev, pageMapped));
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1645,17 +1652,10 @@ function App() {
             </div>
           </div>
         ) : (() => {
-          const byDateDesc = compareEventsForFeed;
-          const sortedByDate = [...filteredEvents].sort(byDateDesc);
+          const sortedByDate = [...filteredEvents].sort((a, b) => compareEventsForFeed(a, b));
           const pastEvents = sortedByDate.filter((e) => !isEventUpcoming(e.date));
-          const upcoming = sortedByDate
-            .filter((e) => isEventUpcoming(e.date))
-            .sort((a, b) => {
-              const byDate = eventSortKey(a.date) - eventSortKey(b.date);
-              if (byDate !== 0) return byDate;
-              return a.id.localeCompare(b.id);
-            });
-          const ungroupedPast = [...pastEvents].sort(byDateDesc);
+          const upcoming = sortedByDate.filter((e) => isEventUpcoming(e.date));
+          const ungroupedPast = pastEvents;
 
           const CARD_TOP_SPACER = 'h-6 shrink-0';
 
