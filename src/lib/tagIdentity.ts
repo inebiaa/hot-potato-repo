@@ -389,27 +389,41 @@ export interface EventFieldsForIdentitySync {
   custom_tags?: Record<string, string[]> | null;
 }
 
+async function mapPool<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>): Promise<void> {
+  if (items.length === 0) return;
+  const limit = Math.max(1, concurrency);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+}
+
 /**
  * For each credit line on the event, ensure a `tag_identities` row exists and the exact spelling is an alias.
  * Call after a successful create/update so search, filters, and profiles can resolve all spellings to one person.
+ * Runs with bounded concurrency — festival lineups can be dozens of names.
  */
 export async function syncTagIdentitiesFromEventFields(
   fields: EventFieldsForIdentitySync,
   createdBy?: string | null
 ): Promise<void> {
+  type Job = { tagType: TagType; name: string };
+  const jobs: Job[] = [];
+
   for (const { key, tagType } of EVENT_TAG_COLUMNS) {
     const arr = fields[key] as string[] | null | undefined;
     if (!Array.isArray(arr)) continue;
     for (const name of arr) {
-      if (typeof name !== 'string' || !name.trim()) continue;
-      const identity = await ensureIdentity(tagType, name, createdBy || undefined);
-      if (identity) await ensureAlias(identity.id, name, createdBy || undefined);
+      if (typeof name === 'string' && name.trim()) jobs.push({ tagType, name });
     }
   }
   const loc = fields.location;
   if (typeof loc === 'string' && loc.trim()) {
-    const identity = await ensureIdentity('venue', loc, createdBy || undefined);
-    if (identity) await ensureAlias(identity.id, loc, createdBy || undefined);
+    jobs.push({ tagType: 'venue', name: loc });
   }
   const ct = fields.custom_tags;
   if (ct && typeof ct === 'object' && !Array.isArray(ct)) {
@@ -417,12 +431,19 @@ export async function syncTagIdentitiesFromEventFields(
       if (!Array.isArray(vals)) continue;
       const tagType = (isSpecialGuestsSlug(slug) ? 'artist' : `custom:${slug}`) as TagType;
       for (const name of vals) {
-        if (typeof name !== 'string' || !name.trim()) continue;
-        const identity = await ensureIdentity(tagType, name, createdBy || undefined);
-        if (identity) await ensureAlias(identity.id, name, createdBy || undefined);
+        if (typeof name === 'string' && name.trim()) jobs.push({ tagType, name });
       }
     }
   }
+
+  await mapPool(jobs, 6, async ({ tagType, name }) => {
+    try {
+      const identity = await ensureIdentity(tagType, name, createdBy || undefined);
+      if (identity) await ensureAlias(identity.id, name, createdBy || undefined);
+    } catch (err) {
+      console.warn('tag identity sync failed for', tagType, name, err);
+    }
+  });
 }
 
 /** Link `p_subject_id` → `p_target_id` (same tag type). Reversible via `adminUnlinkTagIdentity`. */

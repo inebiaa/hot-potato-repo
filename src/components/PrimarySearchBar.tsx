@@ -3,6 +3,7 @@ import type { DragEvent } from 'react';
 import type { AppSettings } from '../types/appSettings';
 import { showTypePillColors } from '../lib/showType';
 import { getPillColors } from './tagCards/getPillColors';
+import { useT } from '../contexts/CopyContext';
 
 export type CustomPerformerTagDef = { slug: string; bg_color: string; text_color: string };
 
@@ -130,6 +131,7 @@ export default function PrimarySearchBar({
   onClearFilters: _onClearFilters,
 }: PrimarySearchBarProps) {
   void _onClearFilters;
+  const t = useT();
   const hasFilterActivity = Boolean(searchQuery) || selectedTags.length > 0;
   const showCounts =
     !embeddedInHeader &&
@@ -206,7 +208,7 @@ export default function PrimarySearchBar({
             ) : null}
             <input
               type="text"
-              placeholder={selectedTags.length ? '' : 'Search shows, designers, models...'}
+              placeholder={selectedTags.length ? '' : t('search.placeholder')}
               value={searchQuery}
               onChange={(e) => onSearchQueryChange(e.target.value)}
               onFocus={onSearchFocus}

@@ -1,6 +1,11 @@
 /** Dedicated music-show credit stored in `custom_tags`. Icon/colors come from app settings. */
 export const SPECIAL_GUESTS_SLUG = 'special-guests';
 export const SPECIAL_GUESTS_LABEL = 'Special Guests';
+export const SPECIAL_GUEST_LABEL = 'Special Guest';
+
+export function specialGuestsLabel(count: number): string {
+  return count === 1 ? SPECIAL_GUEST_LABEL : SPECIAL_GUESTS_LABEL;
+}
 
 export function isSpecialGuestsSlug(slug: string | null | undefined): boolean {
   if (!slug) return false;

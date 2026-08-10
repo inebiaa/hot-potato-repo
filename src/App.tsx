@@ -8,7 +8,6 @@ import { eventDateFilterValue, eventDateMatchesSearch, formatEventDateDisplay } 
 import { getSeasonFromDate, getYearFromDate } from './lib/season';
 import { eventSortKey, isEventUpcoming } from './lib/eventDates';
 import { effectiveHeaderTags } from './lib/eventHeaderTags';
-import { normalizeEventTagArrays } from './lib/eventTagArray';
 import { normalizeForSearch } from './lib/normalize';
 import { normalizeShowType, showTypeLabel } from './lib/showType';
 import { getSpecialGuests, isSpecialGuestsSlug } from './lib/specialGuests';
@@ -22,6 +21,8 @@ import StatisticsPage from './components/StatisticsPage';
 import ProfilePage from './components/ProfilePage';
 import type { AppSettings } from './types/appSettings';
 import { TagDisplayProvider } from './contexts/TagDisplayContext';
+import { CopyProvider } from './contexts/CopyContext';
+import { overridesFromSettings, t as copyT } from './copy';
 import {
   displayLabelForTagFilter,
   eventArrayMatchesFilter,
@@ -48,12 +49,14 @@ import {
   fetchRatingBundleForEvent,
   fetchUserRatingsByEventId,
 } from './lib/eventRatingStats';
-
-interface EventWithStats extends Event {
-  average_rating: number;
-  rating_count: number;
-  user_rating?: Rating;
-}
+import {
+  EVENT_FEED_COLUMNS,
+  FEED_PAGE_SIZE,
+  FEED_PREFETCH_VIEWPORTS,
+  mapEventsWithStats,
+  toEventWithStats,
+  type EventWithStats,
+} from './lib/eventsFeed';
 
 /** Survive remounts so we don't flash a full-page spinner on every route land. */
 let settingsCache: AppSettings | null = null;
@@ -78,8 +81,19 @@ function App() {
   const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasClearedFiltersForSharedLink = useRef(false);
   const overlayCardWrapperRef = useRef<HTMLDivElement | null>(null);
+  const feedScrollRef = useRef<HTMLElement | null>(null);
+  const feedSentinelRef = useRef<HTMLDivElement | null>(null);
+  const userRatingsCacheRef = useRef<Map<string, Rating>>(new Map());
+  const tagResolvedEventIdsRef = useRef<Set<string>>(new Set());
   const [appSettings, setAppSettings] = useState<AppSettings | null>(() => settingsCache);
   const hasLoadedEventsRef = useRef(false);
+  const eventsOffsetRef = useRef(0);
+  const hasMoreEventsRef = useRef(true);
+  const loadingMoreRef = useRef(false);
+  const ensuringCatalogRef = useRef(false);
+  const [hasMoreEvents, setHasMoreEvents] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [deepLinkFailed, setDeepLinkFailed] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchDragOver, setSearchDragOver] = useState(false);
   const [tagResolutionMap, setTagResolutionMap] = useState<TagResolutionMap | null>(null);
@@ -184,6 +198,7 @@ function App() {
         app_logo_url: settingsObj.app_logo_url ?? undefined,
         app_favicon_url: settingsObj.app_favicon_url ?? undefined,
         tagline: settingsObj.tagline ?? undefined,
+        copy_overrides: settingsObj.copy_overrides ?? '',
         color_scheme: scheme,
         collapsible_cards_enabled: settingsObj.collapsible_cards_enabled || 'true',
         producer_bg_color: producerBg,
@@ -225,96 +240,227 @@ function App() {
     }
   };
 
-  const fetchEvents = async () => {
+  const fetchEvents = async (opts?: { append?: boolean }) => {
+    const append = opts?.append ?? false;
     const silent = hasLoadedEventsRef.current;
-    if (!silent) setLoading(true);
-    setEventsError(null);
+    if (!append && !silent) setLoading(true);
+    if (append) {
+      if (loadingMoreRef.current || !hasMoreEventsRef.current) return;
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+    } else {
+      setEventsError(null);
+      eventsOffsetRef.current = 0;
+      hasMoreEventsRef.current = true;
+      setHasMoreEvents(true);
+      tagResolvedEventIdsRef.current = new Set();
+    }
+
     try {
+      const from = append ? eventsOffsetRef.current : 0;
+      const to = from + FEED_PAGE_SIZE - 1;
+
       const eventsPromise = supabase
         .from('events')
-        .select('*')
-        .order('date', { ascending: false });
+        .select(EVENT_FEED_COLUMNS)
+        .order('date', { ascending: false })
+        .range(from, to);
 
-      const statsPromise = fetchEventRatingStats();
-      const userRatingsPromise = user?.id
-        ? fetchUserRatingsByEventId(user.id)
-        : Promise.resolve({ data: new Map<string, Rating>(), error: null as Error | null });
+      // User ratings rarely change mid-scroll; reuse the first fetch while appending.
+      const userRatingsPromise =
+        append && userRatingsCacheRef.current.size > 0
+          ? Promise.resolve({ data: userRatingsCacheRef.current, error: null as Error | null })
+          : user?.id
+            ? fetchUserRatingsByEventId(user.id)
+            : Promise.resolve({ data: new Map<string, Rating>(), error: null as Error | null });
 
-      const [{ data: eventsData, error: eventsErr }, statsRes, userRatingsRes] = await Promise.all([
+      const [{ data: eventsData, error: eventsErr }, userRatingsRes] = await Promise.all([
         eventsPromise,
-        statsPromise,
         userRatingsPromise,
       ]);
 
       if (eventsErr) {
         setEventsError(eventsErr.message || String(eventsErr));
-        setEvents([]);
-        setFilteredEvents([]);
-        return;
-      }
-      if (statsRes.error) {
-        setEventsError(statsRes.error.message);
-        setEvents([]);
-        setFilteredEvents([]);
+        if (!append) {
+          setEvents([]);
+          setFilteredEvents([]);
+        }
         return;
       }
       if (userRatingsRes.error) {
         setEventsError(userRatingsRes.error.message);
-        setEvents([]);
-        setFilteredEvents([]);
+        if (!append) {
+          setEvents([]);
+          setFilteredEvents([]);
+        }
         return;
       }
 
-      const eventsWithStats: EventWithStats[] = (eventsData || []).map((event) => {
-        const stats = statsRes.data.get(event.id);
-        const userRating = userRatingsRes.data.get(event.id);
+      if (!append) {
+        userRatingsCacheRef.current = userRatingsRes.data;
+      }
 
-        let customTags: Record<string, string[]> | null = event.custom_tags ?? null;
-        if (typeof customTags === 'string') {
-          try {
-            customTags = JSON.parse(customTags);
-          } catch {
-            customTags = {};
+      const pageRows = (eventsData || []) as Event[];
+      const more = pageRows.length === FEED_PAGE_SIZE;
+      eventsOffsetRef.current = from + pageRows.length;
+      hasMoreEventsRef.current = more;
+      setHasMoreEvents(more);
+
+      const statsRes = await fetchEventRatingStats(pageRows.map((e) => e.id));
+      if (statsRes.error) {
+        setEventsError(statsRes.error.message);
+        if (!append) {
+          setEvents([]);
+          setFilteredEvents([]);
+        }
+        return;
+      }
+
+      const pageMapped = mapEventsWithStats(pageRows, statsRes.data, userRatingsCacheRef.current);
+
+      if (append) {
+        setEvents((prev) => {
+          const seen = new Set(prev.map((e) => e.id));
+          const merged = [...prev];
+          for (const row of pageMapped) {
+            if (!seen.has(row.id)) merged.push(row);
           }
-        }
-        if (!customTags || Array.isArray(customTags) || typeof customTags !== 'object') {
-          customTags = {};
-        }
-        let customTagMeta: Record<string, { icon?: string }> | null = event.custom_tag_meta ?? null;
-        if (typeof customTagMeta === 'string') {
-          try {
-            customTagMeta = JSON.parse(customTagMeta);
-          } catch {
-            customTagMeta = {};
-          }
-        }
-        if (!customTagMeta || Array.isArray(customTagMeta) || typeof customTagMeta !== 'object') {
-          customTagMeta = {};
-        }
-
-        return {
-          ...normalizeEventTagArrays(event as Event),
-          custom_tags: customTags,
-          custom_tag_meta: customTagMeta,
-          average_rating: stats?.average_rating ?? 0,
-          rating_count: stats?.rating_count ?? 0,
-          user_rating: userRating,
-        };
-      });
-
-      setEvents(eventsWithStats);
-      setFilteredEvents(eventsWithStats);
+          return merged;
+        });
+      } else {
+        setEvents(pageMapped);
+        setFilteredEvents(pageMapped);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setEventsError(message);
-      setEvents([]);
-      setFilteredEvents([]);
+      if (!append) {
+        setEvents([]);
+        setFilteredEvents([]);
+      }
       console.error('Error fetching events:', error);
     } finally {
       hasLoadedEventsRef.current = true;
-      setLoading(false);
+      if (append) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
+
+  const loadMoreEvents = () => {
+    void fetchEvents({ append: true });
+  };
+
+  /** Prefetch upcoming pages so content is ready before the user scrolls into empty space. */
+  const maybePrefetchFeed = useCallback(() => {
+    const browsing =
+      selectedTags.length === 0 && searchQuery.trim().length < 2;
+    if (!browsing || !hasMoreEventsRef.current || loadingMoreRef.current || loading) return;
+
+    const root = feedScrollRef.current;
+    if (!root) {
+      loadMoreEvents();
+      return;
+    }
+    const remaining = root.scrollHeight - root.scrollTop - root.clientHeight;
+    const need = root.clientHeight * FEED_PREFETCH_VIEWPORTS;
+    if (remaining < need) {
+      loadMoreEvents();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, selectedTags.length, searchQuery]);
+
+  useEffect(() => {
+    maybePrefetchFeed();
+  }, [maybePrefetchFeed, hasMoreEvents, loadingMore, events.length]);
+
+  useEffect(() => {
+    const root = feedScrollRef.current;
+    if (!root) return;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        maybePrefetchFeed();
+      });
+    };
+    root.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      root.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [maybePrefetchFeed]);
+
+  /** Backup: when the bottom sentinel nears the viewport, pull another chunk. */
+  useEffect(() => {
+    const browsing =
+      selectedTags.length === 0 && searchQuery.trim().length < 2;
+    if (!browsing || !hasMoreEvents || loading) return;
+
+    const root = feedScrollRef.current;
+    const target = feedSentinelRef.current;
+    if (!root || !target) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          loadMoreEvents();
+        }
+      },
+      { root, rootMargin: '2000px 0px', threshold: 0 },
+    );
+    io.observe(target);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMoreEvents, loadingMore, loading, events.length, selectedTags.length, searchQuery]);
+
+  /** Search/tag filters need the full catalog; pull remaining pages once. */
+  const ensureFullCatalog = useCallback(async () => {
+    if (ensuringCatalogRef.current) return;
+    ensuringCatalogRef.current = true;
+    try {
+      while (hasMoreEventsRef.current) {
+        await fetchEvents({ append: true });
+      }
+    } finally {
+      ensuringCatalogRef.current = false;
+    }
+    // fetchEvents closes over user; intentional for identity-scoped ratings.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  /** After a rating, refresh only that show's stats — not the whole feed. */
+  const refreshEventRating = useCallback(
+    async (eventId: string) => {
+      const bundle = await fetchRatingBundleForEvent(eventId, user?.id);
+      if (bundle.error) {
+        console.error('Error refreshing event rating:', bundle.error);
+        return;
+      }
+      if (bundle.user_rating) {
+        userRatingsCacheRef.current.set(eventId, bundle.user_rating);
+      } else {
+        userRatingsCacheRef.current.delete(eventId);
+      }
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === eventId
+            ? {
+                ...e,
+                average_rating: bundle.average_rating,
+                rating_count: bundle.rating_count,
+                user_rating: bundle.user_rating,
+              }
+            : e,
+        ),
+      );
+    },
+    [user?.id],
+  );
 
   useEffect(() => {
     void fetchSettings();
@@ -330,13 +476,31 @@ function App() {
   }, [user?.id]);
 
   useEffect(() => {
+    const needsFullCatalog =
+      selectedTags.length > 0 || searchQuery.trim().length >= 2;
+    if (!needsFullCatalog || !hasMoreEvents) return;
+    void ensureFullCatalog();
+  }, [selectedTags, searchQuery, hasMoreEvents, ensureFullCatalog]);
+
+  useEffect(() => {
     if (events.length === 0) {
       setTagResolutionMap(new Map());
+      tagResolvedEventIdsRef.current = new Set();
       return;
     }
+    const unresolved = events.filter((e) => !tagResolvedEventIdsRef.current.has(e.id));
+    if (unresolved.length === 0) return;
+
     let cancelled = false;
-    fetchTagResolutionForEvents(events).then((map) => {
-      if (!cancelled) setTagResolutionMap(map);
+    fetchTagResolutionForEvents(unresolved).then((map) => {
+      if (cancelled) return;
+      for (const e of unresolved) tagResolvedEventIdsRef.current.add(e.id);
+      setTagResolutionMap((prev) => {
+        if (!prev || prev.size === 0) return map;
+        const merged = new Map(prev);
+        map.forEach((v, k) => merged.set(k, v));
+        return merged;
+      });
     });
     return () => {
       cancelled = true;
@@ -780,23 +944,74 @@ function App() {
     (async () => {
       const { data, error } = await supabase
         .from('events')
-        .select('*')
+        .select(EVENT_FEED_COLUMNS)
         .eq('id', overlayEventId)
         .maybeSingle();
       if (cancelled || error || !data) return;
       const bundle = await fetchRatingBundleForEvent(data.id, user?.id);
       if (cancelled || bundle.error) return;
-      setOverlayEventFetched({
-        ...normalizeEventTagArrays(data as Event),
-        average_rating: bundle.average_rating,
-        rating_count: bundle.rating_count,
-        user_rating: bundle.user_rating,
-      } as EventWithStats);
+      const mapped = toEventWithStats(
+        data as Event,
+        {
+          event_id: data.id,
+          average_rating: bundle.average_rating,
+          rating_count: bundle.rating_count,
+        },
+        bundle.user_rating,
+      );
+      setOverlayEventFetched(mapped);
+      // Keep deep-linked shows in the in-memory list so rating refresh stays local.
+      setEvents((prev) => (prev.some((e) => e.id === mapped.id) ? prev : [...prev, mapped]));
     })();
     return () => { cancelled = true; };
     // user referenced for user_rating; including full user would over-fetch on profile edits
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlayEventId, overlayEventFromCache, user?.id]);
+
+  // Embed / shared links: pull a missing show by id without downloading the whole catalog.
+  const hasDeepLinkedEvent = eventIdFromUrl
+    ? events.some((e) => e.id === eventIdFromUrl)
+    : true;
+  useEffect(() => {
+    setDeepLinkFailed(false);
+  }, [eventIdFromUrl]);
+  useEffect(() => {
+    if (!eventIdFromUrl || loading || hasDeepLinkedEvent) return;
+    if (overlayEventId === eventIdFromUrl) return; // overlay effect handles it
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('events')
+        .select(EVENT_FEED_COLUMNS)
+        .eq('id', eventIdFromUrl)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        setDeepLinkFailed(true);
+        return;
+      }
+      const bundle = await fetchRatingBundleForEvent(data.id, user?.id);
+      if (cancelled) return;
+      if (bundle.error) {
+        setDeepLinkFailed(true);
+        return;
+      }
+      const mapped = toEventWithStats(
+        data as Event,
+        {
+          event_id: data.id,
+          average_rating: bundle.average_rating,
+          rating_count: bundle.rating_count,
+        },
+        bundle.user_rating,
+      );
+      setEvents((prev) => (prev.some((e) => e.id === mapped.id) ? prev : [...prev, mapped]));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventIdFromUrl, loading, hasDeepLinkedEvent, user?.id, overlayEventId]);
 
   const overlayEvent = overlayEventFromCache ?? overlayEventFetched;
 
@@ -851,14 +1066,22 @@ function App() {
       );
     }
     if (!embedEvent) {
+      if (deepLinkFailed) {
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+            <p className="text-gray-600">Show not found</p>
+          </div>
+        );
+      }
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-          <p className="text-gray-600">Show not found</p>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
         </div>
       );
     }
     return (
       <TagDisplayProvider map={tagResolutionMap}>
+      <CopyProvider settings={appSettings}>
       <EventJsonLd event={embedEvent} />
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-md mx-auto">
@@ -867,7 +1090,7 @@ function App() {
             averageRating={embedEvent.average_rating}
             ratingCount={embedEvent.rating_count}
             userRating={embedEvent.user_rating}
-            onRatingSubmitted={fetchEvents}
+            onRatingSubmitted={() => void refreshEventRating(embedEvent.id)}
             onEventUpdated={fetchEvents}
             onTagClick={handleTagClick}
             tagColors={appSettings}
@@ -894,6 +1117,7 @@ function App() {
           promptMessage={modalRoute.authPrompt}
         />
       </div>
+      </CopyProvider>
       </TagDisplayProvider>
     );
   }
@@ -920,7 +1144,7 @@ function App() {
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50 p-4">
           <div className="text-center">
             <p className="text-gray-700 mb-4">Sign in to open settings.</p>
-            <a href={pathname} className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-neutral-800">Back to shows</a>
+            <a href={pathname} className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-neutral-800">{copyT('modals.backToShows', overridesFromSettings(appSettings))}</a>
           </div>
         </div>
       );
@@ -934,6 +1158,7 @@ function App() {
     }
     return (
       <TagDisplayProvider map={tagResolutionMap}>
+      <CopyProvider settings={appSettings}>
       <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
         <AppHeader
           pathname={pathname}
@@ -981,7 +1206,7 @@ function App() {
               onClick={goBackFromSettings}
               className="mb-6 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
-              ← Back to shows
+              ← {copyT('modals.backToShows', overridesFromSettings(appSettings))}
             </button>
             <h1 className="mb-6 text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
             <SettingsPage
@@ -1008,6 +1233,7 @@ function App() {
           promptMessage={modalRoute.authPrompt}
         />
       </div>
+      </CopyProvider>
       </TagDisplayProvider>
     );
   }
@@ -1015,6 +1241,7 @@ function App() {
   if (showStats) {
     return (
       <TagDisplayProvider map={tagResolutionMap}>
+      <CopyProvider settings={appSettings}>
       <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
         <AppHeader
           pathname={pathname}
@@ -1061,7 +1288,7 @@ function App() {
               onClick={goBackFromStats}
               className="text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
             >
-              ← Back to shows
+              ← {copyT('modals.backToShows', overridesFromSettings(appSettings))}
             </button>
             <StatisticsPage
               isOpen={true}
@@ -1096,7 +1323,7 @@ function App() {
                   averageRating={overlayEvent.average_rating}
                   ratingCount={overlayEvent.rating_count}
                   userRating={overlayEvent.user_rating}
-                  onRatingSubmitted={fetchEvents}
+                  onRatingSubmitted={() => void refreshEventRating(overlayEvent.id)}
                   onEventUpdated={fetchEvents}
                   onTagClick={handleTagClick}
                   tagColors={appSettings}
@@ -1124,6 +1351,7 @@ function App() {
           promptMessage={modalRoute.authPrompt}
         />
       </div>
+      </CopyProvider>
       </TagDisplayProvider>
     );
   }
@@ -1141,7 +1369,7 @@ function App() {
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50 p-4">
           <div className="text-center">
             <p className="text-gray-700 mb-4">Sign in to view your profile.</p>
-            <a href={pathname} className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-neutral-800">Back to shows</a>
+            <a href={pathname} className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-neutral-800">{copyT('modals.backToShows', overridesFromSettings(appSettings))}</a>
           </div>
         </div>
       );
@@ -1155,6 +1383,7 @@ function App() {
     }
     return (
       <TagDisplayProvider map={tagResolutionMap}>
+      <CopyProvider settings={appSettings}>
       <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
         <AppHeader
           pathname={pathname}
@@ -1203,7 +1432,7 @@ function App() {
             onClick={goBack}
             className="text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
           >
-            ← Back to shows
+            ← {copyT('modals.backToShows', overridesFromSettings(appSettings))}
           </button>
           <ProfilePage
             userId={user.id}
@@ -1250,8 +1479,8 @@ function App() {
                   averageRating={overlayEvent.average_rating}
                   ratingCount={overlayEvent.rating_count}
                   userRating={overlayEvent.user_rating}
-                  onRatingSubmitted={() => { fetchEvents(); }}
-                  onEventUpdated={() => { fetchEvents(); }}
+                  onRatingSubmitted={() => void refreshEventRating(overlayEvent.id)}
+                  onEventUpdated={() => { void fetchEvents(); }}
                   onTagClick={handleTagClick}
                   tagColors={appSettings}
                   customPerformerTags={[]}
@@ -1278,6 +1507,7 @@ function App() {
           promptMessage={modalRoute.authPrompt}
         />
       </div>
+      </CopyProvider>
       </TagDisplayProvider>
     );
   }
@@ -1297,8 +1527,11 @@ function App() {
     );
   }
 
+  const copy = overridesFromSettings(appSettings);
+
   return (
     <TagDisplayProvider map={tagResolutionMap}>
+    <CopyProvider settings={appSettings}>
     {params.eventId && overlayEvent ? <EventJsonLd event={overlayEvent} /> : null}
     <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
       <AppHeader
@@ -1340,13 +1573,14 @@ function App() {
       />
 
       <main
+        ref={feedScrollRef}
         className={`flex-1 min-h-0 overflow-y-auto ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
       >
         <div className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
         <div className="mb-8 overflow-visible">
-          <h2 className="mb-2 text-3xl font-bold text-gray-900">Fashion Shows</h2>
+          <h2 className="mb-2 text-3xl font-bold text-gray-900">{copyT('home.title', copy)}</h2>
           <p className="max-w-2xl text-gray-600">
-            {user ? 'Discover, rate, and review fashion shows from around the world' : 'Sign in to rate shows and add your own!'}
+            {user ? copyT('home.subtitleSignedIn', copy) : copyT('home.subtitleSignedOut', copy)}
           </p>
         </div>
 
@@ -1384,16 +1618,16 @@ function App() {
           <div className="text-center py-12">
             <div className="bg-white rounded-lg shadow-md p-8 max-w-md mx-auto">
               <Sparkles size={48} className="mx-auto text-gray-400 mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No fashion shows yet</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">{copyT('empty.noShows.title', copy)}</h3>
               <p className="text-gray-600 mb-4">
-                Be the first to add a fashion show!
+                {copyT('empty.noShows.body', copy)}
               </p>
               {user && (
                 <button
                   onClick={openAddEventModal}
                   className="rounded-lg bg-primary px-6 py-3 text-primary-foreground transition-colors hover:bg-neutral-800"
                 >
-                  Add Show
+                  {copyT('empty.noShows.cta', copy)}
                 </button>
               )}
             </div>
@@ -1402,15 +1636,15 @@ function App() {
           <div className="text-center py-12">
             <div className="bg-white rounded-lg shadow-md p-8 max-w-md mx-auto">
               <Search size={48} className="mx-auto text-gray-400 mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No shows match your search</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">{copyT('empty.noMatch.title', copy)}</h3>
               <p className="text-gray-600 mb-4">
-                Try adjusting your filters or search terms
+                {copyT('empty.noMatch.body', copy)}
               </p>
               <button
                 onClick={clearFilters}
                 className="rounded-lg bg-primary px-6 py-3 text-primary-foreground transition-colors hover:bg-neutral-800"
               >
-                Clear Filters
+                {copyT('empty.noMatch.cta', copy)}
               </button>
             </div>
           </div>
@@ -1435,7 +1669,7 @@ function App() {
                 averageRating={event.average_rating}
                 ratingCount={event.rating_count}
                 userRating={event.user_rating}
-                onRatingSubmitted={fetchEvents}
+                onRatingSubmitted={() => void refreshEventRating(event.id)}
                 onEventUpdated={fetchEvents}
                 onTagClick={handleTagClick}
                 tagColors={appSettings}
@@ -1469,6 +1703,9 @@ function App() {
           return (
               <div className="w-full">
                 <MasonryLaneFeed items={laneItems} columnMinWidthPx={220} gapPx={24} />
+                {hasMoreEvents && selectedTags.length === 0 && searchQuery.trim().length < 2 && (
+                  <div ref={feedSentinelRef} className="h-1 w-full" aria-hidden />
+                )}
               </div>
             );
         })()}
@@ -1519,8 +1756,8 @@ function App() {
                 averageRating={overlayEvent.average_rating}
                 ratingCount={overlayEvent.rating_count}
                 userRating={overlayEvent.user_rating}
-                onRatingSubmitted={() => { fetchEvents(); }}
-                onEventUpdated={() => { fetchEvents(); }}
+                onRatingSubmitted={() => void refreshEventRating(overlayEvent.id)}
+                onEventUpdated={() => { void fetchEvents(); }}
                 onTagClick={handleTagClick}
                 tagColors={appSettings}
                 customPerformerTags={[]}
@@ -1535,6 +1772,7 @@ function App() {
       )}
 
     </div>
+    </CopyProvider>
     </TagDisplayProvider>
   );
 }

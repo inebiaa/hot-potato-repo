@@ -12,21 +12,18 @@ import { resolveVenueFormattedAddress } from '../lib/resolveVenueAddress';
 import { isCanonicalCityLabel } from '../lib/cityPlaces';
 import {
   SHOW_TYPE_OPTIONS,
-  featuredCreditHint,
-  featuredCreditLabel,
-  featuredCreditPlaceholder,
   normalizeShowType,
   starringColumn,
   type ShowType,
 } from '../lib/showType';
 import {
-  SPECIAL_GUESTS_LABEL,
   SPECIAL_GUESTS_SLUG,
   getSpecialGuests,
   isSpecialGuestsSlug,
   withSpecialGuests,
   withSpecialGuestsMeta,
 } from '../lib/specialGuests';
+import { useT } from '../contexts/CopyContext';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
 import CustomPerformerCategoryInput from './CustomPerformerCategoryInput';
@@ -42,6 +39,7 @@ interface EditEventModalProps {
 }
 
 export default function EditEventModal({ isOpen, onClose, onEventUpdated, event }: EditEventModalProps) {
+  const t = useT();
   const [name, setName] = useState(event.name);
   const [date, setDate] = useState(event.date.slice(0, 10));
   const [showType, setShowType] = useState<ShowType>(() => normalizeShowType(event.show_type));
@@ -214,7 +212,8 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
         );
       }
 
-      await syncTagIdentitiesFromEventFields(
+      // Don't block the save UI on identity sync — festival lineups can be dozens of sequential DB calls.
+      void syncTagIdentitiesFromEventFields(
         {
           producers: resolvedProducers,
           featured_designers: resolvedDesigners,
@@ -227,7 +226,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           custom_tags: Object.keys(customTagsWithGuests).length ? customTagsWithGuests : null,
         },
         user.id
-      );
+      ).catch((err) => console.warn('Background tag identity sync failed:', err));
 
       await onEventUpdated();
       onClose();
@@ -246,11 +245,11 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
   };
 
   return createPortal(
-    <ModalShell onClose={onClose} title={showType === 'music' ? 'Edit Music Show' : 'Edit Fashion Show'} zClass="z-[100]">
+    <ModalShell onClose={onClose} title={t("form.editTitle")} zClass="z-[100]">
         <form onSubmit={handleSubmit} className="space-y-4 p-4 sm:p-6">
           <div>
             <Label htmlFor="name" required>
-              Show Name
+              {t("form.showName")}
             </Label>
             <Input
               id="name"
@@ -262,8 +261,8 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           </div>
 
           <fieldset>
-            <legend className="mb-1 block text-sm font-medium text-foreground">Show type</legend>
-            <div className="flex gap-2" role="radiogroup" aria-label="Show type">
+            <legend className="mb-1 block text-sm font-medium text-foreground">{t("form.showType")}</legend>
+            <div className="flex gap-2" role="radiogroup" aria-label={t("form.showType")}>
               {SHOW_TYPE_OPTIONS.map((opt) => {
                 const selected = showType === opt.value;
                 return (
@@ -290,7 +289,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="date" required>
-                Date
+                {t('form.date')}
               </Label>
               <Input
                 id="date"
@@ -304,59 +303,55 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             <div>
               <TagInput
                 id="city"
-                label="City"
+                label={t("form.city")}
                 value={city}
                 onChange={setCity}
                 useCitySuggestions
                 maxTags={1}
                 required
-                placeholder="e.g., Denver, CO"
-                hint="Type to search, then pick a city from the list"
+                placeholder={t("form.city.placeholder")}
               />
             </div>
           </div>
 
           <TagInput
             id="location"
-            label="Venue"
+            label={t("form.venue")}
             value={venue}
             onChange={setVenue}
             useVenueSuggestions
             maxTags={1}
-            placeholder="e.g., Grand Palais, Fashion Week"
-            hint="Type and press Enter; suggestions from venues already used on events"
+            placeholder={showType === 'music' ? t('form.venue.placeholder.music') : t('form.venue.placeholder.fashion')}
           />
 
           <TagInput
             id="starring"
-            label={featuredCreditLabel(showType)}
+            label={t('event.starring')}
             value={showType === 'music' ? artists : designers}
             onChange={showType === 'music' ? setArtists : setDesigners}
             tagColumn={starringColumn(showType)}
-            placeholder={featuredCreditPlaceholder(showType)}
-            hint={featuredCreditHint(showType)}
+            placeholder={showType === 'music' ? t('form.starring.placeholder.music') : t('form.starring.placeholder.fashion')}
           />
 
           {showType === 'music' && (
             <TagInput
               id="specialGuests"
-              label={SPECIAL_GUESTS_LABEL}
+              label={t(specialGuests.length === 1 ? 'event.specialGuest' : 'event.specialGuests')}
               value={specialGuests}
               onChange={setSpecialGuests}
               tagColumn="featured_artists"
-              placeholder="e.g., Opening act, Special guest"
-              hint="Openers and announced special guests; type and press Enter"
+              placeholder={t('form.specialGuests.placeholder')}
               expandable
             />
           )}
 
           <TagInput
             id="producers"
-            label="Produced By"
+            label={t('form.producedBy')}
             value={producers}
             onChange={setProducers}
             tagColumn="producers"
-            placeholder="e.g., Fashion Production Co, Designer Studios"
+            placeholder={showType === 'music' ? t('form.producedBy.placeholder.music') : t('form.producedBy.placeholder.fashion')}
             expandable
           />
 
@@ -364,21 +359,21 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
             <>
               <TagInput
                 id="models"
-                label="Featured Models"
+                label={t('form.featuredModels')}
                 value={models}
                 onChange={setModels}
                 tagColumn="models"
-                placeholder="e.g., Gigi Hadid, Bella Hadid, Karlie Kloss"
+                placeholder={t('form.featuredModels.placeholder')}
                 expandable
               />
 
               <TagInput
                 id="hairMakeup"
-                label="Hair & Makeup"
+                label={t('form.hairMakeup')}
                 value={hairMakeup}
                 onChange={setHairMakeup}
                 tagColumn="hair_makeup"
-                placeholder="e.g., James Boehmer, Pat McGrath"
+                placeholder={t('form.hairMakeup.placeholder')}
                 expandable
               />
             </>
@@ -386,11 +381,11 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
 
           <TagInput
             id="headerTags"
-            label="Genre"
+            label={t('form.genre')}
             value={headerTags}
             onChange={setHeaderTags}
             tagColumn="header_tags"
-            placeholder={showType === 'music' ? 'e.g., Indie, Jazz, Electronic' : 'e.g., Spring 2024, Couture, Limited Edition'}
+            placeholder={showType === 'music' ? t('form.genre.placeholder.music') : t('form.genre.placeholder.fashion')}
             expandable
           />
 
@@ -470,11 +465,11 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
 
           <TagInput
             id="footerTags"
-            label="Collection"
+            label={t('form.collection')}
             value={footerTags}
             onChange={setFooterTags}
             tagColumn="footer_tags"
-            placeholder="e.g., Award Winning, Sustainable Fashion, NYFW Fall 2024"
+            placeholder={showType === 'music' ? t('form.collection.placeholder.music') : t('form.collection.placeholder.fashion')}
             expandable
           />
 

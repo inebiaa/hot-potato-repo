@@ -13,8 +13,8 @@ import { buildEventSocialMetaTagsHtml } from './src/lib/eventSocialMeta'
 
 const APP_NAME = (process.env.VITE_APP_NAME || 'Secret Blogger').trim() || 'Secret Blogger'
 const APP_DESCRIPTION =
-  (process.env.VITE_APP_DESCRIPTION || 'Discover, rate, and review fashion shows from around the world.').trim() ||
-  'Discover, rate, and review fashion shows from around the world.'
+  (process.env.VITE_APP_DESCRIPTION || 'Discover, rate, and review fashion and music shows from around the world.').trim() ||
+  'Discover, rate, and review fashion and music shows from around the world.'
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')

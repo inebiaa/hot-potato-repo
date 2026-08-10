@@ -168,7 +168,7 @@ export async function canonicalizeCity(raw: string): Promise<string | null> {
   return null;
 }
 
-/** True when label looks like "City, ST" / "City, CC" (2-letter region). */
+/** True when label looks like "City, ST" / "City, CC" / "City, VIC" (2–3 letter region). */
 export function isCanonicalCityLabel(value: string): boolean {
-  return /^[^,]+,\s*[A-Za-z]{2}$/.test(value.trim());
+  return /^[^,]+,\s*[A-Za-z]{2,3}$/.test(value.trim());
 }

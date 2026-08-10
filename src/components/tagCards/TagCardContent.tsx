@@ -25,8 +25,8 @@ export default function TagCardContent({
   onEventClick,
   tagColors,
 }: TagCardContentProps) {
-  /** Match EventCard tag sections (~2 lines then +N); pills row has no inner scroll. */
-  const TAG_LIMIT = 8;
+  /** Match EventCard tag sections (3 pills then +N); pills row has no inner scroll. */
+  const TAG_LIMIT = 3;
   const [pillsExpanded, setPillsExpanded] = useState(false);
   const [isListExpanded, setIsListExpanded] = useState(false);
   const [aliasPills, setAliasPills] = useState<string[]>([]);

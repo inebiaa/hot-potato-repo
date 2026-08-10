@@ -86,19 +86,24 @@ export default function ViewRatingsModal({
 
       if (ratingsError) throw ratingsError;
 
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('user_profiles')
-        .select('user_id, username');
+      const userIds = [...new Set((ratingsData || []).map((r) => r.user_id).filter(Boolean))];
+      const profilesByUserId = new Map<string, string>();
+      if (userIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('user_profiles')
+          .select('user_id, username')
+          .in('user_id', userIds);
 
-      if (profilesError) throw profilesError;
+        if (profilesError) throw profilesError;
+        for (const p of profilesData || []) {
+          if (p.user_id) profilesByUserId.set(p.user_id, p.username || 'Unknown User');
+        }
+      }
 
-      const ratingsWithUsernames = (ratingsData || []).map((rating) => {
-        const profile = profilesData?.find((p) => p.user_id === rating.user_id);
-        return {
-          ...rating,
-          username: profile?.username || 'Unknown User'
-        };
-      });
+      const ratingsWithUsernames = (ratingsData || []).map((rating) => ({
+        ...rating,
+        username: profilesByUserId.get(rating.user_id) || 'Unknown User',
+      }));
 
       const filteredRatings = singleUserId
         ? ratingsWithUsernames.filter((rating) => rating.user_id === singleUserId)

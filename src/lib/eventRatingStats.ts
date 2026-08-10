@@ -6,25 +6,38 @@ export type EventRatingStatRow = {
   rating_count: number;
 };
 
-/** Per-event avg/count from `event_rating_stats` (no per-rating rows). */
-export async function fetchEventRatingStats(): Promise<{
+function buildStatsMap(
+  rows: { event_id: string; average_rating: number; rating_count: number }[] | null,
+): Map<string, EventRatingStatRow> {
+  const map = new Map<string, EventRatingStatRow>();
+  for (const row of rows || []) {
+    map.set(row.event_id, {
+      event_id: row.event_id,
+      average_rating: Number(row.average_rating) || 0,
+      rating_count: Number(row.rating_count) || 0,
+    });
+  }
+  return map;
+}
+
+/** Per-event avg/count from `event_rating_stats`. Pass eventIds to scope the read. */
+export async function fetchEventRatingStats(eventIds?: string[]): Promise<{
   data: Map<string, EventRatingStatRow>;
   error: Error | null;
 }> {
-  const { data, error } = await supabase
-    .from('event_rating_stats')
-    .select('event_id, average_rating, rating_count');
+  if (eventIds && eventIds.length === 0) {
+    return { data: new Map(), error: null };
+  }
+
+  let query = supabase.from('event_rating_stats').select('event_id, average_rating, rating_count');
+  if (eventIds) {
+    query = query.in('event_id', eventIds);
+  }
+
+  const { data, error } = await query;
 
   if (!error) {
-    const map = new Map<string, EventRatingStatRow>();
-    for (const row of data || []) {
-      map.set(row.event_id, {
-        event_id: row.event_id,
-        average_rating: Number(row.average_rating) || 0,
-        rating_count: Number(row.rating_count) || 0,
-      });
-    }
-    return { data: map, error: null };
+    return { data: buildStatsMap(data), error: null };
   }
 
   // Fallback if migration not applied yet: pull only event_id + rating (no comments).
@@ -34,9 +47,12 @@ export async function fetchEventRatingStats(): Promise<{
     return { data: new Map(), error: new Error(error.message) };
   }
 
-  const { data: rows, error: fallbackErr } = await supabase
-    .from('ratings')
-    .select('event_id, rating');
+  let ratingsQuery = supabase.from('ratings').select('event_id, rating');
+  if (eventIds) {
+    ratingsQuery = ratingsQuery.in('event_id', eventIds);
+  }
+
+  const { data: rows, error: fallbackErr } = await ratingsQuery;
 
   if (fallbackErr) {
     return { data: new Map(), error: new Error(fallbackErr.message) };

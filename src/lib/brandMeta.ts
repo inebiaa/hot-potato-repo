@@ -4,7 +4,7 @@
  */
 export const DEFAULT_APP_NAME = 'Secret Blogger';
 export const DEFAULT_SITE_ORIGIN = 'https://www.secretblogger.app';
-export const DEFAULT_APP_DESCRIPTION = 'Discover, rate, and review fashion shows from around the world.';
+export const DEFAULT_APP_DESCRIPTION = 'Discover, rate, and review fashion and music shows from around the world.';
 
 function clean(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
