@@ -9,7 +9,7 @@ import type { Plugin } from 'vite'
 import type { Event } from './src/lib/eventTypes'
 import { canonicalEventUrlFromParts } from './src/lib/siteBase'
 import { eventJsonLdScriptContentPrerender } from './src/lib/eventJsonLd'
-import { buildEventSocialMetaTagsHtml } from './src/lib/eventSocialMeta'
+import { buildEventSocialMetaTagsHtml, stripSiteSocialFromHtml } from './src/lib/eventSocialMeta'
 
 const APP_NAME = (process.env.VITE_APP_NAME || 'Secret Blogger').trim() || 'Secret Blogger'
 const APP_DESCRIPTION =
@@ -42,7 +42,9 @@ function injectEventSeoShell(indexHtml: string, event: Event, site: string, vite
   const jsonLd = jsonLdForHtml(eventJsonLdScriptContentPrerender(event, prerender))
   const socialMeta = buildEventSocialMetaTagsHtml(event, prerender)
   const title = `${event.name} | ${APP_NAME}`
-  let html = indexHtml.replace(/<title>.*?<\/title>/s, `<title>${escapeTitleText(title)}</title>`)
+  // Drop homepage OG + canonical so scrapers only see the event poster (not og-default.png first).
+  let html = stripSiteSocialFromHtml(indexHtml)
+  html = html.replace(/<title>.*?<\/title>/s, `<title>${escapeTitleText(title)}</title>`)
   const block = `  <link rel="canonical" href="${escapeHtmlAttr(canonical)}" />\n${socialMeta}\n  <script id="secret-blogger-event-jsonld" type="application/ld+json">${jsonLd}</script>\n`
   html = html.replace('</head>', `${block}</head>`)
   return html
