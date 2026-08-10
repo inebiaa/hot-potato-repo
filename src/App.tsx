@@ -4,16 +4,19 @@ import { Sparkles, Search } from 'lucide-react';
 import AppHeader from './components/AppHeader';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
+import { eventDateFilterValue, eventDateMatchesSearch, formatEventDateDisplay } from './lib/formatEventDate';
 import { getSeasonFromDate, getYearFromDate } from './lib/season';
 import { eventSortKey, isEventUpcoming } from './lib/eventDates';
 import { effectiveHeaderTags } from './lib/eventHeaderTags';
 import { normalizeEventTagArrays } from './lib/eventTagArray';
 import { normalizeForSearch } from './lib/normalize';
+import { normalizeShowType, showTypeLabel } from './lib/showType';
+import { getSpecialGuests, isSpecialGuestsSlug } from './lib/specialGuests';
 import { readableTextForBg } from './lib/colorUtils';
 import EventCard from './components/EventCard';
 import AuthModal from './components/AuthModal';
 import AddEventModal from './components/AddEventModal';
-import SettingsModal from './components/SettingsModal';
+import SettingsPage from './components/SettingsPage';
 import TagRatingsModal from './components/TagRatingsModal';
 import StatisticsPage from './components/StatisticsPage';
 import ProfilePage from './components/ProfilePage';
@@ -47,6 +50,9 @@ interface EventWithStats extends Event {
   user_rating?: Rating;
 }
 
+/** Survive remounts so we don't flash a full-page spinner on every route land. */
+let settingsCache: AppSettings | null = null;
+
 function App() {
   const navigate = useNavigate();
   const params = useParams();
@@ -63,15 +69,16 @@ function App() {
   const [overlayEventId, setOverlayEventId] = useState<string | null>(null);
   const [overlaySource, setOverlaySource] = useState<'tagModal' | 'viewRatings' | null>(null);
   const [, setOverlayOpenWithWiggle] = useState(false);
-  const [overlaySuggestSection, setOverlaySuggestSection] = useState<keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | undefined>(undefined);
-  const [overlaySuggestCustomSlug, setOverlaySuggestCustomSlug] = useState<string | undefined>(undefined);
+  const [overlayReorderSection, setOverlayReorderSection] = useState<keyof { producers: string[]; featured_designers: string[]; featured_artists: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | undefined>(undefined);
+  const [overlayReorderCustomSlug, setOverlayReorderCustomSlug] = useState<string | undefined>(undefined);
   const [tagModalRefreshTrigger, setTagModalRefreshTrigger] = useState(0);
   const [identitySearchHits, setIdentitySearchHits] = useState<TagIdentityRecord[]>([]);
   const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasClearedFiltersForSharedLink = useRef(false);
   const overlayReorderEnteredAtRef = useRef<number>(0);
   const overlayCardWrapperRef = useRef<HTMLDivElement | null>(null);
-  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(() => settingsCache);
+  const hasLoadedEventsRef = useRef(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchDragOver, setSearchDragOver] = useState(false);
   const [tagResolutionMap, setTagResolutionMap] = useState<TagResolutionMap | null>(null);
@@ -83,11 +90,12 @@ function App() {
     navigate({ pathname: location.pathname, search: clearAppModalParams(searchParams) });
   }, [navigate, location.pathname, searchParams]);
 
-  const openSettingsModal = useCallback(() => {
+  const openSettings = useCallback(() => {
     startTransition(() => {
-      navigate({ pathname: location.pathname, search: setAppModalParams(searchParams, 'settings') });
+      navigate({ pathname: '/', search: '?settings=1' });
+      window.scrollTo(0, 0);
     });
-  }, [navigate, location.pathname, searchParams]);
+  }, [navigate]);
 
   const openAddEventModal = useCallback(() => {
     navigate({ pathname: location.pathname, search: setAppModalParams(searchParams, 'add-event') });
@@ -167,8 +175,9 @@ function App() {
       const countdownBg = settingsObj.countdown_bg_color || '#fef3c7';
       const footerBg = settingsObj.footer_tags_bg_color || '#d1fae5';
       const optionalBg = settingsObj.optional_tags_bg_color || '#e0e7ff';
+      const specialGuestsBg = settingsObj.special_guests_bg_color || '#e0e7ff';
 
-      setAppSettings({
+      const nextSettings: AppSettings = {
         app_name: settingsObj.app_name ?? undefined,
         app_icon_url: settingsObj.app_icon_url ?? undefined,
         app_logo_url: settingsObj.app_logo_url ?? undefined,
@@ -202,16 +211,22 @@ function App() {
         season_icon: iconValue('season_icon', 'Calendar'),
         header_tags_icon: iconValue('header_tags_icon', 'Tag'),
         footer_tags_icon: iconValue('footer_tags_icon', 'Tag'),
+        special_guests_icon: iconValue('special_guests_icon', 'Mic'),
         optional_tags_bg_color: optionalBg,
         optional_tags_text_color: resolveText(optionalBg, settingsObj.optional_tags_text_color, '#3730a3'),
-      });
+        special_guests_bg_color: specialGuestsBg,
+        special_guests_text_color: resolveText(specialGuestsBg, settingsObj.special_guests_text_color, '#3730a3'),
+      };
+      settingsCache = nextSettings;
+      setAppSettings(nextSettings);
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
   };
 
   const fetchEvents = async () => {
-    setLoading(true);
+    const silent = hasLoadedEventsRef.current;
+    if (!silent) setLoading(true);
     setEventsError(null);
     try {
       const { data: eventsData, error: eventsErr } = await supabase
@@ -287,16 +302,23 @@ function App() {
       setFilteredEvents([]);
       console.error('Error fetching events:', error);
     } finally {
+      hasLoadedEventsRef.current = true;
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchSettings();
-    fetchEvents();
-    // Intentionally sync on auth user only; fetchSettings/fetchEvents close over latest setters.
+    void fetchSettings();
+    // Settings are global — load once per App mount, not on every auth tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, []);
+
+  useEffect(() => {
+    void fetchEvents();
+    // Refetch when identity changes (login/logout) so user_rating stays correct.
+    // Use user?.id so token/object churn does not retrigger; silent after first load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   useEffect(() => {
     if (events.length === 0) {
@@ -357,6 +379,8 @@ function App() {
     events.forEach((e) => {
       (e.producers || []).forEach((v) => expandIdentity('producer', v));
       (e.featured_designers || []).forEach((v) => expandIdentity('designer', v));
+      (e.featured_artists || []).forEach((v) => expandIdentity('artist', v));
+      getSpecialGuests(e.custom_tags).forEach((v) => expandIdentity('artist', v));
       (e.models || []).forEach((v) => expandIdentity('model', v));
       (e.hair_makeup || []).forEach((v) => expandIdentity('hair_makeup', v));
       effectiveHeaderTags(e).forEach((v) => expandIdentity('header_tags', v));
@@ -365,11 +389,20 @@ function App() {
       if (e.location) expandIdentity('venue', e.location);
       add('season', getSeasonFromDate(e.date));
       {
+        const showType = normalizeShowType(e.show_type);
+        add('show_type', showType, showTypeLabel(showType));
+      }
+      {
         const y = getYearFromDate(e.date);
         if (y) add('year', y);
       }
+      {
+        const dateVal = eventDateFilterValue(e.date);
+        if (dateVal) add('date', dateVal, formatEventDateDisplay(e.date));
+      }
       if (e.custom_tags && typeof e.custom_tags === 'object') {
         Object.entries(e.custom_tags).forEach(([slug, vals]) => {
+          if (isSpecialGuestsSlug(slug)) return;
           const tt = `custom:${slug}` as const;
           (vals || []).forEach((v) => {
             const entry = map?.get(tagResolutionKey(tt, v));
@@ -404,20 +437,29 @@ function App() {
   const tagSuggestions = useMemo(() => {
     const q = normalizeForSearch(searchQuery);
     if (!q || q.length < 2) return [];
-    const fromEvents = searchableTags.filter((t) => normalizeForSearch(t.label).includes(q));
+    const fromEvents = searchableTags.filter((t) => {
+      if (normalizeForSearch(t.label).includes(q)) return true;
+      return t.type === 'date' && eventDateMatchesSearch(t.value, q);
+    });
     const suggestionKey = (t: { type: string; value: string; label: string }) =>
       `${t.type}:${t.value}\x00${normalizeTagName(t.label)}`;
     const seen = new Set(fromEvents.map(suggestionKey));
     const out: { type: string; value: string; label: string }[] = [...fromEvents];
     for (const id of identitySearchHits) {
       if (!identityIdsInUse.has(id.clusterId)) continue;
-      const sug = id.tag_type.startsWith('custom:')
-        ? {
-            type: 'custom_performer' as const,
-            value: `${id.tag_type.slice(7)}\x00${id.clusterId}`,
-            label: id.canonical_name,
-          }
-        : { type: id.tag_type, value: id.clusterId, label: id.canonical_name };
+      const customSlug = id.tag_type.startsWith('custom:') ? id.tag_type.slice(7) : null;
+      const sug =
+        customSlug && !isSpecialGuestsSlug(customSlug)
+          ? {
+              type: 'custom_performer' as const,
+              value: `${customSlug}\x00${id.clusterId}`,
+              label: id.canonical_name,
+            }
+          : {
+              type: customSlug && isSpecialGuestsSlug(customSlug) ? 'artist' : id.tag_type,
+              value: id.clusterId,
+              label: id.canonical_name,
+            };
       const key = suggestionKey(sug);
       if (!seen.has(key)) {
         seen.add(key);
@@ -477,10 +519,10 @@ function App() {
   const eventIdFromUrl = eventIdFromPath ?? eventIdFromQuery;
   const showProfile = searchParams.get('profile') === '1';
   const showStats = searchParams.get('stats') === '1';
+  const showSettings = searchParams.get('settings') === '1';
   const pathname = location.pathname;
 
   const isAddEventModalOpen = modalRoute.modal === 'add-event';
-  const isSettingsModalOpen = modalRoute.modal === 'settings';
   const isAuthModalOpen = modalRoute.modal === 'auth';
   const isTagRatingsModalOpen =
     !showStats && modalRoute.modal === 'tag' && !!modalRoute.tagType && !!modalRoute.tagValue;
@@ -501,8 +543,8 @@ function App() {
       setOverlayEventId(null);
       setOverlaySource(null);
       setOverlayOpenWithWiggle(false);
-      setOverlaySuggestSection(undefined);
-      setOverlaySuggestCustomSlug(undefined);
+      setOverlayReorderSection(undefined);
+      setOverlayReorderCustomSlug(undefined);
     }
   }, [params.eventId, searchParams]);
 
@@ -525,6 +567,18 @@ function App() {
     navigate({ pathname: '/', search: '' });
     window.scrollTo(0, 0);
   };
+
+  const goBackFromSettings = () => {
+    navigate({ pathname: '/', search: '' });
+    window.scrollTo(0, 0);
+    void fetchSettings();
+  };
+
+  // Legacy ?modal=settings → ?settings=1 page
+  useEffect(() => {
+    if (searchParams.get('modal') !== 'settings') return;
+    navigate({ pathname: '/', search: '?settings=1' }, { replace: true });
+  }, [searchParams, navigate]);
 
   // When opening shared link (?event=xxx), clear filters once so the event is visible (don't clear again when user searches)
   useEffect(() => {
@@ -566,8 +620,8 @@ function App() {
     overlayEventId ||
     showStats ||
     showProfile ||
+    showSettings ||
     isTagRatingsModalOpen ||
-    isSettingsModalOpen ||
     isAddEventModalOpen ||
     isAuthModalOpen ||
     isEventPanelModal
@@ -602,11 +656,14 @@ function App() {
         };
         filtered = filtered.filter((event) => {
           const nameMatch = normalizeForSearch(event.name || '').includes(queryNorm);
-          const descriptionMatch = normalizeForSearch(event.description || '').includes(queryNorm);
           const cityMatch = normalizeForSearch(event.city || '').includes(queryNorm);
           const locationMatch = normalizeForSearch(event.location || '').includes(queryNorm);
           const venueMatch = event.location ? tagLineMatch('venue', event.location) : false;
           const designersMatch = event.featured_designers?.some((d) => tagLineMatch('designer', d)) || false;
+          const artistsMatch =
+            event.featured_artists?.some((a) => tagLineMatch('artist', a)) ||
+            getSpecialGuests(event.custom_tags).some((a) => tagLineMatch('artist', a)) ||
+            false;
           const modelsMatch = event.models?.some((m) => tagLineMatch('model', m)) || false;
           const producersMatch = event.producers?.some((p) => tagLineMatch('producer', p)) || false;
           const headerTagsMatch = effectiveHeaderTags(event).some((t) => tagLineMatch('header_tags', t)) || false;
@@ -614,26 +671,31 @@ function App() {
           const customTagsMatch =
             event.custom_tags && typeof event.custom_tags === 'object'
               ? Object.entries(event.custom_tags).some(([slug, vals]) =>
-                  (vals || []).some((v: string) => customLineMatch(slug, v))
+                  isSpecialGuestsSlug(slug)
+                    ? false
+                    : (vals || []).some((v: string) => customLineMatch(slug, v))
                 )
               : false;
           const hairMakeupMatch = event.hair_makeup?.some((h) => tagLineMatch('hair_makeup', h)) || false;
-          const yearMatch =
-            /^\d{4}$/.test(queryNorm) && getYearFromDate(event.date) === queryNorm;
+          const dateMatch = eventDateMatchesSearch(event.date || '', queryNorm);
+          const seasonMatch = normalizeForSearch(getSeasonFromDate(event.date || '')).includes(queryNorm);
+          const showTypeMatch = normalizeForSearch(showTypeLabel(event.show_type)).includes(queryNorm);
           return (
             nameMatch ||
-            descriptionMatch ||
             cityMatch ||
             locationMatch ||
             venueMatch ||
             designersMatch ||
+            artistsMatch ||
             modelsMatch ||
             producersMatch ||
             headerTagsMatch ||
             footerTagsMatch ||
             customTagsMatch ||
             hairMakeupMatch ||
-            yearMatch
+            dateMatch ||
+            seasonMatch ||
+            showTypeMatch
           );
         });
       }
@@ -648,12 +710,23 @@ function App() {
             return eventMatchesVenueTag(event, tag.value, tagResolutionMap);
           case 'season':
             return getSeasonFromDate(event.date) === tag.value;
+          case 'show_type':
+            return normalizeShowType(event.show_type) === tag.value;
           case 'year':
             return getYearFromDate(event.date) === tag.value;
+          case 'date': {
+            const ymd = eventDateFilterValue(event.date || '');
+            return Boolean(ymd) && ymd === tag.value;
+          }
           case 'producer':
             return eventArrayMatchesFilter(tagResolutionMap, 'producer', event.producers, tag.value);
           case 'designer':
             return eventArrayMatchesFilter(tagResolutionMap, 'designer', event.featured_designers, tag.value);
+          case 'artist':
+            return (
+              eventArrayMatchesFilter(tagResolutionMap, 'artist', event.featured_artists, tag.value) ||
+              eventArrayMatchesFilter(tagResolutionMap, 'artist', getSpecialGuests(event.custom_tags), tag.value)
+            );
           case 'model':
             return eventArrayMatchesFilter(tagResolutionMap, 'model', event.models, tag.value);
           case 'hair_makeup':
@@ -665,6 +738,12 @@ function App() {
           case 'custom_performer': {
             const [slug, tagValue] = tag.value.split('\x00');
             if (!slug || !tagValue) return false;
+            if (isSpecialGuestsSlug(slug)) {
+              return (
+                eventArrayMatchesFilter(tagResolutionMap, 'artist', event.featured_artists, tagValue) ||
+                eventArrayMatchesFilter(tagResolutionMap, 'artist', getSpecialGuests(event.custom_tags), tagValue)
+              );
+            }
             const vals = event.custom_tags?.[slug];
             return eventArrayMatchesFilter(
               tagResolutionMap,
@@ -724,14 +803,14 @@ function App() {
     eventId: string,
     source?: 'tagModal' | 'viewRatings',
     openWithWiggle?: boolean,
-    suggestSection?: keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | 'custom',
-    suggestCustomSlug?: string
+    reorderSection?: keyof { producers: string[]; featured_designers: string[]; featured_artists: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | 'custom',
+    reorderCustomSlug?: string
   ) => {
     setOverlayEventId(eventId);
     setOverlaySource(source ?? null);
     setOverlayOpenWithWiggle(!!openWithWiggle);
-    setOverlaySuggestSection(openWithWiggle && !suggestCustomSlug && suggestSection !== 'custom' ? (suggestSection ?? 'header_tags') : undefined);
-    setOverlaySuggestCustomSlug(openWithWiggle ? suggestCustomSlug : undefined);
+    setOverlayReorderSection(openWithWiggle && !reorderCustomSlug && reorderSection !== 'custom' ? (reorderSection ?? 'header_tags') : undefined);
+    setOverlayReorderCustomSlug(openWithWiggle ? reorderCustomSlug : undefined);
     // Stay on profile when opening a review from My reviews (don’t navigate to /event/:id).
     if (showProfile) {
       const next = new URLSearchParams(searchParams);
@@ -748,8 +827,8 @@ function App() {
     setOverlayEventId(null);
     setOverlaySource(null);
     setOverlayOpenWithWiggle(false);
-    setOverlaySuggestSection(undefined);
-    setOverlaySuggestCustomSlug(undefined);
+    setOverlayReorderSection(undefined);
+    setOverlayReorderCustomSlug(undefined);
     setTagModalRefreshTrigger((t) => t + 1);
     if (searchParams.get('profile') === '1') {
       const next = new URLSearchParams(searchParams);
@@ -761,12 +840,8 @@ function App() {
   };
 
   const goBack = () => {
-    if (showProfile) {
-      navigate({ pathname: '/', search: '' });
-      window.scrollTo(0, 0);
-    } else {
-      window.location.href = pathname || '/';
-    }
+    navigate({ pathname: '/', search: '' });
+    window.scrollTo(0, 0);
   };
 
   const openProfile = () => {
@@ -780,7 +855,7 @@ function App() {
     if (loading) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
         </div>
       );
     }
@@ -804,7 +879,6 @@ function App() {
             onRatingSubmitted={fetchEvents}
             onEventUpdated={fetchEvents}
             onTagClick={handleTagClick}
-            onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
             tagColors={appSettings}
             customPerformerTags={[]}
             wiggleOnlyClearsOnClickAway
@@ -836,16 +910,122 @@ function App() {
 
   if (!appSettings) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
       </div>
+    );
+  }
+
+
+  if (showSettings) {
+    if (authLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
+        </div>
+      );
+    }
+    if (!user) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50 p-4">
+          <div className="text-center">
+            <p className="text-gray-700 mb-4">Sign in to open settings.</p>
+            <a href={pathname} className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-neutral-800">Back to shows</a>
+          </div>
+        </div>
+      );
+    }
+    if (!appSettings) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
+        </div>
+      );
+    }
+    return (
+      <TagDisplayProvider map={tagResolutionMap}>
+      <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
+        <AppHeader
+          pathname={pathname}
+          activeView="settings"
+          desktopLikePointer={desktopLikePointer}
+          appSettings={appSettings}
+          user={user}
+          isAdmin={!!isAdmin}
+          onGoHome={goBackFromSettings}
+          onOpenStats={openStats}
+          onOpenProfile={openProfile}
+          onOpenSettings={openSettings}
+          onAddEvent={openAddEventModal}
+          onSignIn={() => openAuthModal('signin')}
+          onSignOut={() => signOut()}
+          searchBar={
+            <PrimarySearchBar
+              embeddedInHeader
+              appSettings={appSettings}
+              searchDragOver={searchDragOver}
+              searchFocused={searchFocused}
+              selectedTags={selectedTags}
+              searchQuery={searchQuery}
+              tagSuggestions={tagSuggestions}
+              filteredCount={filteredEvents.length}
+              totalCount={filteredEvents.length}
+              onSearchDrop={handleSearchDrop}
+              onSearchDragOver={handleSearchDragOver}
+              onSearchDragLeave={handleSearchDragLeave}
+              onSearchFocus={() => setSearchFocused(true)}
+              onSearchBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+              onSearchQueryChange={setSearchQuery}
+              onSelectTagFilter={selectTagFilter}
+              onRemoveTagFilter={removeTagFilter}
+              onClearFilters={clearFilters}
+            />
+          }
+        />
+        <main
+          className={`flex-1 min-h-0 overflow-y-auto ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
+        >
+          <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
+            <button
+              type="button"
+              onClick={goBackFromSettings}
+              className="mb-6 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              ← Back to shows
+            </button>
+            <h1 className="mb-6 text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
+            <SettingsPage
+              onSettingsUpdated={() => {
+                fetchSettings();
+                fetchTagResolutionForEvents(events).then(setTagResolutionMap);
+              }}
+              onSettingsPreview={setAppSettings}
+              onAccountUpdated={fetchEvents}
+            />
+          </div>
+        </main>
+
+        <AddEventModal
+          isOpen={isAddEventModalOpen}
+          onClose={closeAppModal}
+          onEventAdded={fetchEvents}
+        />
+
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={closeAuthModal}
+          initialMode={modalRoute.authMode}
+          promptMessage={modalRoute.authPrompt}
+        />
+      </div>
+      </TagDisplayProvider>
     );
   }
 
   if (showStats) {
     return (
       <TagDisplayProvider map={tagResolutionMap}>
-      <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+      <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
         <AppHeader
           pathname={pathname}
           activeView="stats"
@@ -856,7 +1036,7 @@ function App() {
           onGoHome={goBackFromStats}
           onOpenStats={openStats}
           onOpenProfile={openProfile}
-          onOpenSettings={openSettingsModal}
+          onOpenSettings={openSettings}
           onAddEvent={openAddEventModal}
           onSignIn={() => openAuthModal('signin')}
           onSignOut={() => signOut()}
@@ -930,7 +1110,6 @@ function App() {
                   onRatingSubmitted={fetchEvents}
                   onEventUpdated={fetchEvents}
                   onTagClick={handleTagClick}
-                  onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
                   tagColors={appSettings}
                   customPerformerTags={[]}
                   wiggleOnlyClearsOnClickAway
@@ -951,22 +1130,6 @@ function App() {
           onEventAdded={fetchEvents}
         />
 
-        {isSettingsModalOpen && (
-          <SettingsModal
-            isOpen
-            onClose={() => {
-              closeAppModal();
-              fetchSettings();
-            }}
-            onSettingsUpdated={() => {
-              fetchSettings();
-              fetchTagResolutionForEvents(events).then(setTagResolutionMap);
-            }}
-            onSettingsPreview={setAppSettings}
-            onAccountUpdated={fetchEvents}
-          />
-        )}
-
         <AuthModal
           isOpen={isAuthModalOpen}
           onClose={closeAuthModal}
@@ -981,31 +1144,31 @@ function App() {
   if (showProfile) {
     if (authLoading) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
         </div>
       );
     }
     if (!user) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50 p-4">
           <div className="text-center">
             <p className="text-gray-700 mb-4">Sign in to view your profile.</p>
-            <a href={pathname} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Back to shows</a>
+            <a href={pathname} className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-neutral-800">Back to shows</a>
           </div>
         </div>
       );
     }
     if (!appSettings) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
         </div>
       );
     }
     return (
       <TagDisplayProvider map={tagResolutionMap}>
-      <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+      <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
         <AppHeader
           pathname={pathname}
           activeView="profile"
@@ -1016,7 +1179,7 @@ function App() {
           onGoHome={goBack}
           onOpenStats={openStats}
           onOpenProfile={openProfile}
-          onOpenSettings={openSettingsModal}
+          onOpenSettings={openSettings}
           onAddEvent={openAddEventModal}
           onSignIn={() => openAuthModal('signin')}
           onSignOut={() => signOut()}
@@ -1060,7 +1223,7 @@ function App() {
             pathname={pathname}
             onClose={goBack}
             onTagClick={handleTagClick}
-            onOpenEvent={(id, openWithWiggle, suggestSection, suggestCustomSlug) => openEventOverlay(id, 'viewRatings', openWithWiggle, suggestSection, suggestCustomSlug)}
+            onOpenEvent={(id, openWithWiggle, reorderSection, reorderCustomSlug) => openEventOverlay(id, 'viewRatings', openWithWiggle, reorderSection, reorderCustomSlug)}
             tagColors={appSettings}
             customPerformerTags={[]}
             visibleEventIds={new Set(filteredEvents.map((e) => e.id))}
@@ -1104,11 +1267,10 @@ function App() {
                   onRatingSubmitted={() => { fetchEvents(); }}
                   onEventUpdated={() => { fetchEvents(); }}
                   onTagClick={handleTagClick}
-                  onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
                   tagColors={appSettings}
                   customPerformerTags={[]}
-                  initialReorderSection={overlaySuggestCustomSlug ? undefined : overlaySuggestSection}
-                  initialCustomReorderSlug={overlaySuggestCustomSlug}
+                  initialReorderSection={overlayReorderCustomSlug ? undefined : overlayReorderSection}
+                  initialCustomReorderSlug={overlayReorderCustomSlug}
                   wiggleOnlyClearsOnClickAway
                   onReorderModeEntered={() => { overlayReorderEnteredAtRef.current = Date.now(); }}
                 />
@@ -1126,22 +1288,6 @@ function App() {
           onClose={closeAppModal}
           onEventAdded={fetchEvents}
         />
-
-        {isSettingsModalOpen && (
-          <SettingsModal
-            isOpen
-            onClose={() => {
-              closeAppModal();
-              fetchSettings();
-            }}
-            onSettingsUpdated={() => {
-              fetchSettings();
-              fetchTagResolutionForEvents(events).then(setTagResolutionMap);
-            }}
-            onSettingsPreview={setAppSettings}
-            onAccountUpdated={fetchEvents}
-          />
-        )}
 
         <AuthModal
           isOpen={isAuthModalOpen}
@@ -1163,8 +1309,8 @@ function App() {
 
   if (!appSettings) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
       </div>
     );
   }
@@ -1172,7 +1318,7 @@ function App() {
   return (
     <TagDisplayProvider map={tagResolutionMap}>
     {params.eventId && overlayEvent ? <EventJsonLd event={overlayEvent} /> : null}
-    <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+    <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
       <AppHeader
         pathname={pathname}
         activeView="home"
@@ -1183,7 +1329,7 @@ function App() {
         onGoHome={goToHome}
         onOpenStats={openStats}
         onOpenProfile={openProfile}
-        onOpenSettings={openSettingsModal}
+        onOpenSettings={openSettings}
         onAddEvent={openAddEventModal}
         onSignIn={() => openAuthModal('signin')}
         onSignOut={() => signOut()}
@@ -1250,7 +1396,7 @@ function App() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800"></div>
           </div>
         ) : events.length === 0 && !eventsError ? (
           <div className="text-center py-12">
@@ -1263,7 +1409,7 @@ function App() {
               {user && (
                 <button
                   onClick={openAddEventModal}
-                  className="px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  className="rounded-lg bg-primary px-6 py-3 text-primary-foreground transition-colors hover:bg-neutral-800"
                 >
                   Add Show
                 </button>
@@ -1280,7 +1426,7 @@ function App() {
               </p>
               <button
                 onClick={clearFilters}
-                className="px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                className="rounded-lg bg-primary px-6 py-3 text-primary-foreground transition-colors hover:bg-neutral-800"
               >
                 Clear Filters
               </button>
@@ -1310,11 +1456,10 @@ function App() {
                 onRatingSubmitted={fetchEvents}
                 onEventUpdated={fetchEvents}
                 onTagClick={handleTagClick}
-                onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
                 tagColors={appSettings}
                 customPerformerTags={[]}
                 viewHref={eventPagePath(event.id)}
-                onViewClick={(id, openWithWiggle, suggestSection, suggestCustomSlug) => openEventOverlay(id, undefined, openWithWiggle, suggestSection, suggestCustomSlug)}
+                onViewClick={(id, openWithWiggle, reorderSection, reorderCustomSlug) => openEventOverlay(id, undefined, openWithWiggle, reorderSection, reorderCustomSlug)}
               />
             </div>
           );
@@ -1361,21 +1506,6 @@ function App() {
         onEventAdded={fetchEvents}
       />
 
-      {isSettingsModalOpen && (
-        <SettingsModal
-          isOpen
-          onClose={() => {
-            closeAppModal();
-            fetchSettings();
-          }}
-          onSettingsUpdated={() => {
-            fetchSettings();
-            fetchTagResolutionForEvents(events).then(setTagResolutionMap);
-          }}
-          onSettingsPreview={setAppSettings}
-        />
-      )}
-
       <TagRatingsModal
         isOpen={isTagRatingsModalOpen}
         onClose={closeAppModal}
@@ -1411,11 +1541,10 @@ function App() {
                 onRatingSubmitted={() => { fetchEvents(); }}
                 onEventUpdated={() => { fetchEvents(); }}
                 onTagClick={handleTagClick}
-                onRequireAuth={() => openAuthModal('signup', 'Create an account to rate this show.')}
                 tagColors={appSettings}
                 customPerformerTags={[]}
-                initialReorderSection={overlaySuggestCustomSlug ? undefined : overlaySuggestSection}
-                initialCustomReorderSlug={overlaySuggestCustomSlug}
+                initialReorderSection={overlayReorderCustomSlug ? undefined : overlayReorderSection}
+                initialCustomReorderSlug={overlayReorderCustomSlug}
                 wiggleOnlyClearsOnClickAway
                 onReorderModeEntered={() => { overlayReorderEnteredAtRef.current = Date.now(); }}
               />

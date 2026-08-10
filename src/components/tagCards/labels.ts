@@ -5,6 +5,8 @@ export function getRoleLabelForTagType(tagType: string): string {
       return 'Producer';
     case 'designer':
       return 'Designer';
+    case 'artist':
+      return 'Artist';
     case 'model':
       return 'Model';
     case 'hair_makeup':
@@ -15,6 +17,8 @@ export function getRoleLabelForTagType(tagType: string): string {
       return 'Venue';
     case 'season':
       return 'Season';
+    case 'show_type':
+      return 'Show type';
     case 'header_tags':
       return 'Genre';
     case 'footer_tags':

@@ -1,6 +1,7 @@
 import { Search, X } from 'lucide-react';
 import type { DragEvent } from 'react';
 import type { AppSettings } from '../types/appSettings';
+import { showTypePillColors } from '../lib/showType';
 import { getPillColors } from './tagCards/getPillColors';
 
 export type CustomPerformerTagDef = { slug: string; bg_color: string; text_color: string };
@@ -45,16 +46,19 @@ interface PrimarySearchBarProps {
 
 function tagLabel(type: string): string {
   if (type === 'designer') return 'Designer: ';
+  if (type === 'artist') return 'Artist: ';
   if (type === 'model') return 'Model: ';
   if (type === 'producer') return 'Producer: ';
   if (type === 'city') return 'City: ';
   if (type === 'venue') return 'Venue: ';
   if (type === 'season') return 'Season: ';
   if (type === 'year') return 'Year: ';
+  if (type === 'date') return 'Date: ';
   if (type === 'hair_makeup') return 'Hair & Makeup: ';
   if (type === 'header_tags') return 'Genre: ';
   if (type === 'footer_tags') return 'Collection: ';
   if (type === 'custom_performer') return 'Custom: ';
+  if (type === 'show_type') return 'Show: ';
   return '';
 }
 
@@ -70,6 +74,8 @@ function suggestionTypeLabel(type: string): string {
   if (type === 'footer_tags') return 'Collection';
   if (type === 'hair_makeup') return 'Hair & Makeup';
   if (type === 'custom_performer') return 'Custom';
+  if (type === 'show_type') return 'Show';
+  if (type === 'date') return 'Date';
   return type.replace(/_/g, ' ');
 }
 
@@ -79,6 +85,10 @@ function pillColorsForFilter(
   appSettings: AppSettings,
   customPerformerTags?: CustomPerformerTagDef[]
 ): { bg: string; text: string } {
+  if (type === 'show_type') {
+    const colors = showTypePillColors(value);
+    return { bg: colors.backgroundColor, text: colors.color };
+  }
   if (type === 'custom_performer' && customPerformerTags?.length) {
     const slug = value.split('\x00')[0];
     const def = customPerformerTags.find((t) => t.slug === slug);
@@ -87,7 +97,7 @@ function pillColorsForFilter(
     }
   }
   const pillType =
-    type === 'year'
+    type === 'year' || type === 'date'
       ? 'year'
       : type.startsWith('custom:')
         ? 'custom_performer'
@@ -130,8 +140,8 @@ export default function PrimarySearchBar({
   const showTagSuggestions = searchFocused && tagSuggestions.length > 0;
 
   const searchFieldClass = embeddedInHeader
-    ? `relative flex h-10 w-full min-w-0 flex-nowrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-900 shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'bg-blue-50 ring-2 ring-blue-400' : ''}`
-    : `relative flex min-h-[2.5rem] w-full min-w-[200px] flex-nowrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`;
+    ? `relative flex h-10 w-full min-w-0 flex-nowrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-900 shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'bg-neutral-100 ring-2 ring-neutral-400' : ''}`
+    : `relative flex min-h-[2.5rem] w-full min-w-[200px] flex-nowrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'ring-2 ring-neutral-400 bg-neutral-100' : ''}`;
 
   const chipsAndInputRow =
     'flex min-h-0 min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-hidden';

@@ -3,12 +3,30 @@ import { Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 import { normalizeExternalUrl } from '../lib/externalUrl';
+import { resolveVenueFormattedAddress } from '../lib/resolveVenueAddress';
+import { isCanonicalCityLabel } from '../lib/cityPlaces';
 import { useAuth } from '../contexts/AuthContext';
 import { normalizeTagName, syncTagIdentitiesFromEventFields } from '../lib/tagIdentity';
+import {
+  SHOW_TYPE_OPTIONS,
+  featuredCreditHint,
+  featuredCreditLabel,
+  featuredCreditPlaceholder,
+  starringColumn,
+  type ShowType,
+} from '../lib/showType';
+import {
+  SPECIAL_GUESTS_LABEL,
+  SPECIAL_GUESTS_SLUG,
+  withSpecialGuests,
+  withSpecialGuestsMeta,
+} from '../lib/specialGuests';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
 import CustomPerformerCategoryInput from './CustomPerformerCategoryInput';
 import ModalShell from './ModalShell';
+import { Button, Input, Label } from './ui';
+import { cn } from '../lib/utils';
 
 interface AddEventModalProps {
   isOpen: boolean;
@@ -18,15 +36,16 @@ interface AddEventModalProps {
 
 export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEventModalProps) {
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [date, setDate] = useState('');
+  const [showType, setShowType] = useState<ShowType>('fashion');
   const [city, setCity] = useState<string[]>([]);
   const [venue, setVenue] = useState<string[]>([]);
-  const [address, setAddress] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [countdownLink, setCountdownLink] = useState('');
   const [producers, setProducers] = useState<string[]>([]);
   const [designers, setDesigners] = useState<string[]>([]);
+  const [artists, setArtists] = useState<string[]>([]);
+  const [specialGuests, setSpecialGuests] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [hairMakeup, setHairMakeup] = useState<string[]>([]);
   const [headerTags, setHeaderTags] = useState<string[]>([]);
@@ -48,12 +67,12 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       return;
     }
     const arr = (v: unknown) => (Array.isArray(v) ? v : []).map((s) => String(s).trim()).filter(Boolean);
-    if (arr(producers).length === 0 || arr(designers).length === 0) {
-      setError('Please add at least one producer and one designer');
-      return;
-    }
     if (arr(city).length === 0) {
       setError('Please add a city');
+      return;
+    }
+    if (!isCanonicalCityLabel(arr(city)[0] || '')) {
+      setError('Please select a city from the suggestions (e.g. Denver, CO)');
       return;
     }
 
@@ -85,9 +104,10 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       };
       const cleanP = (a: string[]) => resolveTags((Array.isArray(a) ? a : []).map((s) => String(s).trim()).filter(Boolean));
       const resolvedProducers = cleanP(producers);
-      const resolvedDesigners = cleanP(designers);
-      const resolvedModels = cleanP(models);
-      const resolvedHairMakeup = cleanP(hairMakeup);
+      const resolvedDesigners = showType === 'fashion' ? cleanP(designers) : [];
+      const resolvedArtists = showType === 'music' ? cleanP(artists) : [];
+      const resolvedModels = showType === 'fashion' ? cleanP(models) : [];
+      const resolvedHairMakeup = showType === 'fashion' ? cleanP(hairMakeup) : [];
       const resolvedHeaderTags = cleanP(headerTags);
       const resolvedFooterTags = cleanP(footerTags);
       const resolvedCustomTags: Record<string, string[]> = {};
@@ -97,31 +117,35 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
           resolvedCustomTags[slug] = resolveTags(cleaned);
         }
       }
+      const resolvedSpecialGuests = showType === 'music' ? cleanP(specialGuests) : [];
+      const customTagsWithGuests = withSpecialGuests(resolvedCustomTags, resolvedSpecialGuests);
+      const customMeta = withSpecialGuestsMeta(
+        Object.fromEntries(inlineCustomTypes.map((t) => [t.slug, { icon: t.icon || 'Tag' }])),
+        resolvedSpecialGuests.length > 0
+      );
       const venueVal = venue[0] || null;
-      if (resolvedProducers.length === 0 || resolvedDesigners.length === 0) {
-        setError('Please add at least one producer and one designer');
-        setLoading(false);
-        return;
-      }
+      const cityVal = (city && city[0]) || '';
+      const formattedAddress = await resolveVenueFormattedAddress(venueVal, cityVal);
 
       const { error: insertError } = await supabase.from('events').insert({
         name,
-        description: description || null,
         date,
-        city: (city && city[0]) || '',
+        city: cityVal,
         season: date ? getSeasonFromDate(date) : null,
+        show_type: showType,
         location: venueVal,
-        address: address || null,
+        formatted_address: formattedAddress,
         image_url: imageUrl || null,
         countdown_link: normalizedCountdownLink,
         producers: resolvedProducers.length ? resolvedProducers : null,
         featured_designers: resolvedDesigners.length ? resolvedDesigners : null,
+        featured_artists: resolvedArtists.length ? resolvedArtists : null,
         models: resolvedModels.length ? resolvedModels : null,
         hair_makeup: resolvedHairMakeup.length ? resolvedHairMakeup : null,
         header_tags: resolvedHeaderTags.length ? resolvedHeaderTags : null,
         footer_tags: resolvedFooterTags.length ? resolvedFooterTags : null,
-        custom_tags: Object.keys(resolvedCustomTags).length ? resolvedCustomTags : null,
-        custom_tag_meta: inlineCustomTypes.length ? Object.fromEntries(inlineCustomTypes.map((t) => [t.slug, { icon: t.icon || 'Tag' }])) : null,
+        custom_tags: Object.keys(customTagsWithGuests).length ? customTagsWithGuests : null,
+        custom_tag_meta: customMeta,
         created_by: user.id,
       });
 
@@ -131,12 +155,13 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
         {
           producers: resolvedProducers,
           featured_designers: resolvedDesigners,
+          featured_artists: resolvedArtists,
           models: resolvedModels,
           hair_makeup: resolvedHairMakeup,
           header_tags: resolvedHeaderTags,
           footer_tags: resolvedFooterTags,
           location: venueVal,
-          custom_tags: Object.keys(resolvedCustomTags).length ? resolvedCustomTags : null,
+          custom_tags: Object.keys(customTagsWithGuests).length ? customTagsWithGuests : null,
         },
         user.id
       );
@@ -144,15 +169,16 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       onEventAdded();
       onClose();
       setName('');
-      setDescription('');
       setDate('');
+      setShowType('fashion');
       setCity([]);
       setVenue([]);
-      setAddress('');
       setImageUrl('');
       setCountdownLink('');
       setProducers([]);
       setDesigners([]);
+      setArtists([]);
+      setSpecialGuests([]);
       setModels([]);
       setHairMakeup([]);
       setHeaderTags([]);
@@ -176,48 +202,58 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
   };
 
   return (
-    <ModalShell onClose={onClose} title="Create New Fashion Show">
+    <ModalShell onClose={onClose} title={showType === 'music' ? 'Create New Music Show' : 'Create New Fashion Show'}>
         <form onSubmit={handleSubmit} className="space-y-4 p-4 sm:p-6">
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-              Show Name *
-            </label>
-            <input
+            <Label htmlFor="name" required>
+              Show Name
+            </Label>
+            <Input
               id="name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
             />
           </div>
 
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
-            <textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
-              placeholder="Short description of the show"
-            />
-          </div>
+          <fieldset>
+            <legend className="mb-1 block text-sm font-medium text-foreground">Show type</legend>
+            <div className="flex gap-2" role="radiogroup" aria-label="Show type">
+              {SHOW_TYPE_OPTIONS.map((opt) => {
+                const selected = showType === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setShowType(opt.value)}
+                    className={cn(
+                      'min-h-10 flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
+                      selected
+                        ? 'border-neutral-900 bg-neutral-900 text-white'
+                        : 'border-input bg-card text-foreground hover:bg-muted',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
-                Date *
-              </label>
-              <input
+              <Label htmlFor="date" required>
+                Date
+              </Label>
+              <Input
                 id="date"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
               />
             </div>
 
@@ -230,8 +266,8 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
                 useCitySuggestions
                 maxTags={1}
                 required
-                placeholder="e.g., Paris, New York, Milan"
-                hint="Type and press Enter; suggestions from existing events"
+                placeholder="e.g., Denver, CO"
+                hint="Type to search, then pick a city from the list"
               />
             </div>
           </div>
@@ -247,61 +283,62 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             hint="Type and press Enter; suggestions from venues already used on events"
           />
 
-          <div>
-            <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-              Street address
-            </label>
-            <textarea
-              id="address"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-              placeholder="Shown on the card when set; included in Event structured data"
+          <TagInput
+            id="starring"
+            label={featuredCreditLabel(showType)}
+            value={showType === 'music' ? artists : designers}
+            onChange={showType === 'music' ? setArtists : setDesigners}
+            tagColumn={starringColumn(showType)}
+            placeholder={featuredCreditPlaceholder(showType)}
+            hint={featuredCreditHint(showType)}
+          />
+
+          {showType === 'music' && (
+            <TagInput
+              id="specialGuests"
+              label={SPECIAL_GUESTS_LABEL}
+              value={specialGuests}
+              onChange={setSpecialGuests}
+              tagColumn="featured_artists"
+              placeholder="e.g., Opening act, Special guest"
+              hint="Openers and announced special guests; type and press Enter"
+              expandable
             />
-          </div>
+          )}
 
           <TagInput
             id="producers"
-            label="Producers"
+            label="Produced By"
             value={producers}
             onChange={setProducers}
             tagColumn="producers"
             placeholder="e.g., Fashion Production Co, Designer Studios"
-            required
-            hint="Type and press Enter to add; suggestions appear as you type"
+            expandable
           />
 
-          <TagInput
-            id="designers"
-            label="Featured Designers"
-            value={designers}
-            onChange={setDesigners}
-            tagColumn="featured_designers"
-            placeholder="e.g., Valentino, Gucci, Alexander McQueen"
-            required
-            hint="Type and press Enter to add; suggestions appear as you type"
-          />
+          {showType === 'fashion' && (
+            <>
+              <TagInput
+                id="models"
+                label="Featured Models"
+                value={models}
+                onChange={setModels}
+                tagColumn="models"
+                placeholder="e.g., Gigi Hadid, Bella Hadid, Karlie Kloss"
+                expandable
+              />
 
-          <TagInput
-            id="models"
-            label="Featured Models"
-            value={models}
-            onChange={setModels}
-            tagColumn="models"
-            placeholder="e.g., Gigi Hadid, Bella Hadid, Karlie Kloss"
-            hint="Type and press Enter to add; suggestions appear as you type"
-          />
-
-          <TagInput
-            id="hairMakeup"
-            label="Hair & Makeup Artists"
-            value={hairMakeup}
-            onChange={setHairMakeup}
-            tagColumn="hair_makeup"
-            placeholder="e.g., James Boehmer, Pat McGrath"
-            hint="Type and press Enter to add; suggestions appear as you type"
-          />
+              <TagInput
+                id="hairMakeup"
+                label="Hair & Makeup"
+                value={hairMakeup}
+                onChange={setHairMakeup}
+                tagColumn="hair_makeup"
+                placeholder="e.g., James Boehmer, Pat McGrath"
+                expandable
+              />
+            </>
+          )}
 
           <TagInput
             id="headerTags"
@@ -309,80 +346,82 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             value={headerTags}
             onChange={setHeaderTags}
             tagColumn="header_tags"
-            placeholder="e.g., Spring 2024, Couture, Limited Edition"
-            hint="Tags for the header section"
+            placeholder={showType === 'music' ? 'e.g., Indie, Jazz, Electronic' : 'e.g., Spring 2024, Couture, Limited Edition'}
+            expandable
           />
 
           {inlineCustomTypes.map(({ slug, label, icon }) => (
-            <div key={slug} className="flex flex-col sm:flex-row items-stretch sm:items-start gap-3">
-              <div className="shrink-0 w-full sm:w-28">
-                <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-                <IconPicker label="" value={icon} onChange={(v) => setInlineCustomTypes((prev) => prev.map((t) => (t.slug === slug ? { ...t, icon: v } : t)))} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <TagInput
-                  id={`custom-inline-${slug}`}
-                  label=""
-                  value={customTags[slug] || []}
-                  onChange={(v) => setCustomTags((prev) => ({ ...prev, [slug]: v }))}
-                  customTagSlug={slug}
-                  placeholder={`e.g., ${label}...`}
-                  hint="Type and press Enter to add; suggestions appear as you type"
+            <TagInput
+              key={slug}
+              id={`custom-inline-${slug}`}
+              label={label}
+              value={customTags[slug] || []}
+              onChange={(v) => setCustomTags((prev) => ({ ...prev, [slug]: v }))}
+              customTagSlug={slug}
+              placeholder={`e.g., ${label}...`}
+              expandable
+              headerAction={
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInlineCustomTypes((prev) => prev.filter((t) => t.slug !== slug));
+                    setCustomTags((prev) => {
+                      const next = { ...prev };
+                      delete next[slug];
+                      return next;
+                    });
+                  }}
+                  className="shrink-0 rounded p-1.5 text-red-500 hover:bg-red-50 hover:text-red-700"
+                  title="Remove this category"
+                  aria-label={`Remove ${label} category`}
+                >
+                  <Trash2 size={16} />
+                </button>
+              }
+              expandedExtras={
+                <IconPicker
+                  label="Icon"
+                  value={icon}
+                  onChange={(v) =>
+                    setInlineCustomTypes((prev) => prev.map((t) => (t.slug === slug ? { ...t, icon: v } : t)))
+                  }
                 />
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setInlineCustomTypes((prev) => prev.filter((t) => t.slug !== slug));
-                  setCustomTags((prev) => {
-                    const next = { ...prev };
-                    delete next[slug];
-                    return next;
-                  });
-                }}
-                className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded shrink-0 mt-6"
-                title="Remove this category"
-                aria-label={`Remove ${label} category`}
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
+              }
+            />
           ))}
 
-          <div className="flex gap-2 items-end">
+          <div className="flex items-end gap-2">
             <div className="flex-1">
-              <label htmlFor="newCustomType" className="block text-sm font-medium text-gray-700 mb-1">
-                Add custom performer category
-              </label>
+              <Label htmlFor="newCustomType">Add custom category</Label>
               <CustomPerformerCategoryInput
                 id="newCustomType"
                 value={newCustomTypeLabel}
                 onChange={setNewCustomTypeLabel}
-                excludedSlugs={inlineCustomTypes.map((t) => t.slug)}
+                excludedSlugs={[SPECIAL_GUESTS_SLUG, ...inlineCustomTypes.map((t) => t.slug)]}
                 onPickExisting={(slug, label) => {
-                  if (inlineCustomTypes.some((t) => t.slug === slug)) return;
+                  if (slug === SPECIAL_GUESTS_SLUG || inlineCustomTypes.some((t) => t.slug === slug)) return;
                   setInlineCustomTypes((prev) => [...prev, { slug, label, icon: 'Tag' }]);
                 }}
               />
-              <p className="text-xs text-gray-500 mt-0.5">
-                Choose an existing category as you type, or enter a new name and click Add
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                e.g. Presented By — choose existing or type a new name, then Add
               </p>
             </div>
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => {
                 const label = newCustomTypeLabel.trim();
                 if (!label) return;
                 const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-                if (!slug) return;
+                if (!slug || slug === SPECIAL_GUESTS_SLUG) return;
                 if (inlineCustomTypes.some((t) => t.slug === slug)) return;
                 setInlineCustomTypes((prev) => [...prev, { slug, label, icon: 'Tag' }]);
                 setNewCustomTypeLabel('');
               }}
-              className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium shrink-0"
             >
               Add
-            </button>
+            </Button>
           </div>
 
           <TagInput
@@ -392,51 +431,41 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             onChange={setFooterTags}
             tagColumn="footer_tags"
             placeholder="e.g., Award Winning, Sustainable Fashion, NYFW Fall 2024"
-            hint="Additional descriptors or event groupings (e.g., NYFW Fall 2024)"
+            expandable
           />
 
           <div>
-            <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700 mb-1">
-              Show Image URL
-            </label>
-            <input
+            <Label htmlFor="imageUrl">Show Image URL</Label>
+            <Input
               id="imageUrl"
               type="url"
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="https://…"
             />
           </div>
 
           <div>
-            <label htmlFor="countdownLink" className="block text-sm font-medium text-gray-700 mb-1">
-              Official ticket link
-            </label>
-            <input
+            <Label htmlFor="countdownLink">Official ticket link</Label>
+            <Input
               id="countdownLink"
               type="url"
               value={countdownLink}
               onChange={(e) => setCountdownLink(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="https://… public ticket or registration page"
             />
-            <p className="text-xs text-gray-500 mt-0.5">Opens when the countdown pill is tapped on upcoming shows.</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Opens when the countdown pill is tapped on upcoming shows.</p>
           </div>
 
           {error && (
-            <div className="text-sm text-red-600">
+            <div className="text-sm text-destructive">
               {error}
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 font-medium"
-          >
+          <Button type="submit" disabled={loading} className="w-full">
             {loading ? 'Creating...' : 'Create Show'}
-          </button>
+          </Button>
         </form>
     </ModalShell>
   );

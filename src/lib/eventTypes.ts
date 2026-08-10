@@ -1,22 +1,24 @@
 /** Shared event row shape (also used by Vite prerender; keep free of runtime imports). */
+export type ShowType = 'fashion' | 'music';
+
 export interface Event {
   id: string;
   name: string;
-  description: string;
   date: string;
   city: string;
   season: string | null;
+  /** Fashion vs music show; legacy rows without the column normalize to fashion in the UI. */
+  show_type?: ShowType | null;
   location: string | null;
-  address: string | null;
-  /** Optional single-line full address (legacy rows); cards + Event JSON-LD streetAddress when set. */
+  /** Auto-resolved street address for JSON-LD only (not shown in the UI). */
   formatted_address?: string | null;
-  /** Optional external place identifier (legacy rows); unused by current venue UI. */
-  google_place_id?: string | null;
   image_url: string | null;
   /** Official ticket / registration URL (countdown pill on upcoming events). */
   countdown_link?: string | null;
   producers: string[] | null;
   featured_designers: string[] | null;
+  /** Music-show starring artists (separate from fashion designers). */
+  featured_artists?: string[] | null;
   models: string[] | null;
   hair_makeup: string[] | null;
   header_tags?: string[] | null;

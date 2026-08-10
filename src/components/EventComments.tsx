@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { MessageCircle, Send, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { Button, Input } from './ui';
 
 interface Comment {
   id: string;
@@ -134,28 +135,24 @@ export default function EventComments({ eventId, isExpanded }: EventCommentsProp
       {user && (
         <form onSubmit={handleSubmitComment} className="mb-4">
           <div className="flex gap-2">
-            <input
+            <Input
               type="text"
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
               placeholder="Add a comment..."
-              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1"
               disabled={submitting}
             />
-            <button
-              type="submit"
-              disabled={submitting || !newComment.trim()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
+            <Button type="submit" disabled={submitting || !newComment.trim()} aria-label="Send comment">
               <Send size={16} />
-            </button>
+            </Button>
           </div>
         </form>
       )}
 
       {loading ? (
         <div className="flex justify-center py-4">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-neutral-900"></div>
         </div>
       ) : comments.length === 0 ? (
         <p className="text-sm text-gray-500 italic py-2">No comments yet. Be the first to comment!</p>

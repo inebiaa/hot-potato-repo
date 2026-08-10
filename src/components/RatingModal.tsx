@@ -7,6 +7,7 @@ import CommentEditor from './CommentEditor';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 import { getEventTagStyles } from '../lib/commentTagParsing';
 import ModalShell from './ModalShell';
+import { Button } from './ui';
 
 interface RatingModalTagColors {
   producer_bg_color?: string;
@@ -167,7 +168,7 @@ export default function RatingModal({
                   onClick={() => setRating(star)}
                   onMouseEnter={() => setHoveredRating(star)}
                   onMouseLeave={() => setHoveredRating(0)}
-                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500"
                   aria-label={`${star} star${star > 1 ? 's' : ''}`}
                 >
                   <Star
@@ -220,23 +221,20 @@ export default function RatingModal({
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              type="submit"
-              disabled={loading}
-              className="min-h-[44px] flex-1 bg-blue-600 text-white py-2.5 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 text-base sm:text-sm font-medium"
-            >
+            <Button type="submit" disabled={loading} className="min-h-[44px] flex-1">
               {loading ? 'Submitting...' : existingRating ? 'Update Rating' : 'Submit Rating'}
-            </button>
+            </Button>
 
             {existingRating && (
-              <button
+              <Button
                 type="button"
+                variant="danger"
                 onClick={handleDelete}
                 disabled={loading}
-                className="min-h-[44px] px-4 bg-red-600 text-white py-2.5 rounded-md hover:bg-red-700 transition-colors disabled:bg-gray-400 text-base sm:text-sm font-medium"
+                className="min-h-[44px]"
               >
                 Delete
-              </button>
+              </Button>
             )}
           </div>
         </form>

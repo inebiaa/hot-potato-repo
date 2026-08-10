@@ -2,13 +2,16 @@ import { Routes, Route } from 'react-router-dom';
 import App from './App';
 
 /**
- * Same app shell for `/` and `/event/:eventId` so deep links and JSON-LD share one tree.
+ * Single App instance for `/` and `/event/:eventId`.
+ * Separate sibling routes remount App on every open/close and wipe in-memory state.
  */
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<App />} />
-      <Route path="/event/:eventId" element={<App />} />
+      <Route element={<App />}>
+        <Route path="/" />
+        <Route path="/event/:eventId" />
+      </Route>
     </Routes>
   );
 }

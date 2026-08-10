@@ -5,6 +5,7 @@ import { getSeasonFromDate } from '../lib/season';
 import type { Event } from '../lib/supabase';
 import { effectiveHeaderTags } from '../lib/eventHeaderTags';
 import { eventArrayMatchesFilter, eventMatchesVenueTag, type TagResolutionMap } from '../lib/tagDisplayResolution';
+import { getSpecialGuests } from '../lib/specialGuests';
 import { sameTagSpelling } from '../lib/tagIdentity';
 import TagCardRouter from './tagCards/TagCardRouter';
 import ModalShell from './ModalShell';
@@ -105,6 +106,7 @@ export default function TagRatingsModal({
   const matchEvent = (e: {
     producers?: string[] | null;
     featured_designers?: string[] | null;
+    featured_artists?: string[] | null;
     models?: string[] | null;
     hair_makeup?: string[] | null;
     city?: string;
@@ -112,12 +114,18 @@ export default function TagRatingsModal({
     date?: string;
     header_tags?: string[] | null;
     footer_tags?: string[] | null;
+    custom_tags?: Record<string, string[]> | null;
   }) => {
     switch (tagType) {
       case 'producer':
         return eventArrayMatchesFilter(tagResolutionMap, 'producer', e.producers, tagValue);
       case 'designer':
         return eventArrayMatchesFilter(tagResolutionMap, 'designer', e.featured_designers, tagValue);
+      case 'artist':
+        return (
+          eventArrayMatchesFilter(tagResolutionMap, 'artist', e.featured_artists, tagValue) ||
+          eventArrayMatchesFilter(tagResolutionMap, 'artist', getSpecialGuests(e.custom_tags), tagValue)
+        );
       case 'model':
         return eventArrayMatchesFilter(tagResolutionMap, 'model', e.models, tagValue);
       case 'hair_makeup':
@@ -162,7 +170,7 @@ export default function TagRatingsModal({
       } else {
         const { data: allEvents, error: eventsError } = await supabase
           .from('events')
-          .select('id, name, date, producers, featured_designers, models, hair_makeup, city, location, header_tags, footer_tags, custom_tags, custom_tag_meta')
+          .select('id, name, date, producers, featured_designers, featured_artists, models, hair_makeup, city, location, header_tags, footer_tags, custom_tags, custom_tag_meta')
           .order('date', { ascending: false });
 
         if (eventsError) throw eventsError;
@@ -276,7 +284,7 @@ export default function TagRatingsModal({
       <div className={eventOverlayOpen ? 'pointer-events-none' : ''}>
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12 px-6">
-            <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin mb-3" />
+            <div className="w-8 h-8 border-2 border-gray-300 border-t-neutral-800 rounded-full animate-spin mb-3" />
             <p className="text-sm text-gray-500">Loading…</p>
           </div>
         ) : (

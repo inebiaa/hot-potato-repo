@@ -10,11 +10,6 @@ function escapeHtmlAttr(s: string): string {
 }
 
 export function buildEventOgDescription(event: Event, maxLen = 200): string {
-  const desc = event.description?.trim();
-  if (desc) {
-    if (desc.length <= maxLen) return desc;
-    return `${desc.slice(0, Math.max(1, maxLen - 1))}…`;
-  }
   const bits: string[] = [event.name];
   if (event.date?.trim()) bits.push(formatEventDateDisplay(event.date.trim()));
   const place = [event.location?.trim(), event.city?.trim()].filter(Boolean).join(' · ');

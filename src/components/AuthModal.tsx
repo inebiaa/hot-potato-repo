@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import ModalShell from './ModalShell';
+import { Button, Input, Label, Modal } from './ui';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -62,28 +62,27 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
   };
 
   return (
-    <ModalShell
+    <Modal
       onClose={onClose}
       title={isLogin ? 'Sign In' : 'Create Account'}
       panelClassName="max-w-md sm:rounded-xl"
     >
-        <div className="p-4 sm:p-6">
+      <div className="p-4 sm:p-6">
         {promptMessage && (
-          <p className="text-sm text-gray-600 mb-5">{promptMessage}</p>
+          <p className="mb-5 text-sm text-muted-foreground">{promptMessage}</p>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            <Label htmlFor="email" required>
               Email
-            </label>
-            <input
+            </Label>
+            <Input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
               placeholder="Enter email"
               autoComplete="email"
             />
@@ -92,26 +91,25 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
           {!isLogin && (
             <>
               <div>
-                <label htmlFor="yourName" className="block text-sm font-medium text-gray-700 mb-1">
+                <Label htmlFor="yourName" required>
                   Display Name
-                </label>
-                <input
+                </Label>
+                <Input
                   id="yourName"
                   type="text"
                   value={yourName}
                   onChange={(e) => setYourName(e.target.value)}
                   required={!isLogin}
                   maxLength={80}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
                   placeholder="e.g., Jane Doe"
                 />
-                <p className="text-xs text-gray-500 mt-1">Your public display name for credits and mentions</p>
+                <p className="mt-1 text-xs text-muted-foreground">Your public display name for credits and mentions</p>
               </div>
               <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+                <Label htmlFor="username" required>
                   Username
-                </label>
-                <input
+                </Label>
+                <Input
                   id="username"
                   type="text"
                   value={username}
@@ -121,19 +119,18 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
                   maxLength={30}
                   pattern="[a-zA-Z0-9_-]+"
                   title="Username must be 4-30 characters and contain only letters, numbers, underscores, and hyphens"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
                   placeholder="e.g., janedoe2024"
                 />
-                <p className="text-xs text-gray-500 mt-1">Your unique username for your profile link and credits</p>
+                <p className="mt-1 text-xs text-muted-foreground">Your unique username for your profile link and credits</p>
               </div>
             </>
           )}
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            <Label htmlFor="password" required>
               Password
-            </label>
-            <input
+            </Label>
+            <Input
               id="password"
               type="password"
               value={password}
@@ -141,55 +138,50 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
               required
               minLength={6}
               autoComplete={isLogin ? 'current-password' : 'new-password'}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
             />
           </div>
 
           {!isLogin && (
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+              <Label htmlFor="confirmPassword" required>
                 Confirm Password
-              </label>
-              <input
+              </Label>
+              <Input
                 id="confirmPassword"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required={!isLogin}
                 minLength={6}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
                 placeholder="Re-enter your password"
               />
             </div>
           )}
 
           {error && (
-            <div className={`text-sm ${error.includes('created') ? 'text-green-600' : 'text-red-600'}`}>
+            <div className={`text-sm ${error.includes('created') ? 'text-green-700' : 'text-destructive'}`}>
               {error}
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400"
-          >
+          <Button type="submit" disabled={loading} className="w-full">
             {loading ? 'Loading...' : isLogin ? 'Sign In' : 'Sign Up'}
-          </button>
+          </Button>
         </form>
 
         <div className="mt-4 text-center text-sm">
           <button
+            type="button"
             onClick={() => {
               setIsLogin(!isLogin);
               setError('');
             }}
-            className="text-blue-600 hover:underline"
+            className="text-foreground underline-offset-2 hover:underline"
           >
             {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>
         </div>
-        </div>
-    </ModalShell>
+      </div>
+    </Modal>
   );
 }

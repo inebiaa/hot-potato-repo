@@ -163,13 +163,13 @@ function attachColumnResize(
 }
 
 const GRIP_TRAILING =
-  'absolute right-0 top-0 z-10 flex h-full w-3 -translate-x-px touch-none items-center justify-center cursor-col-resize rounded-sm hover:bg-stone-300/40 active:bg-stone-400/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-400';
+  'absolute right-0 top-0 z-10 flex h-full w-3 -translate-x-px touch-none items-center justify-center cursor-col-resize rounded-sm hover:bg-neutral-300/40 active:bg-neutral-400/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400';
 const GRIP_LEADING =
-  'absolute left-0 top-0 z-10 flex h-full w-3 translate-x-px touch-none items-center justify-center cursor-col-resize rounded-sm hover:bg-stone-300/40 active:bg-stone-400/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-400';
+  'absolute left-0 top-0 z-10 flex h-full w-3 translate-x-px touch-none items-center justify-center cursor-col-resize rounded-sm hover:bg-neutral-300/40 active:bg-neutral-400/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400';
 
-const HDR = 'text-[10px] font-semibold uppercase tracking-wider text-stone-400';
-const CELL_BORDER = 'border-r border-stone-200/80';
-const CELL_BORDER_BODY = 'border-r border-stone-100 group-hover:border-stone-200/50';
+const HDR = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-400';
+const CELL_BORDER = 'border-r border-neutral-200/80';
+const CELL_BORDER_BODY = 'border-r border-neutral-100 group-hover:border-neutral-200/50';
 
 function defaultVisibility(): Record<PlaylistOptionalColumnId, boolean> {
   return {
@@ -213,11 +213,7 @@ function cityOnly(event: Event): string {
 }
 
 function venueLine(event: Event): string {
-  const parts: string[] = [];
-  if (event.location?.trim()) parts.push(event.location.trim());
-  const addr = (event.formatted_address?.trim() || event.address?.trim() || '').replace(/\s+/g, ' ');
-  if (addr) parts.push(addr);
-  return parts.join(' · ') || '';
+  return event.location?.trim() || '';
 }
 
 function producersLine(event: Event, map: TagResolutionMap | null): string {
@@ -230,6 +226,12 @@ function designersLine(event: Event, map: TagResolutionMap | null): string {
   const arr = [...new Set((event.featured_designers || []).map((v) => v?.trim()).filter(Boolean) as string[])];
   if (arr.length === 0) return '';
   return arr.map((v) => displayTagLabel(map, 'designer', v)).join(', ');
+}
+
+function artistsLine(event: Event, map: TagResolutionMap | null): string {
+  const arr = [...new Set((event.featured_artists || []).map((v) => v?.trim()).filter(Boolean) as string[])];
+  if (arr.length === 0) return '';
+  return arr.map((v) => displayTagLabel(map, 'artist', v)).join(', ');
 }
 
 function buildDetailsSegment(
@@ -257,6 +259,8 @@ function buildDetailsSegment(
   if (visible.designers) {
     const d = designersLine(event, map);
     if (d) parts.push(d);
+    const a = artistsLine(event, map);
+    if (a) parts.push(a);
   }
   return parts.join(' · ');
 }
@@ -303,7 +307,7 @@ function ResizeGrip({
       }}
       className={gripClass}
     >
-      <span className="h-4 w-px shrink-0 rounded-full bg-stone-400" aria-hidden />
+      <span className="h-4 w-px shrink-0 rounded-full bg-neutral-400" aria-hidden />
     </div>
   );
 }
@@ -348,7 +352,7 @@ function PlaylistTitle({
     <div ref={wrapRef} className="min-w-0 w-full max-w-full px-2 text-left">
       <span
         ref={spanRef}
-        className="block truncate text-left text-[15px] font-medium leading-snug tracking-tight text-stone-900"
+        className="block truncate text-left text-[15px] font-medium leading-snug tracking-tight text-neutral-900"
         title={fullName}
       >
         {useAbbr ? abbreviated : fullName}
@@ -362,15 +366,16 @@ interface ProfileReviewsPlaylistProps {
   onOpenEvent?: (
     eventId: string,
     openWithWiggle?: boolean,
-    suggestSection?: keyof {
+    reorderSection?: keyof {
       producers: string[];
       featured_designers: string[];
+      featured_artists: string[];
       models: string[];
       hair_makeup: string[];
       header_tags: string[];
       footer_tags: string[];
     } | 'custom',
-    suggestCustomSlug?: string
+    reorderCustomSlug?: string
   ) => void;
 }
 
@@ -519,10 +524,10 @@ export default function ProfileReviewsPlaylist({ rows, onOpenEvent }: ProfileRev
   const showDateLeadingGrip = visible.date && !visible.avg && !visible.you;
 
   const headerStickyClass =
-    'sticky top-0 z-10 border-b border-stone-200/90 bg-stone-100/95 backdrop-blur-sm';
+    'sticky top-0 z-10 border-b border-neutral-200/90 bg-neutral-100/95 backdrop-blur-sm';
   const headerGridClass = 'grid w-full min-w-0 items-stretch text-left';
   const bodyRowClass =
-    'grid w-full min-w-0 max-w-full touch-manipulation items-center border-b border-stone-100 text-left transition-colors hover:bg-stone-50 active:bg-stone-100/70 odd:bg-white even:bg-stone-50/40 group';
+    'grid w-full min-w-0 max-w-full touch-manipulation items-center border-b border-neutral-100 text-left transition-colors hover:bg-neutral-50 active:bg-neutral-100/70 odd:bg-white even:bg-neutral-50/40 group';
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-full sm:max-w-5xl">
@@ -530,7 +535,7 @@ export default function ProfileReviewsPlaylist({ rows, onOpenEvent }: ProfileRev
         <div ref={menuRef} className="relative">
           <button
             type="button"
-            className={`rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100/90 hover:text-stone-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-400/80 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${menuOpen ? 'bg-stone-100/80 text-stone-700' : ''}`}
+            className={`rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100/90 hover:text-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/80 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${menuOpen ? 'bg-neutral-100/80 text-neutral-700' : ''}`}
             aria-expanded={menuOpen}
             aria-haspopup="dialog"
             aria-controls="playlist-display-menu"
@@ -546,18 +551,18 @@ export default function ProfileReviewsPlaylist({ rows, onOpenEvent }: ProfileRev
             <div
               id="playlist-display-menu"
               role="dialog"
-              className="absolute right-0 top-full z-40 mt-1 w-[min(17rem,calc(100vw-1.5rem))] rounded-xl border border-stone-200/90 bg-white py-1 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.08)]"
+              className="absolute right-0 top-full z-40 mt-1 w-[min(17rem,calc(100vw-1.5rem))] rounded-xl border border-neutral-200/90 bg-white py-1 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.08)]"
             >
-              <p className="border-b border-stone-100 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-stone-400">
+              <p className="border-b border-neutral-100 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
                 Row layout
               </p>
               <ul className="max-h-72 overflow-y-auto py-0.5 [scrollbar-width:thin]">
                 {OPTIONAL_COLUMN_META.map(({ id, menuLabel }) => (
                   <li key={id}>
-                    <label className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left text-sm text-stone-700 hover:bg-stone-50/90">
+                    <label className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left text-sm text-neutral-700 hover:bg-neutral-50/90">
                       <input
                         type="checkbox"
-                        className="shrink-0 rounded border-stone-300 text-stone-700 focus:ring-stone-400"
+                        className="shrink-0 rounded border-neutral-300 text-neutral-700 focus:ring-neutral-400"
                         checked={visible[id]}
                         onChange={() => toggle(id)}
                       />
@@ -571,7 +576,7 @@ export default function ProfileReviewsPlaylist({ rows, onOpenEvent }: ProfileRev
         </div>
       </div>
 
-      <div className="min-w-0 rounded-xl border border-stone-200 bg-white shadow-sm">
+      <div className="min-w-0 rounded-xl border border-neutral-200 bg-white shadow-sm">
         <div className="profile-reviews-playlist-scroll max-h-[min(70vh,36rem)] min-w-0 touch-manipulation overflow-x-auto overflow-y-auto overscroll-x-contain">
           <div className="mx-auto w-full min-w-full max-w-full">
             <div className={`${headerStickyClass} w-full min-w-full`}>
@@ -688,7 +693,7 @@ export default function ProfileReviewsPlaylist({ rows, onOpenEvent }: ProfileRev
                     style={{ gridTemplateColumns }}
                   >
                     <div
-                      className={`flex min-h-[44px] min-w-0 items-center justify-start pl-2 text-xs tabular-nums text-stone-400 ${CELL_BORDER_BODY}`}
+                      className={`flex min-h-[44px] min-w-0 items-center justify-start pl-2 text-xs tabular-nums text-neutral-400 ${CELL_BORDER_BODY}`}
                     >
                       {index + 1}
                     </div>
@@ -702,7 +707,7 @@ export default function ProfileReviewsPlaylist({ rows, onOpenEvent }: ProfileRev
                         className={`flex min-h-[44px] min-w-0 items-center justify-start px-2 text-left ${CELL_BORDER_BODY}`}
                         title={details || undefined}
                       >
-                        <span className="truncate text-left text-xs text-stone-500">{details || '—'}</span>
+                        <span className="truncate text-left text-xs text-neutral-500">{details || '—'}</span>
                       </div>
                     )}
                     {visible.you && (
@@ -717,7 +722,7 @@ export default function ProfileReviewsPlaylist({ rows, onOpenEvent }: ProfileRev
                             className={
                               star <= rating.rating
                                 ? 'fill-amber-400 text-amber-400'
-                                : 'text-stone-200'
+                                : 'text-neutral-200'
                             }
                           />
                         ))}
@@ -725,22 +730,22 @@ export default function ProfileReviewsPlaylist({ rows, onOpenEvent }: ProfileRev
                     )}
                     {visible.avg && (
                       <div
-                        className={`flex min-h-[44px] min-w-0 items-center justify-start px-2 text-left text-xs tabular-nums text-stone-600 ${CELL_BORDER_BODY}`}
+                        className={`flex min-h-[44px] min-w-0 items-center justify-start px-2 text-left text-xs tabular-nums text-neutral-600 ${CELL_BORDER_BODY}`}
                         title="Community average"
                       >
                         {ratingCount > 0 ? (
                           <span className="min-w-0 max-w-full truncate text-left">
-                            <span className="font-semibold text-stone-800">{averageRating.toFixed(1)}</span>
-                            <span className="text-stone-400"> · {ratingCount}</span>
+                            <span className="font-semibold text-neutral-800">{averageRating.toFixed(1)}</span>
+                            <span className="text-neutral-400"> · {ratingCount}</span>
                           </span>
                         ) : (
-                          <span className="text-stone-400">—</span>
+                          <span className="text-neutral-400">—</span>
                         )}
                       </div>
                     )}
                     {visible.date && (
                       <div
-                        className={`flex min-h-[44px] min-w-0 items-center justify-start px-2 text-left text-xs tabular-nums text-stone-600 ${CELL_BORDER_BODY}`}
+                        className={`flex min-h-[44px] min-w-0 items-center justify-start px-2 text-left text-xs tabular-nums text-neutral-600 ${CELL_BORDER_BODY}`}
                         title={dt}
                       >
                         <span className="min-w-0 max-w-full truncate">{dt}</span>

@@ -53,8 +53,8 @@ export default function StatisticsPageContent({
         style={asPage ? undefined : { maxHeight: '90vh' }}
       >
         <div className={`px-6 py-4 border-b flex items-center gap-3 ${asPage ? 'bg-white rounded-t-xl' : 'bg-white'}`}>
-          <div className="bg-stone-100 p-2 rounded-lg">
-            <BarChart3 className="text-stone-600" size={20} />
+          <div className="bg-neutral-100 p-2 rounded-lg">
+            <BarChart3 className="text-neutral-600" size={20} />
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900">Tag Statistics</h2>
@@ -69,7 +69,7 @@ export default function StatisticsPageContent({
                 onClick={() => setSelectedType('all')}
                 className={`text-xs px-2 py-1 rounded-md transition-colors ${
                   selectedType === 'all'
-                    ? 'bg-stone-200 text-stone-700'
+                    ? 'bg-neutral-200 text-neutral-700'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
@@ -84,6 +84,16 @@ export default function StatisticsPageContent({
                 }}
               >
                 Designers
+              </button>
+              <button
+                onClick={() => setSelectedType('artist')}
+                className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+                style={{
+                  backgroundColor: selectedType === 'artist' ? getTagColors('artist').bg : '#f3f4f6',
+                  color: selectedType === 'artist' ? getTagColors('artist').text : '#374151',
+                }}
+              >
+                Artists
               </button>
               <button
                 onClick={() => setSelectedType('model')}
@@ -121,7 +131,7 @@ export default function StatisticsPageContent({
               <select
                 value={selectedCity}
                 onChange={(e) => setSelectedCity(e.target.value)}
-                className="px-3 py-2 rounded-lg text-sm border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 rounded-lg text-sm border border-input focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-card"
               >
                 <option value="">All Cities</option>
                 {allCities.map((city) => (
@@ -134,7 +144,7 @@ export default function StatisticsPageContent({
               <select
                 value={selectedSeason}
                 onChange={(e) => setSelectedSeason(e.target.value)}
-                className="px-3 py-2 rounded-lg text-sm border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 rounded-lg text-sm border border-input focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-card"
               >
                 <option value="">All Seasons</option>
                 {allSeasons.map((season) => (
@@ -147,7 +157,7 @@ export default function StatisticsPageContent({
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'count' | 'name')}
-                className="px-3 py-2 rounded-lg text-sm border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 rounded-lg text-sm border border-input focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-card"
               >
                 <option value="count">Sort by Count</option>
                 <option value="name">Sort by Name</option>
@@ -197,7 +207,7 @@ export default function StatisticsPageContent({
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900"></div>
             </div>
           ) : tagStats.length === 0 ? (
             <div className="text-center py-12">

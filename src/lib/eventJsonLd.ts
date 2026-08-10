@@ -1,5 +1,6 @@
 import type { Event } from './eventTypes';
 import { canonicalEventUrl, canonicalEventUrlFromParts, publicSiteOrigin } from './siteBase';
+import { normalizeShowType } from './showType';
 
 /**
  * Rich Results / Search: validate the deployed event URL (not a JSON paste). Prerendered HTML from
@@ -55,13 +56,9 @@ function buildPostalAddress(event: Event): Record<string, unknown> {
   const addr: Record<string, unknown> = {
     '@type': 'PostalAddress',
   };
-  /** Same source as the card: formatted line preferred, else user-entered address (multiline OK for schema.org Text). */
-  const line =
-    (event.formatted_address && event.formatted_address.trim()) ||
-    (event.address && event.address.trim()) ||
-    '';
+  const line = event.formatted_address?.trim() || '';
   if (line) {
-    addr.streetAddress = line.replace(/\r\n/g, '\n').trim();
+    addr.streetAddress = line.replace(/\r\n/g, '\n');
   }
   if (event.city?.trim()) {
     addr.addressLocality = event.city.trim();
@@ -89,8 +86,8 @@ function cleanTagList(arr: string[] | null | undefined): string[] {
 }
 
 /**
- * Producers → organizer (host/production). Designers → performer (show talent).
- * Matches app labels "Produced By" and "Featured Designers".
+ * Producers → organizer. Starring (designers or artists) → performer.
+ * Matches app labels "Produced By" and "Starring".
  */
 function addOrganizerAndPerformers(event: Event, obj: Record<string, unknown>): void {
   const producers = cleanTagList(event.producers);
@@ -101,14 +98,17 @@ function addOrganizerAndPerformers(event: Event, obj: Record<string, unknown>): 
     };
   }
 
-  const designers = cleanTagList(event.featured_designers);
-  if (designers.length === 0) return;
+  const starring =
+    normalizeShowType(event.show_type) === 'music'
+      ? cleanTagList(event.featured_artists)
+      : cleanTagList(event.featured_designers);
+  if (starring.length === 0) return;
 
   const asPerson = (name: string) => ({ '@type': 'Person', name });
-  if (designers.length === 1) {
-    obj.performer = asPerson(designers[0]);
+  if (starring.length === 1) {
+    obj.performer = asPerson(starring[0]);
   } else {
-    obj.performer = designers.map(asPerson);
+    obj.performer = starring.map(asPerson);
   }
 }
 
@@ -131,10 +131,6 @@ export function buildEventJsonLd(event: Event, prerender?: EventJsonLdPrerender)
     url: canonical,
     location: buildPlace(event),
   };
-
-  if (event.description?.trim()) {
-    obj.description = event.description.trim();
-  }
 
   const img = eventAbsoluteImageUrl(event.image_url, prerender);
   if (img) {

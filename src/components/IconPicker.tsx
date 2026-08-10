@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { EVENT_CARD_ICONS, getIcon } from '../lib/eventCardIcons';
+import { formControlClass, formControlPaddingClass } from './ui/field';
+import { cn } from '../lib/utils';
 
 interface IconPickerProps {
   label: string;
@@ -17,12 +19,16 @@ export default function IconPicker({ label, value, onChange }: IconPickerProps) 
 
   return (
     <div>
-      {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+      {label && <label className="mb-1 block text-sm font-medium text-foreground">{label}</label>}
       <div className="relative">
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className={cn(
+            formControlClass,
+            formControlPaddingClass,
+            'flex min-h-10 items-center justify-center gap-2 hover:bg-muted',
+          )}
           title={hasSelection ? value : 'None'}
           aria-label={label || `Icon: ${hasSelection ? value : 'None'}`}
         >
@@ -43,7 +49,7 @@ export default function IconPicker({ label, value, onChange }: IconPickerProps) 
                   onChange('');
                   setIsOpen(false);
                 }}
-                className={`col-span-full min-h-11 px-3 text-sm sm:text-xs rounded-md border text-left ${!hasSelection ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                className={`col-span-full min-h-11 px-3 text-sm sm:text-xs rounded-md border text-left ${!hasSelection ? 'bg-neutral-100 border-neutral-300 text-neutral-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                 title="No icon"
               >
                 No icon
@@ -58,7 +64,7 @@ export default function IconPicker({ label, value, onChange }: IconPickerProps) 
                       onChange(name);
                       setIsOpen(false);
                     }}
-                    className={`min-h-11 min-w-11 rounded-md hover:bg-gray-100 flex items-center justify-center ${value === name ? 'bg-blue-50 ring-1 ring-blue-200' : ''}`}
+                    className={`min-h-11 min-w-11 rounded-md hover:bg-gray-100 flex items-center justify-center ${value === name ? 'bg-neutral-100 ring-1 ring-neutral-300' : ''}`}
                     title={name}
                   >
                     <Icon size={20} className="text-gray-700" />

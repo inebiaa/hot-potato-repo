@@ -35,6 +35,7 @@ export function normalizeEventTagArrays(e: Event): Event {
     ...e,
     producers: opt(coalesceTagList(e.producers)) as Event['producers'],
     featured_designers: opt(coalesceTagList(e.featured_designers)) as Event['featured_designers'],
+    featured_artists: opt(coalesceTagList(e.featured_artists)) as Event['featured_artists'],
     models: opt(coalesceTagList(e.models)) as Event['models'],
     hair_makeup: opt(coalesceTagList(e.hair_makeup)) as Event['hair_makeup'],
     header_tags: opt(coalesceTagList(e.header_tags)) as Event['header_tags'],

@@ -5,6 +5,7 @@ import { supabase, Event } from '../lib/supabase';
 import RatingModal from './RatingModal';
 import CommentWithTags from './CommentWithTags';
 import ModalShell from './ModalShell';
+import { Button } from './ui';
 
 interface Rating {
   id: string;
@@ -158,7 +159,7 @@ export default function ViewRatingsModal({
         ) : null}
 
         {!singleUserId ? (
-          <div className="p-6 border-b bg-gradient-to-br from-blue-50 to-slate-50">
+          <div className="p-6 border-b bg-gradient-to-br from-neutral-50 to-neutral-100">
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <Star className="text-yellow-400 fill-yellow-400" size={32} />
@@ -181,7 +182,7 @@ export default function ViewRatingsModal({
                   key={s}
                   type="button"
                   onClick={() => setEditingRating({ ...ratings[0], rating: s })}
-                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500"
                   aria-label={`Set rating to ${s}`}
                 >
                   <Star
@@ -206,7 +207,7 @@ export default function ViewRatingsModal({
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900"></div>
           </div>
         ) : ratings.length === 0 ? (
           <div className="p-8 text-center">
@@ -218,7 +219,7 @@ export default function ViewRatingsModal({
               {ratings.map((rating) => (
                 <div
                   key={rating.id}
-                  className={singleUserId ? 'rounded-2xl bg-white/90 px-5 py-4 border border-stone-200 shadow-sm overflow-hidden' : 'bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors overflow-hidden'}
+                  className={singleUserId ? 'rounded-2xl bg-white/90 px-5 py-4 border border-neutral-200 shadow-sm overflow-hidden' : 'bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors overflow-hidden'}
                 >
                   <div
                     className={`p-4 ${!singleUserId && (rating.comment || (allowRatingEdits && currentUserId && rating.user_id === currentUserId)) ? 'cursor-pointer' : ''}`}
@@ -301,10 +302,11 @@ export default function ViewRatingsModal({
         )}
 
         {(onViewEvent || (allowRatingEdits && currentUserId && event)) && !singleUserId ? (
-          <div className="p-4 border-t bg-gray-50 flex gap-2 shrink-0">
+          <div className="flex shrink-0 gap-2 border-t border-border bg-muted p-4">
             {allowRatingEdits && currentUserId && event ? (
-              <button
+              <Button
                 type="button"
+                className="min-h-[44px] flex-1"
                 onClick={() => {
                   if (currentUserRating) {
                     setEditingRating(currentUserRating);
@@ -312,19 +314,18 @@ export default function ViewRatingsModal({
                   }
                   setIsCreatingRating(true);
                 }}
-                className="min-h-[44px] flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-base sm:text-sm"
               >
                 {currentUserRating ? 'Update' : 'Rate Show'}
-              </button>
+              </Button>
             ) : null}
             {onViewEvent ? (
-            <button
+            <Button
               type="button"
+              className="min-h-[44px] flex-1"
               onClick={() => onViewEvent(eventId)}
-              className="min-h-[44px] flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-base sm:text-sm"
             >
               View full event
-            </button>
+            </Button>
             ) : null}
           </div>
         ) : null}

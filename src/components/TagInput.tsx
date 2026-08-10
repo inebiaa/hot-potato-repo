@@ -1,34 +1,19 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { X, GripVertical } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
+import { X, GripVertical, Plus } from 'lucide-react';
 import { fetchExistingTags, fetchCustomTagSuggestions, fetchExistingCities, fetchExistingVenues, TagColumn } from '../lib/tags';
+import { searchCities } from '../lib/cityPlaces';
 import { tagMatchesQuery } from '../lib/normalize';
-import TagPillSplitLabel, {
-  tagPillSplitContainerWithIconClass,
-  tagPillSplitSegmentGroupClass,
-} from './TagPillSplitLabel';
-
-const TAG_INPUT_CHIP_COLORS = { backgroundColor: '#f3f4f6', color: '#1f2937' } as const;
-
-/** Long tag chips: width-aware splits use the flex slot between grip and remove, not a 48-char cap. */
-function TagInputPillLabel({ text }: { text: string }) {
-  const slotRef = useRef<HTMLSpanElement>(null);
-  return (
-    <span ref={slotRef} className="flex min-h-0 min-w-0 max-w-full flex-1 basis-0 flex-col justify-center self-stretch">
-      <TagPillSplitLabel
-        layoutWidthRef={slotRef}
-        text={text}
-        segmentColors={TAG_INPUT_CHIP_COLORS}
-      />
-    </span>
-  );
-}
+import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
+import { TAG_INPUT_EDIT_PILL_COLORS } from './tagPillShell';
+import { formControlClass, formControlPaddingClass } from './ui/field';
+import { cn } from '../lib/utils';
 
 interface TagInputProps {
   value: string[];
   onChange: (tags: string[]) => void;
   tagColumn?: TagColumn;
   customTagSlug?: string;
-  /** When true, fetches city suggestions (single-value field) */
+  /** When true, fetches real city suggestions (Photon); pick required — no free text */
   useCitySuggestions?: boolean;
   /** When true, fetches venue (`location`) suggestions from existing events */
   useVenueSuggestions?: boolean;
@@ -39,6 +24,15 @@ interface TagInputProps {
   id?: string;
   label?: string;
   hint?: string;
+  /**
+   * Compact row: label + small + box. Expands to the full tag field when pressed
+   * (or when tags already exist).
+   */
+  expandable?: boolean;
+  /** Optional control shown on the right of the collapsed/expanded header row. */
+  headerAction?: ReactNode;
+  /** Extra content under the field when expanded (e.g. icon picker). */
+  expandedExtras?: ReactNode;
 }
 
 export default function TagInput({
@@ -54,6 +48,9 @@ export default function TagInput({
   id,
   label,
   hint,
+  expandable = false,
+  headerAction,
+  expandedExtras,
 }: TagInputProps) {
   const tags = useMemo(() => (Array.isArray(value) ? value : []), [value]);
   const [inputValue, setInputValue] = useState('');
@@ -61,26 +58,41 @@ export default function TagInput({
   const [allTags, setAllTags] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [expanded, setExpanded] = useState(() => !expandable || tags.length > 0);
+  const [citySearchLoading, setCitySearchLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  const focusAfterExpandRef = useRef(false);
+  const requireSuggestionPick = useCitySuggestions;
+
+  useEffect(() => {
+    if (expandable && tags.length > 0) setExpanded(true);
+  }, [expandable, tags.length]);
+
+  useEffect(() => {
+    if (!expanded || !focusAfterExpandRef.current) return;
+    focusAfterExpandRef.current = false;
+    inputRef.current?.focus();
+  }, [expanded]);
 
   useEffect(() => {
     let cancelled = false;
     if (useCitySuggestions) {
-      fetchExistingCities().then((tags) => {
-        if (!cancelled) setAllTags(tags);
+      // Seed with cities already on events (for continuity); live search also queries Photon.
+      fetchExistingCities().then((list) => {
+        if (!cancelled) setAllTags(list);
       });
     } else if (useVenueSuggestions) {
-      fetchExistingVenues().then((tags) => {
-        if (!cancelled) setAllTags(tags);
+      fetchExistingVenues().then((list) => {
+        if (!cancelled) setAllTags(list);
       });
     } else if (customTagSlug) {
-      fetchCustomTagSuggestions(customTagSlug).then((tags) => {
-        if (!cancelled) setAllTags(tags);
+      fetchCustomTagSuggestions(customTagSlug).then((list) => {
+        if (!cancelled) setAllTags(list);
       });
     } else if (tagColumn) {
-      fetchExistingTags(tagColumn).then((tags) => {
-        if (!cancelled) setAllTags(tags);
+      fetchExistingTags(tagColumn).then((list) => {
+        if (!cancelled) setAllTags(list);
       });
     }
     return () => { cancelled = true; };
@@ -170,23 +182,66 @@ export default function TagInput({
     if (!inputValue.trim()) {
       setSuggestions([]);
       setShowSuggestions(false);
+      setCitySearchLoading(false);
       return;
     }
-    const filtered = allTags.filter(
-      (t) => tagMatchesQuery(t, inputValue) && !tags.includes(t)
-    );
-    setSuggestions(filtered.slice(0, 8));
-    setShowSuggestions(filtered.length > 0);
-    setHighlightedIndex(-1);
-  }, [inputValue, allTags, tags]);
+
+    if (!useCitySuggestions) {
+      const filtered = allTags.filter(
+        (t) => tagMatchesQuery(t, inputValue) && !tags.includes(t)
+      );
+      setSuggestions(filtered.slice(0, 8));
+      setShowSuggestions(filtered.length > 0);
+      setHighlightedIndex(-1);
+      return;
+    }
+
+    let cancelled = false;
+    setCitySearchLoading(true);
+    const handle = window.setTimeout(() => {
+      const q = inputValue.trim();
+      const fromExisting = allTags.filter(
+        (t) => tagMatchesQuery(t, q) && !tags.includes(t) && /,\s*[A-Za-z]{2}$/.test(t)
+      );
+      searchCities(q, 8).then((remote) => {
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const merged: string[] = [];
+        for (const t of [...fromExisting, ...remote]) {
+          const key = t.trim().toLowerCase();
+          if (!key || seen.has(key) || tags.includes(t)) continue;
+          seen.add(key);
+          merged.push(t);
+          if (merged.length >= 8) break;
+        }
+        setSuggestions(merged);
+        setShowSuggestions(merged.length > 0);
+        setHighlightedIndex(merged.length > 0 ? 0 : -1);
+        setCitySearchLoading(false);
+      }).catch(() => {
+        if (cancelled) return;
+        setSuggestions(fromExisting.slice(0, 8));
+        setShowSuggestions(fromExisting.length > 0);
+        setHighlightedIndex(fromExisting.length > 0 ? 0 : -1);
+        setCitySearchLoading(false);
+      });
+    }, 280);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [inputValue, allTags, tags, useCitySuggestions]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
       if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
         addTag(suggestions[highlightedIndex]);
-      } else if (inputValue.trim() && (canAddMore || maxTags === 1)) {
+      } else if (!requireSuggestionPick && inputValue.trim() && (canAddMore || maxTags === 1)) {
         addTag(inputValue);
+      } else if (requireSuggestionPick && suggestions.length === 1) {
+        addTag(suggestions[0]);
       }
       return;
     }
@@ -210,49 +265,105 @@ export default function TagInput({
 
   const handleBlur = () => {
     setTimeout(() => {
-      if (inputValue.trim()) addTag(inputValue);
+      if (!requireSuggestionPick && inputValue.trim()) addTag(inputValue);
       setShowSuggestions(false);
     }, 150);
   };
 
+  const openExpanded = () => {
+    focusAfterExpandRef.current = true;
+    setExpanded(true);
+  };
+
+  if (expandable && !expanded) {
+    return (
+      <div className="flex items-center gap-2">
+        {label ? (
+          <span className="min-w-0 flex-1 text-sm font-medium text-foreground">{label}</span>
+        ) : (
+          <span className="min-w-0 flex-1" />
+        )}
+        <button
+          type="button"
+          onClick={openExpanded}
+          className={cn(
+            'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-dashed border-input',
+            'bg-card text-muted-foreground transition-colors hover:border-neutral-400 hover:bg-muted hover:text-foreground',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          )}
+          aria-label={label ? `Add ${label}` : 'Add tags'}
+          title={label ? `Add ${label}` : 'Add'}
+        >
+          <Plus size={16} strokeWidth={2} />
+        </button>
+        {headerAction}
+      </div>
+    );
+  }
+
   return (
     <div className="relative">
-      {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">
-          {label} {required && '*'}
-        </label>
+      {(label || headerAction) && (
+        <div className="mb-1 flex items-center gap-2">
+          {label ? (
+            <label htmlFor={id} className="min-w-0 flex-1 text-sm font-medium text-foreground">
+              {label} {required && <span className="text-muted-foreground">*</span>}
+            </label>
+          ) : (
+            <span className="min-w-0 flex-1" />
+          )}
+          {headerAction}
+        </div>
       )}
+      {expandedExtras ? <div className="mb-2">{expandedExtras}</div> : null}
       <div
-        className="flex flex-wrap gap-1.5 p-2 min-h-[2.75rem] border border-gray-300 rounded-md focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white"
+        className={cn(
+          formControlClass,
+          formControlPaddingClass,
+          'flex min-h-10 flex-wrap items-center gap-1 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring',
+        )}
         onClick={() => inputRef.current?.focus()}
       >
         {tags.map((tag, idx) => (
           <span
             key={`${tag}-${idx}`}
+            data-tag-pill
             draggable={maxTags !== 1}
             onDragStart={maxTags !== 1 ? (e) => handleDragStart(e, idx) : undefined}
             onDragEnd={handleDragEnd}
             onDragOver={maxTags !== 1 ? (e) => handleDragOver(e, idx) : undefined}
             onDragLeave={handleDragLeave}
             onDrop={maxTags !== 1 ? (e) => handleDrop(e, idx) : undefined}
-            className={`${maxTags !== 1 ? tagPillSplitContainerWithIconClass : tagPillSplitSegmentGroupClass} p-0 rounded text-sm select-none ${
-              maxTags === 1 ? '' : dragIndex === idx ? 'opacity-60 cursor-grabbing' : 'cursor-grab'
-            } ${dropTargetIndex === idx ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+            className={cn(
+              /* Same group + segment shells as EventCard — character split, not field-width blobs */
+              `${tagPillSplitSegmentGroupClass} p-0 text-xs select-none`,
+              maxTags === 1 ? '' : dragIndex === idx ? 'cursor-grabbing opacity-60' : 'cursor-grab',
+              dropTargetIndex === idx ? 'ring-2 ring-ring ring-offset-1' : '',
+            )}
           >
-            {maxTags !== 1 && <GripVertical size={14} className="text-gray-400 shrink-0" aria-hidden />}
-            <TagInputPillLabel text={tag} />
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                removeTag(idx);
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md hover:bg-gray-200 text-gray-500 hover:text-gray-700 sm:min-h-0 sm:min-w-0 sm:p-1"
-              aria-label={`Remove ${tag}`}
-            >
-              <X size={16} strokeWidth={2.5} />
-            </button>
+            <TagPillSplitLabel
+              text={tag}
+              segmentColors={TAG_INPUT_EDIT_PILL_COLORS}
+              leadingSlot={
+                maxTags !== 1 ? (
+                  <GripVertical size={12} className="text-neutral-500" aria-hidden />
+                ) : undefined
+              }
+              trailingSlot={
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeTag(idx);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="inline-flex items-center justify-center p-0 text-neutral-500 hover:text-neutral-800"
+                  aria-label={`Remove ${tag}`}
+                >
+                  <X size={12} strokeWidth={2.5} />
+                </button>
+              }
+            />
           </span>
         ))}
         <input
@@ -266,21 +377,22 @@ export default function TagInput({
           onFocus={() => inputValue.trim() && setShowSuggestions(true)}
           placeholder={tags.length === 0 ? placeholder : ''}
           required={required && tags.length === 0}
-          className="flex-1 min-w-[120px] min-h-[2.5rem] outline-none text-base sm:text-sm py-1"
+          className="min-w-[7rem] flex-1 bg-transparent py-0.5 text-sm outline-none placeholder:text-muted-foreground"
         />
       </div>
       {showSuggestions && suggestions.length > 0 && (
         <div
           ref={suggestionsRef}
-          className="absolute z-50 mt-1 w-full max-h-40 overflow-auto bg-white border border-gray-200 rounded-md shadow-lg py-1"
+          className="absolute z-50 mt-1 max-h-40 w-full overflow-auto rounded-lg border border-border bg-card py-1 shadow-lg"
         >
           {suggestions.map((s, i) => (
             <button
               key={s}
               type="button"
-              className={`min-h-[44px] w-full text-left px-3 py-3 text-base sm:min-h-0 sm:py-2 sm:text-sm hover:bg-blue-50 ${
-                i === highlightedIndex ? 'bg-blue-50' : ''
-              }`}
+              className={cn(
+                'min-h-[44px] w-full px-3 py-3 text-left text-base hover:bg-muted sm:min-h-0 sm:py-2 sm:text-sm',
+                i === highlightedIndex ? 'bg-muted' : '',
+              )}
               onMouseDown={(e) => {
                 e.preventDefault();
                 addTag(s);
@@ -291,7 +403,10 @@ export default function TagInput({
           ))}
         </div>
       )}
-      {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+      {hint && !expandable && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      {useCitySuggestions && citySearchLoading && inputValue.trim() && (
+        <p className="mt-1 text-xs text-muted-foreground">Searching cities…</p>
+      )}
     </div>
   );
 }
