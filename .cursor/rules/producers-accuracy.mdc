@@ -1,0 +1,12 @@
+---
+description: Only set event producers when explicitly credited
+alwaysApply: true
+---
+
+# Producers accuracy
+
+Set `producers` **only** when a venue page or official tour/promoter page **explicitly** credits the presenter (e.g. “Presented by…”, “Présenté par…”, “X Presents”).
+
+- If unsure → leave `producers` null / empty. Do not guess.
+- Do **not** blanket-assign from a tour promoter, Ticketmaster listing, press “courtesy of…”, or site chrome/footer brand alone.
+- Listing on Live Nation / AEG / Bowery / etc. ticket inventory is **not** enough — need an explicit presenter credit for that night (or a clear official tour announce for that market, e.g. Frontier AU “Presented by MG Live, I OH YOU and Frontier Touring”).
