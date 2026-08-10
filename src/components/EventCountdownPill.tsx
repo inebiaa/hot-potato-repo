@@ -8,15 +8,9 @@ export type EventCountdownPillProps = {
   countdownOpenUrl: string | null;
   countdownBg?: string;
   countdownText?: string;
-  showWiggle: boolean;
   /** Called once when the countdown reaches zero so the feed can refresh. */
   onExpired: () => void;
-  onButtonClick: (e: React.MouseEvent) => void;
-  onMouseDown: () => void;
-  onMouseUp: (e: React.MouseEvent) => void;
-  onMouseLeave: (e: React.MouseEvent) => void;
-  onTouchStart: () => void;
-  onTouchEnd: (e: React.TouchEvent) => void;
+  onButtonClick: () => void;
 };
 
 function EventCountdownPillInner({
@@ -25,14 +19,8 @@ function EventCountdownPillInner({
   countdownOpenUrl,
   countdownBg,
   countdownText,
-  showWiggle,
   onExpired,
   onButtonClick,
-  onMouseDown,
-  onMouseUp,
-  onMouseLeave,
-  onTouchStart,
-  onTouchEnd,
 }: EventCountdownPillProps) {
   const [text, setText] = useState('');
   const onExpiredRef = useRef(onExpired);
@@ -79,7 +67,7 @@ function EventCountdownPillInner({
     <button
       type="button"
       data-tag-pill
-      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 tabular-nums whitespace-nowrap ${countdownOpenUrl ? 'cursor-pointer' : ''} ${showWiggle ? 'pill-wiggle' : ''}`}
+      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80 tabular-nums whitespace-nowrap ${countdownOpenUrl ? 'cursor-pointer' : ''}`}
       style={{
         backgroundColor: countdownBg || '#fef3c7',
         color: countdownText || '#92400e',
@@ -87,11 +75,6 @@ function EventCountdownPillInner({
       aria-label={countdownOpenUrl ? `Open official ticket link for ${eventName}` : undefined}
       title={countdownOpenUrl || undefined}
       onClick={onButtonClick}
-      onMouseDown={onMouseDown}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseLeave}
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
     >
       <Clock size={12} className="shrink-0" />
       {text}

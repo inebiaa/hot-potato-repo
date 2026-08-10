@@ -350,7 +350,7 @@ export default function AdminsTab(p: AdminsTabProps) {
                               <span
                                 key={al.id}
                                 data-tag-pill
-                                className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs ${adminAliasDeleteMode ? 'pill-wiggle' : ''}`}
+                                className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs`}
                               >
                                 <TagPillSplitLabel text={al.alias} segmentColors={ALIAS_NEUTRAL_PILL_COLORS} />
                                 {!adminAliasDeleteMode && (

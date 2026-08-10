@@ -317,7 +317,7 @@ export default function AccountTab(p: AccountTabProps) {
                                     <span
                                       key={alias.id}
                                       data-tag-pill
-                                      className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs ${inDeleteMode && removable ? 'pill-wiggle' : ''}`}
+                                      className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs`}
                                     >
                                       <TagPillSplitLabel text={alias.alias} segmentColors={ALIAS_NEUTRAL_PILL_COLORS} />
                                       {inDeleteMode && removable && (

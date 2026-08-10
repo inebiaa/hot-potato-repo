@@ -2,26 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* iPhone-style wiggle: subtle rotation, quick oscillation */
-@keyframes pill-wiggle {
-  0%, 100% { transform: rotate(0deg) scale(var(--pill-scale, 1)); }
-  25% { transform: rotate(-2deg) scale(var(--pill-scale, 1)); }
-  75% { transform: rotate(2deg) scale(var(--pill-scale, 1)); }
-}
-
-.pill-wiggle {
-  animation: pill-wiggle 0.12s ease-in-out infinite;
-  /* Override transition on transform so animation isn't dampened by transition-all */
-  transition-property: color, background-color, border-color, opacity, box-shadow;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pill-wiggle {
-    animation: none;
-  }
-}
-
-/* Remove 300ms tap delay on mobile so long-press works on first try */
+/* Remove 300ms tap delay on mobile tag pills */
 [data-tag-pill] {
   touch-action: manipulation;
 }

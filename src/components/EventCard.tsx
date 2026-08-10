@@ -3,7 +3,7 @@ import { Calendar, MapPin, Star, Edit, Trash2, Share2, Mail, MoreVertical } from
 import { Event, Rating, supabase } from '../lib/supabase';
 import { getIcon } from '../lib/eventCardIcons';
 import { getSeasonFromDate } from '../lib/season';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import RatingModal from './RatingModal';
 import EditEventModal from './EditEventModal';
 import ViewRatingsModal from './ViewRatingsModal';
@@ -13,7 +13,6 @@ import { tagPillShellClass } from './tagPillShell';
 import { useAuth } from '../contexts/AuthContext';
 import { useTagDisplayMap } from '../contexts/TagDisplayContext';
 import { tagResolutionKey } from '../lib/tagDisplayResolution';
-import { normalizeTagName } from '../lib/tagIdentity';
 import { tryNormalizeExternalUrl } from '../lib/externalUrl';
 import { isEventUpcoming } from '../lib/eventDates';
 import EventCountdownPill from './EventCountdownPill';
@@ -26,7 +25,6 @@ import { clearAppModalParams, parseAppModal, setAppModalParams } from '../lib/se
 import { featuredCreditLabel, normalizeShowType, starringColumn, starringTagType } from '../lib/showType';
 import {
   SPECIAL_GUESTS_LABEL,
-  SPECIAL_GUESTS_SLUG,
   getSpecialGuests,
   isSpecialGuestsSlug,
 } from '../lib/specialGuests';
@@ -58,8 +56,8 @@ interface EventCardProps {
   onTagClick: (type: string, value: string, displayLabel?: string) => void;
   /** When set, the card title links to this URL (e.g. single-event view) */
   viewHref?: string;
-  /** When set, clicking the title opens overlay instead of navigating (e.g. openEventOverlay). Second param: open overlay with wiggle mode active. Third/fourth: reorder section (and custom slug when section is custom). */
-  onViewClick?: (eventId: string, openWithWiggle?: boolean, reorderSection?: keyof { producers: string[]; featured_designers: string[]; featured_artists: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | 'custom', reorderCustomSlug?: string) => void;
+  /** When set, clicking the title opens overlay instead of navigating (e.g. openEventOverlay). */
+  onViewClick?: (eventId: string) => void;
   tagColors?: {
     producer_bg_color?: string;
     producer_text_color?: string;
@@ -98,14 +96,6 @@ interface EventCardProps {
   /** Opacity for the image only (for stack front card photo blending) */
   imageOpacity?: number;
   customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
-  /** When set, card mounts in reorder/wiggle mode (e.g. overlay opened from a wiggling list card) */
-  initialReorderSection?: keyof { producers: string[]; featured_designers: string[]; featured_artists: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] };
-  /** When set with initialReorderSection='custom', which custom slug was in reorder mode */
-  initialCustomReorderSlug?: string;
-  /** When true (overlay card), clicking on the card does not clear wiggle – only click-away does */
-  wiggleOnlyClearsOnClickAway?: boolean;
-  /** Called when reorder mode is entered (so overlay can avoid closing on release-after-long-press) */
-  onReorderModeEntered?: () => void;
 }
 
 export default function EventCard({
@@ -122,10 +112,6 @@ export default function EventCard({
   customPerformerTags = [],
   stackPhotoOnly = false,
   imageOpacity,
-  initialReorderSection,
-  initialCustomReorderSlug,
-  wiggleOnlyClearsOnClickAway = false,
-  onReorderModeEntered
 }: EventCardProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -152,37 +138,32 @@ export default function EventCard({
   const [shareCopied, setShareCopied] = useState<'link' | 'embed' | 'embedcode' | 'email' | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [expandedTagSections, setExpandedTagSections] = useState<Record<string, boolean>>({});
-  const [orderedTags, setOrderedTags] = useState({
+
+  const tagsBySection = useMemo(() => ({
     producers: coalesceTagList(event.producers),
     featured_designers: coalesceTagList(event.featured_designers),
     featured_artists: coalesceTagList(event.featured_artists),
     models: coalesceTagList(event.models),
     hair_makeup: coalesceTagList(event.hair_makeup),
     header_tags: effectiveHeaderTags(event),
-    footer_tags: coalesceTagList(event.footer_tags)
-  });
-  const [reorderSection, setReorderSection] = useState<keyof typeof orderedTags | null>(
-    (initialReorderSection as keyof typeof orderedTags) ?? null
+    footer_tags: coalesceTagList(event.footer_tags),
+  }), [
+    event.producers,
+    event.featured_designers,
+    event.featured_artists,
+    event.models,
+    event.hair_makeup,
+    event.header_tags,
+    event.footer_tags,
+  ]);
+
+  const customTags = useMemo(
+    () =>
+      (event.custom_tags && typeof event.custom_tags === 'object' && !Array.isArray(event.custom_tags))
+        ? (event.custom_tags as Record<string, string[]>)
+        : {},
+    [event.custom_tags]
   );
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const [orderedCustomTags, setOrderedCustomTags] = useState<Record<string, string[]>>(
-    (event.custom_tags && typeof event.custom_tags === 'object' && !Array.isArray(event.custom_tags))
-      ? (event.custom_tags as Record<string, string[]>)
-      : {}
-  );
-  const [customReorderSlug, setCustomReorderSlug] = useState<string | null>(initialCustomReorderSlug ?? null);
-  const [customDragIndex, setCustomDragIndex] = useState<number | null>(null);
-  const [customDropIndex, setCustomDropIndex] = useState<number | null>(null);
-  const longPressTimerRef = useRef<number | null>(null);
-  const cardRootRef = useRef<HTMLDivElement | null>(null);
-  const reorderModeEnteredAtRef = useRef<number>(0);
-  const longPressActivatedRef = useRef(false);
-  const skipNextClickRef = useRef(false);
-  const longPressTargetRef = useRef<EventTarget | null>(null);
-  const TAG_ORDER_STORAGE_KEY = 'event_tag_order_v1';
-  const isAnyReorderMode = reorderSection !== null || customReorderSlug !== null;
-  const showWiggle = isAnyReorderMode;
 
   const TAG_LIMIT = 8; // ~2 lines of tags; beyond this show "View more"
   const toggleTagSection = (key: string) => {
@@ -200,107 +181,14 @@ export default function EventCard({
     };
   };
 
-  const readSavedOrder = useCallback((): {
-    producers?: string[];
-    featured_designers?: string[];
-    featured_artists?: string[];
-    models?: string[];
-    hair_makeup?: string[];
-    header_tags?: string[];
-    footer_tags?: string[];
-    custom_tags?: Record<string, string[]>;
-  } | null => {
-    try {
-      const raw = window.localStorage.getItem(TAG_ORDER_STORAGE_KEY);
-      if (!raw) return null;
-      const data = JSON.parse(raw) as Record<string, {
-        producers?: string[];
-        featured_designers?: string[];
-        featured_artists?: string[];
-        models?: string[];
-        hair_makeup?: string[];
-        header_tags?: string[];
-        footer_tags?: string[];
-        custom_tags?: Record<string, string[]>;
-      }>;
-      return data[event.id] || null;
-    } catch {
-      return null;
-    }
-  }, [event.id]);
-
-  /** Merge event's current tags (source of truth) with saved display order. Saved order only affects ordering; added/removed tags come from current. */
-  const mergeWithSavedOrder = (current: string[], saved?: string[] | null): string[] => {
-    if (!current.length) return [];
-    if (!saved?.length) return current;
-    // Use current's strings (event data) for display; saved only determines order
-    const savedOrdered = saved
-      .map((t) => current.find((c) => normalizeTagName(c) === normalizeTagName(t)))
-      .filter((t): t is string => t != null);
-    const inSaved = new Set(savedOrdered.map((t) => normalizeTagName(t)));
-    const newTags = current.filter((t) => !inSaved.has(normalizeTagName(t)));
-    return [...savedOrdered, ...newTags];
-  };
-
-  const saveOrder = (next: {
-    orderedTags: typeof orderedTags;
-    orderedCustomTags: Record<string, string[]>;
-  }) => {
-    try {
-      const raw = window.localStorage.getItem(TAG_ORDER_STORAGE_KEY);
-      const data = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-      data[event.id] = {
-        producers: next.orderedTags.producers,
-        featured_designers: next.orderedTags.featured_designers,
-        featured_artists: next.orderedTags.featured_artists,
-        models: next.orderedTags.models,
-        hair_makeup: next.orderedTags.hair_makeup,
-        header_tags: next.orderedTags.header_tags,
-        footer_tags: next.orderedTags.footer_tags,
-        custom_tags: next.orderedCustomTags
-      };
-      window.localStorage.setItem(TAG_ORDER_STORAGE_KEY, JSON.stringify(data));
-    } catch {
-      // Ignore storage errors.
-    }
-  };
-
-  useEffect(() => {
-    const fallbackOrdered = {
-      producers: coalesceTagList(event.producers),
-      featured_designers: coalesceTagList(event.featured_designers),
-      featured_artists: coalesceTagList(event.featured_artists),
-      models: coalesceTagList(event.models),
-      hair_makeup: coalesceTagList(event.hair_makeup),
-      header_tags: effectiveHeaderTags(event),
-      footer_tags: coalesceTagList(event.footer_tags)
-    };
-    const fallbackCustom = (event.custom_tags && typeof event.custom_tags === 'object' && !Array.isArray(event.custom_tags))
-      ? (event.custom_tags as Record<string, string[]>)
-      : {};
-    const saved = readSavedOrder();
-
-    setOrderedTags({
-      producers: mergeWithSavedOrder(fallbackOrdered.producers, saved?.producers),
-      featured_designers: mergeWithSavedOrder(fallbackOrdered.featured_designers, saved?.featured_designers),
-      featured_artists: mergeWithSavedOrder(fallbackOrdered.featured_artists, saved?.featured_artists),
-      models: mergeWithSavedOrder(fallbackOrdered.models, saved?.models),
-      hair_makeup: mergeWithSavedOrder(fallbackOrdered.hair_makeup, saved?.hair_makeup),
-      header_tags: mergeWithSavedOrder(fallbackOrdered.header_tags, saved?.header_tags),
-      footer_tags: mergeWithSavedOrder(fallbackOrdered.footer_tags, saved?.footer_tags)
-    });
-    setReorderSection(null);
-    setDragIndex(null);
-    setDropIndex(null);
-    const mergedCustom: Record<string, string[]> = {};
-    for (const slug of Object.keys(fallbackCustom)) {
-      mergedCustom[slug] = mergeWithSavedOrder(fallbackCustom[slug] || [], saved?.custom_tags?.[slug]);
-    }
-    setOrderedCustomTags(mergedCustom);
-    setCustomReorderSlug(null);
-    setCustomDragIndex(null);
-    setCustomDropIndex(null);
-  }, [event.id, event.producers, event.featured_designers, event.featured_artists, event.models, event.hair_makeup, event.header_tags, event.footer_tags, event.custom_tags, readSavedOrder]);
+  /** Filter-drag payload for search bar (not tag repositioning). */
+  const tagFilterDragProps = (dragType: string, dragValue: string) => ({
+    draggable: true as const,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.setData('text/plain', `tag-filter:${dragType}:${dragValue}`);
+      e.dataTransfer.effectAllowed = 'copy';
+    },
+  });
 
   const countdownOpenUrl = useMemo(
     () => tryNormalizeExternalUrl(event.countdown_link),
@@ -374,231 +262,6 @@ export default function EventCard({
 
   const canEdit = user && (isAdmin || event.created_by === user.id);
 
-  const startLongPress = (section: keyof typeof orderedTags) => {
-    if (reorderSection || customReorderSlug) return;
-    clearLongPress();
-    longPressActivatedRef.current = false;
-    longPressTimerRef.current = window.setTimeout(() => {
-      longPressActivatedRef.current = true;
-      reorderModeEnteredAtRef.current = Date.now();
-      setReorderSection(section);
-      setDragIndex(null);
-      onReorderModeEntered?.();
-    }, 220);
-  };
-
-  const clearLongPress = (e?: React.MouseEvent | React.TouchEvent | React.PointerEvent) => {
-    const didActivate = longPressActivatedRef.current;
-    if (longPressTimerRef.current !== null) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    longPressActivatedRef.current = false;
-    if (didActivate) {
-      const target = e?.target as HTMLElement | undefined;
-      const isInteractiveTarget = target?.closest?.('button, a, input, [role="button"]');
-      if (e && !isInteractiveTarget) {
-        e.preventDefault();
-        e.nativeEvent?.preventDefault?.();
-      }
-      if (!isInteractiveTarget) {
-        longPressTargetRef.current = target ?? null;
-        skipNextClickRef.current = true;
-        window.setTimeout(() => {
-          skipNextClickRef.current = false;
-          longPressTargetRef.current = null;
-        }, 400);
-      }
-    }
-  };
-
-  const handlePillClick = (e: React.MouseEvent, fn: () => void) => {
-    const target = longPressTargetRef.current;
-    const isSameTarget = target && (
-      e.target === target ||
-      (target as Node).contains?.(e.target as Node) ||
-      (e.target as Node)?.contains?.(target as Node)
-    );
-    const shouldSkip = skipNextClickRef.current && isSameTarget;
-    if (shouldSkip) {
-      e.preventDefault();
-      e.stopPropagation();
-      skipNextClickRef.current = false;
-      longPressTargetRef.current = null;
-      return;
-    }
-    fn();
-  };
-
-  const clearReorderMode = () => {
-    setReorderSection(null);
-    setDragIndex(null);
-    setDropIndex(null);
-    setCustomReorderSlug(null);
-    setCustomDragIndex(null);
-    setCustomDropIndex(null);
-  };
-
-  const persistTagOrder = async (section: keyof typeof orderedTags, next: string[]) => {
-    const nextOrdered = { ...orderedTags, [section]: next };
-    setOrderedTags(nextOrdered);
-    saveOrder({ orderedTags: nextOrdered, orderedCustomTags });
-  };
-
-  const moveTag = async (section: keyof typeof orderedTags, toIndex: number) => {
-    if (dragIndex === null || dragIndex === toIndex) return;
-    const source = [...orderedTags[section]];
-    const [moved] = source.splice(dragIndex, 1);
-    source.splice(toIndex, 0, moved);
-    setDragIndex(toIndex);
-    await persistTagOrder(section, source);
-  };
-
-  const tagInteractionProps = (section: keyof typeof orderedTags, idx: number, dragType?: string, dragValue?: string) => ({
-    onPointerDown: (e: React.PointerEvent) => {
-      if (e.button !== 0 && e.button !== undefined) return; /* only primary button */
-      startLongPress(section);
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    },
-    onPointerUp: (e: React.PointerEvent) => {
-      clearLongPress(e);
-      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-    },
-    onPointerCancel: (e: React.PointerEvent) => {
-      clearLongPress(e);
-      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-    },
-    /* Mouse/touch still needed for click-to-filter and as pointer-event fallback */
-    onMouseUp: (e: React.MouseEvent) => clearLongPress(e),
-    onTouchEnd: (e: React.TouchEvent) => clearLongPress(e),
-    draggable: true,
-    onDragStart: (e: React.DragEvent) => {
-      if (isAnyReorderMode) {
-        setDragIndex(idx);
-      } else if (dragType != null && dragValue != null) {
-        e.dataTransfer.setData('text/plain', `tag-filter:${dragType}:${dragValue}`);
-        e.dataTransfer.effectAllowed = 'copy';
-      }
-    },
-    onDragEnd: () => {
-      setDragIndex(null);
-      setDropIndex(null);
-    },
-    onDragOver: (e: React.DragEvent) => {
-      if (isAnyReorderMode) {
-        e.preventDefault();
-        setDropIndex(idx);
-      }
-    },
-    onDragLeave: () => {
-      if (isAnyReorderMode && dropIndex === idx) setDropIndex(null);
-    },
-    onDrop: async () => {
-      if (isAnyReorderMode) {
-        await moveTag(section, idx);
-        setDropIndex(null);
-      }
-    }
-  });
-
-  const startCustomLongPress = (slug: string) => {
-    if (reorderSection || customReorderSlug) return;
-    clearLongPress();
-    longPressActivatedRef.current = false;
-    longPressTimerRef.current = window.setTimeout(() => {
-      longPressActivatedRef.current = true;
-      reorderModeEnteredAtRef.current = Date.now();
-      setCustomReorderSlug(slug);
-      setCustomDragIndex(null);
-      setCustomDropIndex(null);
-      onReorderModeEntered?.();
-    }, 250);
-  };
-
-  const persistCustomTagOrder = async (slug: string, next: string[]) => {
-    const nextCustom = { ...orderedCustomTags, [slug]: next };
-    setOrderedCustomTags(nextCustom);
-    saveOrder({ orderedTags, orderedCustomTags: nextCustom });
-  };
-
-  const moveCustomTag = async (slug: string, toIndex: number) => {
-    if (customDragIndex === null || customDragIndex === toIndex) return;
-    const source = [...(orderedCustomTags[slug] || [])];
-    const [moved] = source.splice(customDragIndex, 1);
-    source.splice(toIndex, 0, moved);
-    setCustomDragIndex(toIndex);
-    await persistCustomTagOrder(slug, source);
-  };
-
-  const customTagInteractionProps = (slug: string, idx: number, val?: string) => ({
-    onPointerDown: (e: React.PointerEvent) => {
-      if (e.button !== 0) return;
-      startCustomLongPress(slug);
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    },
-    onPointerUp: (e: React.PointerEvent) => {
-      if (e.button !== 0) return;
-      clearLongPress(e as unknown as React.MouseEvent);
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    },
-    onPointerCancel: (e: React.PointerEvent) => {
-      clearLongPress();
-      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-    },
-    onMouseDown: () => startCustomLongPress(slug),
-    onMouseUp: (e: React.MouseEvent) => clearLongPress(e),
-    onTouchStart: () => startCustomLongPress(slug),
-    onTouchEnd: (e: React.TouchEvent) => clearLongPress(e),
-    draggable: true,
-    onDragStart: (e: React.DragEvent) => {
-      if (isAnyReorderMode) {
-        setCustomDragIndex(idx);
-      } else if (val != null) {
-        e.dataTransfer.setData('text/plain', `tag-filter:custom_performer:${slug}\x00${val}`);
-        e.dataTransfer.effectAllowed = 'copy';
-      }
-    },
-    onDragEnd: () => {
-      setCustomDragIndex(null);
-      setCustomDropIndex(null);
-    },
-    onDragOver: (e: React.DragEvent) => {
-      if (isAnyReorderMode) {
-        e.preventDefault();
-        setCustomDropIndex(idx);
-      }
-    },
-    onDragLeave: () => {
-      if (isAnyReorderMode && customDropIndex === idx) setCustomDropIndex(null);
-    },
-    onDrop: async () => {
-      if (isAnyReorderMode) {
-        await moveCustomTag(slug, idx);
-        setCustomDropIndex(null);
-      }
-    }
-  });
-
-  useEffect(() => {
-    return () => clearLongPress();
-  }, []);
-
-  useEffect(() => {
-    if (!isAnyReorderMode) return;
-    const onPointerDown = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as Node | null;
-      if (!target) return;
-      if (cardRootRef.current?.contains(target)) return;
-      clearReorderMode();
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('touchstart', onPointerDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('touchstart', onPointerDown);
-    };
-  }, [isAnyReorderMode]);
-
   const handleDelete = async () => {
     if (!user || !canEdit) return;
 
@@ -627,27 +290,6 @@ export default function EventCard({
   const handleCardClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     const isInteractive = target.closest('button') || target.closest('a') || target.closest('[data-event-actions]') || target.closest('[data-tag-pill]');
-
-    if (isAnyReorderMode) {
-      if (wiggleOnlyClearsOnClickAway) {
-        e.stopPropagation();
-        return;
-      }
-      /* Clicks on tag pills = still reordering; only clear when clicking card background/title/etc */
-      if (target.closest('[data-tag-pill]')) {
-        e.stopPropagation();
-        return;
-      }
-      /* Layout shifts when wiggle starts – mouse may release elsewhere. Ignore clicks within 800ms of entering. */
-      if (Date.now() - reorderModeEnteredAtRef.current < 800) {
-        e.stopPropagation();
-        return;
-      }
-      e.stopPropagation();
-      clearReorderMode();
-      return;
-    }
-
     if (isInteractive) return;
     if (!onViewClick) return;
     onViewClick(event.id);
@@ -671,12 +313,11 @@ export default function EventCard({
   return (
     <>
       <div
-        ref={cardRootRef}
         className={`${imageOpacity !== undefined ? 'bg-transparent' : 'bg-white'} rounded-lg shadow-md hover:shadow-xl transition-all relative ${onViewClick ? 'cursor-pointer' : ''}`}
         onClick={handleCardClick}
         role={onViewClick ? 'button' : undefined}
         tabIndex={onViewClick ? 0 : undefined}
-        onKeyDown={onViewClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (isAnyReorderMode) { clearReorderMode(); if (onViewClick) { const section = customReorderSlug ? undefined : (reorderSection ?? undefined); onViewClick(event.id, true, section, customReorderSlug ?? undefined); } } else { onViewClick(event.id); } } } : undefined}
+        onKeyDown={onViewClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewClick(event.id); } } : undefined}
       >
         {event.image_url && (
           <div className="overflow-hidden rounded-t-lg shrink-0">
@@ -788,20 +429,9 @@ export default function EventCard({
             {event.city && (
                 <button
                 data-tag-pill
-                onClick={(e) => handlePillClick(e, () => { if (!isAnyReorderMode) onTagClick('city', event.city, event.city); })}
-                onMouseDown={() => startLongPress('header_tags')}
-                onMouseUp={(e: React.MouseEvent) => clearLongPress(e)}
-                onMouseLeave={(e: React.MouseEvent) => clearLongPress(e)}
-                onTouchStart={() => startLongPress('header_tags')}
-                onTouchEnd={(e: React.TouchEvent) => clearLongPress(e)}
-                draggable
-                onDragStart={(e: React.DragEvent) => {
-                  if (!isAnyReorderMode) {
-                    e.dataTransfer.setData('text/plain', `tag-filter:city:${event.city}`);
-                    e.dataTransfer.effectAllowed = 'copy';
-                  }
-                }}
-                className={`${HEADER_ICON_INSIDE_PILL_CLASS} ${showWiggle ? 'pill-wiggle' : ''}`}
+                onClick={() => onTagClick('city', event.city, event.city)}
+                {...tagFilterDragProps('city', event.city)}
+                className={HEADER_ICON_INSIDE_PILL_CLASS}
                 style={{
                   backgroundColor: tagColors?.city_bg_color || '#dbeafe',
                   color: tagColors?.city_text_color || '#1e40af',
@@ -818,20 +448,9 @@ export default function EventCard({
               return (
                 <button
                   data-tag-pill
-                  onClick={(e) => handlePillClick(e, () => { if (!isAnyReorderMode) onTagClick('season', season, season); })}
-                  onMouseDown={() => startLongPress('header_tags')}
-                  onMouseUp={(e: React.MouseEvent) => clearLongPress(e)}
-                  onMouseLeave={(e: React.MouseEvent) => clearLongPress(e)}
-                  onTouchStart={() => startLongPress('header_tags')}
-                  onTouchEnd={(e: React.TouchEvent) => clearLongPress(e)}
-                  draggable
-                  onDragStart={(e: React.DragEvent) => {
-                    if (!isAnyReorderMode) {
-                      e.dataTransfer.setData('text/plain', `tag-filter:season:${season}`);
-                      e.dataTransfer.effectAllowed = 'copy';
-                    }
-                  }}
-                  className={`${HEADER_ICON_INSIDE_PILL_CLASS} ${showWiggle ? 'pill-wiggle' : ''}`}
+                  onClick={() => onTagClick('season', season, season)}
+                  {...tagFilterDragProps('season', season)}
+                  className={HEADER_ICON_INSIDE_PILL_CLASS}
                   style={{
                     backgroundColor: tagColors?.season_bg_color || '#ffedd5',
                     color: tagColors?.season_text_color || '#c2410c',
@@ -847,12 +466,12 @@ export default function EventCard({
           </div>
 
           {(() => {
-            const tags = orderedTags.header_tags || [];
+            const tags = tagsBySection.header_tags || [];
             const hasHeader =
               tags.length > 0 ||
               !!(event.date && isEventUpcoming(event.date));
             if (!hasHeader) return null;
-            const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['header_tags'];
+            const showMore = tags.length > TAG_LIMIT && !expandedTagSections['header_tags'];
             const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
             return (
               <div className="mb-3">
@@ -860,15 +479,10 @@ export default function EventCard({
                   {visible.map((tag, idx) => (
                     <button
                       key={idx}
-                      onClick={(e) => handlePillClick(e, () => {
-                        if (!isAnyReorderMode) onTagClick('header_tags', resolveTag('header_tags', tag).identityId || tag, tag);
-                      })}
+                      onClick={() => onTagClick('header_tags', resolveTag('header_tags', tag).identityId || tag, tag)}
                       data-tag-pill
-                      className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-neutral-400 ring-offset-1' : ''}`}
-                      {...tagInteractionProps('header_tags', idx, 'header_tags', tag)}
-                      style={
-                        isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
-                      }
+                      className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80`}
+                      {...tagFilterDragProps('header_tags', tag)}
                     >
                       <TagPillSplitLabel
                         fitToContainer
@@ -888,18 +502,10 @@ export default function EventCard({
                       countdownOpenUrl={countdownOpenUrl}
                       countdownBg={tagColors?.countdown_bg_color}
                       countdownText={tagColors?.countdown_text_color}
-                      showWiggle={showWiggle}
                       onExpired={onEventUpdated}
-                      onButtonClick={(e) =>
-                        handlePillClick(e, () => {
-                          if (countdownOpenUrl) window.open(countdownOpenUrl, '_blank', 'noopener,noreferrer');
-                        })
-                      }
-                      onMouseDown={() => startLongPress('header_tags')}
-                      onMouseUp={(e: React.MouseEvent) => clearLongPress(e)}
-                      onMouseLeave={(e: React.MouseEvent) => clearLongPress(e)}
-                      onTouchStart={() => startLongPress('header_tags')}
-                      onTouchEnd={(e: React.TouchEvent) => clearLongPress(e)}
+                      onButtonClick={() => {
+                        if (countdownOpenUrl) window.open(countdownOpenUrl, '_blank', 'noopener,noreferrer');
+                      }}
                     />
                   )}
                   {tags.length > TAG_LIMIT && (
@@ -934,10 +540,10 @@ export default function EventCard({
             {(() => {
               const starringKey = starringColumn(event.show_type);
               const starringType = starringTagType(event.show_type);
-              const tags = orderedTags[starringKey];
+              const tags = tagsBySection[starringKey];
               if (!(tags?.length > 0)) return null;
               const expandKey = starringKey === 'featured_artists' ? 'artists' : 'designers';
-              const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections[expandKey];
+              const showMore = tags.length > TAG_LIMIT && !expandedTagSections[expandKey];
               const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
               const pillColors = {
                 backgroundColor: tagColors?.designer_bg_color || '#fef3c7',
@@ -955,15 +561,10 @@ export default function EventCard({
                     {visible.map((name, idx) => (
                       <button
                         key={idx}
-                        onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) onTagClick(starringType, resolveTag(starringType, name).identityId || name, name);
-                        })}
+                        onClick={() => onTagClick(starringType, resolveTag(starringType, name).identityId || name, name)}
                         data-tag-pill
-                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-neutral-400 ring-offset-1' : ''}`}
-                        {...tagInteractionProps(starringKey, idx, starringType, name)}
-                        style={
-                          isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
-                        }
+                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80`}
+                        {...tagFilterDragProps(starringType, name)}
                       >
                         <TagPillSplitLabel fitToContainer
                           text={resolveTag(starringType, name).display}
@@ -982,11 +583,11 @@ export default function EventCard({
             })()}
 
             {(() => {
-              const tags = getSpecialGuests(orderedCustomTags);
+              const tags = getSpecialGuests(customTags);
               if (!(tags.length > 0)) {
                 return null;
               }
-              const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['special_guests'];
+              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['special_guests'];
               const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
               const SpecialGuestsIcon = getIcon(tagColors?.special_guests_icon, 'special_guests_icon');
               const pillColors = {
@@ -1005,31 +606,13 @@ export default function EventCard({
                     {visible.map((name, idx) => (
                       <button
                         key={idx}
-                        onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) {
-                            const r = resolveTag('artist', name);
-                            onTagClick('artist', r.identityId || name, name);
-                          }
-                        })}
+                        onClick={() => {
+                          const r = resolveTag('artist', name);
+                          onTagClick('artist', r.identityId || name, name);
+                        }}
                         data-tag-pill
-                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && customDropIndex === idx ? 'ring-2 ring-neutral-400 ring-offset-1' : ''}`}
-                        {...(() => {
-                          const base = customTagInteractionProps(SPECIAL_GUESTS_SLUG, idx, name);
-                          return {
-                            ...base,
-                            onDragStart: (e: React.DragEvent) => {
-                              if (isAnyReorderMode) {
-                                setCustomDragIndex(idx);
-                              } else {
-                                e.dataTransfer.setData('text/plain', `tag-filter:artist:${name}`);
-                                e.dataTransfer.effectAllowed = 'copy';
-                              }
-                            },
-                          };
-                        })()}
-                        style={
-                          isAnyReorderMode && customDropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
-                        }
+                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80`}
+                        {...tagFilterDragProps('artist', name)}
                       >
                         <TagPillSplitLabel fitToContainer
                           text={resolveTag('artist', name).display}
@@ -1047,9 +630,9 @@ export default function EventCard({
               );
             })()}
 
-            {(orderedTags.producers?.length > 0) && (() => {
-              const tags = orderedTags.producers;
-              const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['producers'];
+            {(tagsBySection.producers?.length > 0) && (() => {
+              const tags = tagsBySection.producers;
+              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['producers'];
               const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
               return (
                 <div>
@@ -1063,15 +646,10 @@ export default function EventCard({
                     {visible.map((producer, idx) => (
                       <button
                         key={idx}
-                        onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) onTagClick('producer', resolveTag('producer', producer).identityId || producer, producer);
-                        })}
+                        onClick={() => onTagClick('producer', resolveTag('producer', producer).identityId || producer, producer)}
                         data-tag-pill
-                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-neutral-400 ring-offset-1' : ''}`}
-                        {...tagInteractionProps('producers', idx, 'producer', producer)}
-                        style={
-                          isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
-                        }
+                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80`}
+                        {...tagFilterDragProps('producer', producer)}
                       >
                         <TagPillSplitLabel fitToContainer
                           text={resolveTag('producer', producer).display}
@@ -1092,9 +670,9 @@ export default function EventCard({
               );
             })()}
 
-            {normalizeShowType(event.show_type) === 'fashion' && (orderedTags.models?.length > 0) && (() => {
-              const tags = orderedTags.models;
-              const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['models'];
+            {normalizeShowType(event.show_type) === 'fashion' && (tagsBySection.models?.length > 0) && (() => {
+              const tags = tagsBySection.models;
+              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['models'];
               const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
               return (
                 <div>
@@ -1108,15 +686,10 @@ export default function EventCard({
                     {visible.map((model, idx) => (
                       <button
                         key={idx}
-                        onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) onTagClick('model', resolveTag('model', model).identityId || model, model);
-                        })}
+                        onClick={() => onTagClick('model', resolveTag('model', model).identityId || model, model)}
                         data-tag-pill
-                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-neutral-400 ring-offset-1' : ''}`}
-                        {...tagInteractionProps('models', idx, 'model', model)}
-                        style={
-                          isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
-                        }
+                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80`}
+                        {...tagFilterDragProps('model', model)}
                       >
                         <TagPillSplitLabel fitToContainer
                           text={resolveTag('model', model).display}
@@ -1137,9 +710,9 @@ export default function EventCard({
               );
             })()}
 
-            {normalizeShowType(event.show_type) === 'fashion' && (orderedTags.hair_makeup?.length > 0) && (() => {
-              const tags = orderedTags.hair_makeup;
-              const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['hair_makeup'];
+            {normalizeShowType(event.show_type) === 'fashion' && (tagsBySection.hair_makeup?.length > 0) && (() => {
+              const tags = tagsBySection.hair_makeup;
+              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['hair_makeup'];
               const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
               return (
                 <div>
@@ -1153,15 +726,10 @@ export default function EventCard({
                     {visible.map((artist, idx) => (
                       <button
                         key={idx}
-                        onClick={(e) => handlePillClick(e, () => {
-                          if (!isAnyReorderMode) onTagClick('hair_makeup', resolveTag('hair_makeup', artist).identityId || artist, artist);
-                        })}
+                        onClick={() => onTagClick('hair_makeup', resolveTag('hair_makeup', artist).identityId || artist, artist)}
                         data-tag-pill
-                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-neutral-400 ring-offset-1' : ''}`}
-                        {...tagInteractionProps('hair_makeup', idx, 'hair_makeup', artist)}
-                        style={
-                          isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
-                        }
+                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80`}
+                        {...tagFilterDragProps('hair_makeup', artist)}
                       >
                         <TagPillSplitLabel fitToContainer
                           text={resolveTag('hair_makeup', artist).display}
@@ -1183,7 +751,7 @@ export default function EventCard({
             })()}
 
             {(() => {
-              const ct = orderedCustomTags;
+              const ct = customTags;
               const meta = (event.custom_tag_meta && typeof event.custom_tag_meta === 'object') ? event.custom_tag_meta : {};
               const slugToLabel = (s: string) => s.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
               const sharedBg = tagColors?.optional_tags_bg_color ?? '#e0e7ff';
@@ -1209,7 +777,7 @@ export default function EventCard({
                   const tags = ct[tagDef.slug];
                   if (!tags || tags.length === 0) return null;
                   const CustomIcon = getIcon(tagDef.icon, 'producer_icon');
-                  const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections[`custom_${tagDef.slug}`];
+                  const showMore = tags.length > TAG_LIMIT && !expandedTagSections[`custom_${tagDef.slug}`];
                   const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
                   return (
                     <div key={tagDef.id ?? tagDef.slug}>
@@ -1223,18 +791,13 @@ export default function EventCard({
                         {visible.map((val, idx) => (
                           <button
                             key={idx}
-                            onClick={(e) => handlePillClick(e, () => {
-                              if (!isAnyReorderMode) {
-                                const r = resolveTag(`custom:${tagDef.slug}`, val);
-                                onTagClick(`custom_performer`, `${tagDef.slug}\x00${r.identityId || val}`, val);
-                              }
-                            })}
+                            onClick={() => {
+                              const r = resolveTag(`custom:${tagDef.slug}`, val);
+                              onTagClick(`custom_performer`, `${tagDef.slug}\x00${r.identityId || val}`, val);
+                            }}
                             data-tag-pill
-                            className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && customDropIndex === idx ? 'ring-2 ring-neutral-400 ring-offset-1' : ''}`}
-                            {...customTagInteractionProps(tagDef.slug, idx, val)}
-                            style={
-                              isAnyReorderMode && customDropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
-                            }
+                            className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80`}
+                            {...tagFilterDragProps('custom_performer', `${tagDef.slug}\x00${val}`)}
                           >
                             <TagPillSplitLabel fitToContainer
                               text={resolveTag(`custom:${tagDef.slug}`, val).display}
@@ -1297,7 +860,6 @@ export default function EventCard({
                     event={event}
                     tagColors={tagColors}
                     customPerformerTags={customPerformerTags}
-                    wiggle={showWiggle}
                     fitTagPillsToContainer
                     onTagClick={onTagClick}
                   />
@@ -1306,9 +868,9 @@ export default function EventCard({
             </div>
           )}
 
-          {(orderedTags.footer_tags?.length > 0) && (() => {
-            const tags = orderedTags.footer_tags || [];
-            const showMore = !isAnyReorderMode && tags.length > TAG_LIMIT && !expandedTagSections['footer_tags'];
+          {(tagsBySection.footer_tags?.length > 0) && (() => {
+            const tags = tagsBySection.footer_tags || [];
+            const showMore = tags.length > TAG_LIMIT && !expandedTagSections['footer_tags'];
             const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
             return (
               <div className="mt-3 pt-3 border-t">
@@ -1316,15 +878,10 @@ export default function EventCard({
                   {visible.map((tag, idx) => (
                     <button
                       key={idx}
-                      onClick={(e) => handlePillClick(e, () => {
-                        if (!isAnyReorderMode) onTagClick('footer_tags', resolveTag('footer_tags', tag).identityId || tag, tag);
-                      })}
+                      onClick={() => onTagClick('footer_tags', resolveTag('footer_tags', tag).identityId || tag, tag)}
                       data-tag-pill
-                      className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${showWiggle ? 'pill-wiggle' : ''} ${isAnyReorderMode && dropIndex === idx ? 'ring-2 ring-neutral-400 ring-offset-1' : ''}`}
-                      {...tagInteractionProps('footer_tags', idx, 'footer_tags', tag)}
-                      style={
-                        isAnyReorderMode && dropIndex === idx ? ({ '--pill-scale': 1.05 } as React.CSSProperties) : undefined
-                      }
+                      className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80`}
+                      {...tagFilterDragProps('footer_tags', tag)}
                     >
                       <TagPillSplitLabel fitToContainer
                         text={resolveTag('footer_tags', tag).display}

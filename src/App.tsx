@@ -68,14 +68,10 @@ function App() {
   const [selectedTags, setSelectedTags] = useState<{ type: string; value: string; label: string }[]>([]);
   const [overlayEventId, setOverlayEventId] = useState<string | null>(null);
   const [overlaySource, setOverlaySource] = useState<'tagModal' | 'viewRatings' | null>(null);
-  const [, setOverlayOpenWithWiggle] = useState(false);
-  const [overlayReorderSection, setOverlayReorderSection] = useState<keyof { producers: string[]; featured_designers: string[]; featured_artists: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | undefined>(undefined);
-  const [overlayReorderCustomSlug, setOverlayReorderCustomSlug] = useState<string | undefined>(undefined);
   const [tagModalRefreshTrigger, setTagModalRefreshTrigger] = useState(0);
   const [identitySearchHits, setIdentitySearchHits] = useState<TagIdentityRecord[]>([]);
   const eventCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasClearedFiltersForSharedLink = useRef(false);
-  const overlayReorderEnteredAtRef = useRef<number>(0);
   const overlayCardWrapperRef = useRef<HTMLDivElement | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(() => settingsCache);
   const hasLoadedEventsRef = useRef(false);
@@ -542,9 +538,6 @@ function App() {
     } else if (!searchParams.get('event')) {
       setOverlayEventId(null);
       setOverlaySource(null);
-      setOverlayOpenWithWiggle(false);
-      setOverlayReorderSection(undefined);
-      setOverlayReorderCustomSlug(undefined);
     }
   }, [params.eventId, searchParams]);
 
@@ -802,15 +795,9 @@ function App() {
   const openEventOverlay = (
     eventId: string,
     source?: 'tagModal' | 'viewRatings',
-    openWithWiggle?: boolean,
-    reorderSection?: keyof { producers: string[]; featured_designers: string[]; featured_artists: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | 'custom',
-    reorderCustomSlug?: string
   ) => {
     setOverlayEventId(eventId);
     setOverlaySource(source ?? null);
-    setOverlayOpenWithWiggle(!!openWithWiggle);
-    setOverlayReorderSection(openWithWiggle && !reorderCustomSlug && reorderSection !== 'custom' ? (reorderSection ?? 'header_tags') : undefined);
-    setOverlayReorderCustomSlug(openWithWiggle ? reorderCustomSlug : undefined);
     // Stay on profile when opening a review from My reviews (don’t navigate to /event/:id).
     if (showProfile) {
       const next = new URLSearchParams(searchParams);
@@ -823,12 +810,8 @@ function App() {
   };
 
   const closeEventOverlay = () => {
-    overlayReorderEnteredAtRef.current = 0;
     setOverlayEventId(null);
     setOverlaySource(null);
-    setOverlayOpenWithWiggle(false);
-    setOverlayReorderSection(undefined);
-    setOverlayReorderCustomSlug(undefined);
     setTagModalRefreshTrigger((t) => t + 1);
     if (searchParams.get('profile') === '1') {
       const next = new URLSearchParams(searchParams);
@@ -881,7 +864,6 @@ function App() {
             onTagClick={handleTagClick}
             tagColors={appSettings}
             customPerformerTags={[]}
-            wiggleOnlyClearsOnClickAway
           />
         </div>
         <TagRatingsModal
@@ -1093,7 +1075,6 @@ function App() {
             className={`fixed inset-0 flex items-center justify-center p-4 bg-black/50 overflow-y-auto ${overlaySource ? 'z-[75]' : 'z-[60]'}`}
             onClick={(e) => {
               if (e.target !== e.currentTarget) return;
-              if (overlayReorderEnteredAtRef.current && Date.now() - overlayReorderEnteredAtRef.current < 800) return;
               closeEventOverlay();
             }}
             role="dialog"
@@ -1112,8 +1093,6 @@ function App() {
                   onTagClick={handleTagClick}
                   tagColors={appSettings}
                   customPerformerTags={[]}
-                  wiggleOnlyClearsOnClickAway
-                  onReorderModeEntered={() => { overlayReorderEnteredAtRef.current = Date.now(); }}
                 />
               </div>
             ) : (
@@ -1223,7 +1202,7 @@ function App() {
             pathname={pathname}
             onClose={goBack}
             onTagClick={handleTagClick}
-            onOpenEvent={(id, openWithWiggle, reorderSection, reorderCustomSlug) => openEventOverlay(id, 'viewRatings', openWithWiggle, reorderSection, reorderCustomSlug)}
+            onOpenEvent={(id) => openEventOverlay(id, 'viewRatings')}
             tagColors={appSettings}
             customPerformerTags={[]}
             visibleEventIds={new Set(filteredEvents.map((e) => e.id))}
@@ -1250,7 +1229,6 @@ function App() {
             className={`fixed inset-0 flex items-center justify-center p-4 bg-black/50 overflow-y-auto ${overlaySource ? 'z-[75]' : 'z-[60]'}`}
             onClick={(e) => {
               if (e.target !== e.currentTarget) return;
-              if (overlayReorderEnteredAtRef.current && Date.now() - overlayReorderEnteredAtRef.current < 800) return;
               closeEventOverlay();
             }}
             role="dialog"
@@ -1269,10 +1247,6 @@ function App() {
                   onTagClick={handleTagClick}
                   tagColors={appSettings}
                   customPerformerTags={[]}
-                  initialReorderSection={overlayReorderCustomSlug ? undefined : overlayReorderSection}
-                  initialCustomReorderSlug={overlayReorderCustomSlug}
-                  wiggleOnlyClearsOnClickAway
-                  onReorderModeEntered={() => { overlayReorderEnteredAtRef.current = Date.now(); }}
                 />
               </div>
             ) : (
@@ -1459,7 +1433,7 @@ function App() {
                 tagColors={appSettings}
                 customPerformerTags={[]}
                 viewHref={eventPagePath(event.id)}
-                onViewClick={(id, openWithWiggle, reorderSection, reorderCustomSlug) => openEventOverlay(id, undefined, openWithWiggle, reorderSection, reorderCustomSlug)}
+                onViewClick={(id) => openEventOverlay(id)}
               />
             </div>
           );
@@ -1524,7 +1498,6 @@ function App() {
           className={`fixed inset-0 flex items-center justify-center p-4 bg-black/50 overflow-y-auto ${overlaySource ? 'z-[75]' : 'z-[60]'}`}
           onClick={(e) => {
             if (e.target !== e.currentTarget) return;
-            if (overlayReorderEnteredAtRef.current && Date.now() - overlayReorderEnteredAtRef.current < 800) return;
             closeEventOverlay();
           }}
           role="dialog"
@@ -1543,10 +1516,6 @@ function App() {
                 onTagClick={handleTagClick}
                 tagColors={appSettings}
                 customPerformerTags={[]}
-                initialReorderSection={overlayReorderCustomSlug ? undefined : overlayReorderSection}
-                initialCustomReorderSlug={overlayReorderCustomSlug}
-                wiggleOnlyClearsOnClickAway
-                onReorderModeEntered={() => { overlayReorderEnteredAtRef.current = Date.now(); }}
               />
             </div>
           ) : (

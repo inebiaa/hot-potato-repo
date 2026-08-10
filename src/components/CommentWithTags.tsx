@@ -21,8 +21,6 @@ interface CommentWithTagsProps {
   tagColors?: CommentTagColors;
   customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
   className?: string;
-  /** When true, tag pills get the wiggle animation (e.g. when card is in reorder mode) */
-  wiggle?: boolean;
   /** When true, tag pill splits follow the card/tag row width (event card). */
   fitTagPillsToContainer?: boolean;
   onTagClick?: (type: string, value: string, displayLabel?: string) => void;
@@ -34,7 +32,6 @@ export default function CommentWithTags({
   tagColors,
   customPerformerTags = [],
   className = '',
-  wiggle = false,
   fitTagPillsToContainer = false,
   onTagClick
 }: CommentWithTagsProps) {
@@ -140,7 +137,7 @@ export default function CommentWithTags({
             type="button"
             key={i}
             data-tag-pill
-            className={`${tagPillSplitSegmentGroupClass} p-0 text-xs not-italic font-normal mx-0.5 transition-colors hover:opacity-80 ${onTagClick ? 'cursor-pointer' : ''} ${wiggle ? 'pill-wiggle' : ''}`}
+            className={`${tagPillSplitSegmentGroupClass} p-0 text-xs not-italic font-normal mx-0.5 transition-colors hover:opacity-80 ${onTagClick ? 'cursor-pointer' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               if (!onTagClick) return;

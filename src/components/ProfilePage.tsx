@@ -17,7 +17,7 @@ interface ProfilePageProps {
   pathname: string;
   onClose: () => void;
   onTagClick?: (type: string, value: string, displayLabel?: string) => void;
-  onOpenEvent?: (eventId: string, openWithWiggle?: boolean, reorderSection?: keyof { producers: string[]; featured_designers: string[]; featured_artists: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | 'custom', reorderCustomSlug?: string) => void;
+  onOpenEvent?: (eventId: string) => void;
   tagColors?: {
     producer_bg_color?: string;
     producer_text_color?: string;
