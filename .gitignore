@@ -19,6 +19,9 @@ dist-ssr
 .tmp-*/
 .tmp*/
 
+# Supabase CLI local link/cache (never commit)
+supabase/.temp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
