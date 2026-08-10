@@ -1,9 +1,11 @@
 import { normalizeTagNameKey } from './normalize';
+import { isSpecialGuestsSlug } from './specialGuests';
 import { supabase } from './supabase';
 
 export type TagType =
   | 'producer'
   | 'designer'
+  | 'artist'
   | 'model'
   | 'hair_makeup'
   | 'venue'
@@ -367,6 +369,7 @@ export async function searchTagIdentities(query: string): Promise<TagIdentityRec
 const EVENT_TAG_COLUMNS: { key: keyof EventTagSource; tagType: TagType }[] = [
   { key: 'producers', tagType: 'producer' },
   { key: 'featured_designers', tagType: 'designer' },
+  { key: 'featured_artists', tagType: 'artist' },
   { key: 'models', tagType: 'model' },
   { key: 'hair_makeup', tagType: 'hair_makeup' },
   { key: 'header_tags', tagType: 'header_tags' },
@@ -377,6 +380,7 @@ const EVENT_TAG_COLUMNS: { key: keyof EventTagSource; tagType: TagType }[] = [
 export interface EventFieldsForIdentitySync {
   producers?: string[] | null;
   featured_designers?: string[] | null;
+  featured_artists?: string[] | null;
   models?: string[] | null;
   hair_makeup?: string[] | null;
   header_tags?: string[] | null;
@@ -411,7 +415,7 @@ export async function syncTagIdentitiesFromEventFields(
   if (ct && typeof ct === 'object' && !Array.isArray(ct)) {
     for (const [slug, vals] of Object.entries(ct)) {
       if (!Array.isArray(vals)) continue;
-      const tagType = `custom:${slug}` as TagType;
+      const tagType = (isSpecialGuestsSlug(slug) ? 'artist' : `custom:${slug}`) as TagType;
       for (const name of vals) {
         if (typeof name !== 'string' || !name.trim()) continue;
         const identity = await ensureIdentity(tagType, name, createdBy || undefined);
@@ -448,6 +452,7 @@ export async function adminMergeTagIdentities(keepId: string, absorbId: string):
 interface EventTagSource {
   producers?: string[] | null;
   featured_designers?: string[] | null;
+  featured_artists?: string[] | null;
   models?: string[] | null;
   hair_makeup?: string[] | null;
   location?: string | null;
@@ -463,7 +468,7 @@ export async function searchEventTags(query: string): Promise<Pick<TagIdentityRe
 
   const { data: events, error } = await supabase
     .from('events')
-    .select('producers, featured_designers, models, hair_makeup, location, header_tags, footer_tags, custom_tags')
+    .select('producers, featured_designers, featured_artists, models, hair_makeup, location, header_tags, footer_tags, custom_tags')
     .order('date', { ascending: false })
     .limit(500);
 
@@ -491,7 +496,7 @@ export async function searchEventTags(query: string): Promise<Pick<TagIdentityRe
     const ct = ev.custom_tags;
     if (ct && typeof ct === 'object' && !Array.isArray(ct)) {
       for (const [slug, vals] of Object.entries(ct)) {
-        const tagType = `custom:${slug}` as TagType;
+        const tagType = (isSpecialGuestsSlug(slug) ? 'artist' : `custom:${slug}`) as TagType;
         if (Array.isArray(vals)) {
           for (const v of vals) {
             if (typeof v === 'string') add(tagType, v);

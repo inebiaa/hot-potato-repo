@@ -10,13 +10,14 @@ import { fetchTagResolutionForEvents, type TagResolutionMap } from '../lib/tagDi
 import { normalizeEventTagArrays } from '../lib/eventTagArray';
 import { normalizeForSearch } from '../lib/normalize';
 import ProfileReviewsPlaylist from './ProfileReviewsPlaylist';
+import { Button, Input, Label } from './ui';
 
 interface ProfilePageProps {
   userId: string;
   pathname: string;
   onClose: () => void;
   onTagClick?: (type: string, value: string, displayLabel?: string) => void;
-  onOpenEvent?: (eventId: string, openWithWiggle?: boolean, suggestSection?: keyof { producers: string[]; featured_designers: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | 'custom', suggestCustomSlug?: string) => void;
+  onOpenEvent?: (eventId: string, openWithWiggle?: boolean, reorderSection?: keyof { producers: string[]; featured_designers: string[]; featured_artists: string[]; models: string[]; hair_makeup: string[]; header_tags: string[]; footer_tags: string[] } | 'custom', reorderCustomSlug?: string) => void;
   tagColors?: {
     producer_bg_color?: string;
     producer_text_color?: string;
@@ -340,7 +341,7 @@ export default function ProfilePage({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900" />
       </div>
     );
   }
@@ -348,26 +349,26 @@ export default function ProfilePage({
   if (manageListId) {
     const currentList = lists.find((l) => l.id === manageListId);
     return (
-      <div className="min-h-screen bg-stone-50/80">
+      <div className="min-h-screen bg-neutral-50/80">
         <div className="max-w-2xl mx-auto px-4 pb-16 pt-6">
           <button
             onClick={() => { setManageListId(null); setIsAddEventOpen(false); }}
-            className="text-sm text-stone-500 hover:text-stone-900 mb-8 transition-colors"
+            className="text-sm text-neutral-500 hover:text-neutral-900 mb-8 transition-colors"
           >
             ← Back to profile
           </button>
           <div className="rounded-2xl bg-white/90 p-6 shadow-sm">
             <div className="flex items-start justify-between gap-4 mb-4">
             <div>
-              <h2 className="text-xl font-semibold text-stone-900 tracking-tight">{currentList?.name}</h2>
+              <h2 className="text-xl font-semibold text-neutral-900 tracking-tight">{currentList?.name}</h2>
               {currentList?.description && (
-                <p className="text-sm text-stone-500 mt-1">{currentList.description}</p>
+                <p className="text-sm text-neutral-500 mt-1">{currentList.description}</p>
               )}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={openAddEvent}
-                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-neutral-800"
               >
                 <Plus size={16} />
                 Add show
@@ -388,7 +389,7 @@ export default function ProfilePage({
                 className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
               >
                 <div>
-                  <a href={`${pathname}?event=${event.id}`} className="text-gray-900 hover:text-blue-600 font-medium">
+                  <a href={`${pathname}?event=${event.id}`} className="text-gray-900 hover:text-neutral-900 font-medium">
                     {event.name}
                   </a>
                   {event.date && (
@@ -425,12 +426,11 @@ export default function ProfilePage({
               </div>
               {addEventError && <p className="px-4 py-2 text-sm text-red-600 bg-red-50">{addEventError}</p>}
               <div className="p-4 border-b">
-                <input
+                <Input
                   type="text"
                   placeholder="Search shows..."
                   value={addEventSearch}
                   onChange={(e) => setAddEventSearch(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
                 />
               </div>
               <ul className="overflow-y-auto flex-1 p-4 space-y-1">
@@ -458,7 +458,7 @@ export default function ProfilePage({
   }
 
   return (
-    <div className="min-h-screen bg-stone-50/80">
+    <div className="min-h-screen bg-neutral-50/80">
       <div className="max-w-[2400px] mx-auto px-4 pb-16 pt-6">
 
         <header className="mb-10">
@@ -473,12 +473,12 @@ export default function ProfilePage({
               >
                 {username || (currentUser?.user_metadata?.full_name as string) || (currentUser?.email?.split('@')[0]) || 'Profile'}
               </span>
-              <div className="text-stone-500 text-sm mt-1 space-y-0.5">
+              <div className="text-neutral-500 text-sm mt-1 space-y-0.5">
                 {isOwnProfile && currentUser?.email && (
-                  <p className="text-stone-600">{currentUser.email}</p>
+                  <p className="text-neutral-600">{currentUser.email}</p>
                 )}
                 {isOwnProfile && userIdPublic && (
-                  <p className="text-stone-500">Sign in as: <span className="font-mono text-stone-600">{userIdPublic}</span></p>
+                  <p className="text-neutral-500">Sign in as: <span className="font-mono text-neutral-600">{userIdPublic}</span></p>
                 )}
                 <p>
                   {visibleReviews.length} review{visibleReviews.length !== 1 ? 's' : ''}
@@ -487,12 +487,12 @@ export default function ProfilePage({
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <div className="inline-flex rounded-lg border border-stone-200 bg-white/80 p-1">
+              <div className="inline-flex rounded-lg border border-neutral-200 bg-white/80 p-1">
                 <button
                   type="button"
                   onClick={() => setReviewsLayout('list')}
                   className={`px-2 py-1 rounded-md transition-colors ${
-                    reviewsLayout === 'list' ? 'bg-stone-200 text-stone-800' : 'text-stone-500 hover:text-stone-700'
+                    reviewsLayout === 'list' ? 'bg-neutral-200 text-neutral-800' : 'text-neutral-500 hover:text-neutral-700'
                   }`}
                   title="List view"
                   aria-label="List view"
@@ -503,7 +503,7 @@ export default function ProfilePage({
                   type="button"
                   onClick={() => setReviewsLayout('cards')}
                   className={`px-2 py-1 rounded-md transition-colors ${
-                    reviewsLayout === 'cards' ? 'bg-stone-200 text-stone-800' : 'text-stone-500 hover:text-stone-700'
+                    reviewsLayout === 'cards' ? 'bg-neutral-200 text-neutral-800' : 'text-neutral-500 hover:text-neutral-700'
                   }`}
                   title="Card view"
                   aria-label="Card view"
@@ -516,9 +516,9 @@ export default function ProfilePage({
         </header>
 
         <section className="min-w-0 space-y-4">
-          <h2 className="text-lg font-semibold text-stone-900">My reviews</h2>
+          <h2 className="text-lg font-semibold text-neutral-900">My reviews</h2>
           {visibleReviews.length === 0 ? (
-            <div className="rounded-2xl bg-white/80 py-16 px-6 text-center"><p className="text-stone-500 text-sm">No reviews yet. Rate a show to see it here.</p></div>
+            <div className="rounded-2xl bg-white/80 py-16 px-6 text-center"><p className="text-neutral-500 text-sm">No reviews yet. Rate a show to see it here.</p></div>
           ) : reviewsLayout === 'cards' ? (
             <TagDisplayProvider map={tagDisplayMap}>
             <MasonryLaneFeed
@@ -559,7 +559,7 @@ export default function ProfilePage({
         </section>
 
         <section className="mt-12">
-          <h2 className="text-sm font-medium text-stone-400 uppercase tracking-wider mb-4">Lists</h2>
+          <h2 className="text-sm font-medium text-neutral-400 uppercase tracking-wider mb-4">Lists</h2>
           {listsError ? (
             <div className="rounded-2xl bg-amber-50/90 border border-amber-200/80 p-6">
               <p className="text-sm text-amber-800 mb-4">
@@ -587,13 +587,13 @@ export default function ProfilePage({
             </div>
           ) : (
             <>
-        <p className="text-sm text-stone-500 mb-4">
+        <p className="text-sm text-neutral-500 mb-4">
           Create lists like “Greatest shows of all time” or a model resume.
         </p>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => { setIsCreateListOpen(true); setCreateError(''); setNewListName(''); setNewListDescription(''); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-stone-500 hover:text-stone-700 hover:bg-white/60 transition-colors border border-stone-200/60"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-neutral-500 hover:text-neutral-700 hover:bg-white/60 transition-colors border border-neutral-200/60"
           >
             <Plus size={18} />
             New list
@@ -602,13 +602,13 @@ export default function ProfilePage({
             <button
               key={list.id}
               onClick={() => openManageList(list.id)}
-              className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/90 hover:bg-white transition-all hover:shadow-md hover:shadow-stone-200/30 text-left"
+              className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/90 hover:bg-white transition-all hover:shadow-md hover:shadow-neutral-200/30 text-left"
             >
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-stone-900 truncate">{list.name}</p>
-                <p className="text-xs text-stone-500">{list.event_count} show{list.event_count !== 1 ? 's' : ''}</p>
+                <p className="font-medium text-neutral-900 truncate">{list.name}</p>
+                <p className="text-xs text-neutral-500">{list.event_count} show{list.event_count !== 1 ? 's' : ''}</p>
               </div>
-              <ChevronRight size={16} className="text-stone-300 shrink-0" />
+              <ChevronRight size={16} className="text-neutral-300 shrink-0" />
             </button>
           ))}
         </div>
@@ -623,41 +623,35 @@ export default function ProfilePage({
           onClick={(e) => e.target === e.currentTarget && setIsCreateListOpen(false)}
         >
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-stone-900 mb-4">Create list</h3>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">Create list</h3>
             <form onSubmit={createList} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-stone-700 mb-1">Name</label>
-                <input
+                <Label htmlFor="new-list-name">Name</Label>
+                <Input
+                  id="new-list-name"
                   type="text"
                   value={newListName}
                   onChange={(e) => setNewListName(e.target.value)}
                   placeholder="e.g. Greatest shows of all time"
-                  className="w-full px-3 py-2 border border-stone-200 rounded-xl text-stone-900 focus:ring-2 focus:ring-stone-300 focus:border-transparent"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-stone-700 mb-1">Description</label>
-                <input
+                <Label htmlFor="new-list-description">Description</Label>
+                <Input
+                  id="new-list-description"
                   type="text"
                   value={newListDescription}
                   onChange={(e) => setNewListDescription(e.target.value)}
                   placeholder="e.g. My personal top 10"
-                  className="w-full px-3 py-2 border border-stone-200 rounded-xl text-stone-900 focus:ring-2 focus:ring-stone-300 focus:border-transparent"
                 />
               </div>
-              {createError && <p className="text-sm text-red-600">{createError}</p>}
+              {createError && <p className="text-sm text-destructive">{createError}</p>}
               <div className="flex gap-2">
-                <button type="submit" className="px-4 py-2.5 bg-stone-900 text-white rounded-xl hover:bg-stone-800 transition-colors">
-                  Create
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsCreateListOpen(false)}
-                  className="px-4 py-2.5 border border-stone-200 rounded-xl text-stone-600 hover:bg-stone-50 transition-colors"
-                >
+                <Button type="submit">Create</Button>
+                <Button type="button" variant="secondary" onClick={() => setIsCreateListOpen(false)}>
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           </div>

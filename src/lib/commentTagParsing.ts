@@ -2,6 +2,7 @@ import { findAccentInsensitiveMatch, normalizeTagNameKey } from './normalize';
 import type { Event } from './supabase';
 import { effectiveHeaderTags } from './eventHeaderTags';
 import { getSeasonFromDate } from './season';
+import { getSpecialGuests, isSpecialGuestsSlug } from './specialGuests';
 
 /** Tag pill colors aligned with CommentWithTags / EventCard */
 export interface CommentTagColors {
@@ -45,7 +46,7 @@ export function getEventTagStyles(
     if (type === 'producer') {
       bg = tagColors?.producer_bg_color || '#f3f4f6';
       text = tagColors?.producer_text_color || '#374151';
-    } else if (type === 'designer') {
+    } else if (type === 'designer' || type === 'artist') {
       bg = tagColors?.designer_bg_color || '#fef3c7';
       text = tagColors?.designer_text_color || '#b45309';
     } else if (type === 'model') {
@@ -77,6 +78,8 @@ export function getEventTagStyles(
   };
   (event.producers || []).forEach((v) => add(v, 'producer'));
   (event.featured_designers || []).forEach((v) => add(v, 'designer'));
+  (event.featured_artists || []).forEach((v) => add(v, 'artist'));
+  getSpecialGuests(event.custom_tags).forEach((v) => add(v, 'artist'));
   (event.models || []).forEach((v) => add(v, 'model'));
   (event.hair_makeup || []).forEach((v) => add(v, 'hair_makeup'));
   effectiveHeaderTags(event).forEach((v) => add(v, 'header_tags'));
@@ -85,6 +88,7 @@ export function getEventTagStyles(
   if (event.date) add(getSeasonFromDate(event.date), 'season');
   if (event.custom_tags && typeof event.custom_tags === 'object') {
     Object.entries(event.custom_tags).forEach(([slug, vals]) => {
+      if (isSpecialGuestsSlug(slug)) return;
       (vals || []).forEach((v) => add(v, 'custom', slug));
     });
   }

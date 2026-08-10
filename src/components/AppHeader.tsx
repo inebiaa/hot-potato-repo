@@ -3,11 +3,11 @@ import { Plus, LogOut, LogIn, Sparkles, BarChart3, User, Settings, Home, MoreVer
 import type { AppSettings } from '../types/appSettings';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
-export type AppHeaderActiveView = 'home' | 'stats' | 'profile';
+export type AppHeaderActiveView = 'home' | 'stats' | 'profile' | 'settings';
 
 /** Primary actions: no chrome box — icon / text only, tint on hover. */
 const ctaGhost =
-  'text-blue-600 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
+  'text-neutral-900 hover:bg-neutral-100 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
 
 interface AppHeaderProps {
   pathname: string;
@@ -84,7 +84,7 @@ export default function AppHeader({
 
   const navItemClass = (active: boolean) =>
     `flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
-      active ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900'
+      active ? 'text-neutral-900' : 'text-gray-600 hover:text-gray-900'
     }`;
 
   const runAndClose = (fn: () => void) => {
@@ -121,7 +121,7 @@ export default function AppHeader({
                       {appSettings.app_icon_url ? (
                         <img src={appSettings.app_icon_url} alt="App Icon" className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" />
                       ) : (
-                        <div className="shrink-0 bg-gradient-to-br from-blue-600 to-blue-700 p-2">
+                        <div className="shrink-0 bg-neutral-900 p-2">
                           <Sparkles className="text-white" size={22} />
                         </div>
                       )}
@@ -154,18 +154,18 @@ export default function AppHeader({
 
               <div className="hidden shrink-0 items-center gap-1 lg:flex lg:pl-1">
                 <button type="button" onClick={onGoHome} className={iconBtn} title="Home">
-                  <Home size={20} strokeWidth={activeView === 'home' ? 2.25 : 2} className={activeView === 'home' ? 'text-blue-600' : ''} />
+                  <Home size={20} strokeWidth={activeView === 'home' ? 2.25 : 2} className={activeView === 'home' ? 'text-neutral-900' : ''} />
                 </button>
                 <button type="button" onClick={onOpenStats} className={iconBtn} title="Statistics">
-                  <BarChart3 size={20} strokeWidth={activeView === 'stats' ? 2.25 : 2} className={activeView === 'stats' ? 'text-blue-600' : ''} />
+                  <BarChart3 size={20} strokeWidth={activeView === 'stats' ? 2.25 : 2} className={activeView === 'stats' ? 'text-neutral-900' : ''} />
                 </button>
                 {user ? (
                   <>
                     <button type="button" onClick={onOpenProfile} className={iconBtn} title="My profile">
-                      <User size={20} strokeWidth={activeView === 'profile' ? 2.25 : 2} className={activeView === 'profile' ? 'text-blue-600' : ''} />
+                      <User size={20} strokeWidth={activeView === 'profile' ? 2.25 : 2} className={activeView === 'profile' ? 'text-neutral-900' : ''} />
                     </button>
                     <button type="button" onClick={onOpenSettings} className={iconBtn} title="Settings">
-                      <Settings size={20} strokeWidth={2} />
+                      <Settings size={20} strokeWidth={activeView === 'settings' ? 2.25 : 2} className={activeView === 'settings' ? 'text-neutral-900' : ''} />
                     </button>
                     <button
                       type="button"

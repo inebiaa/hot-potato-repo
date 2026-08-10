@@ -1,15 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import ModalShell from './ModalShell';
-import TagPillSplitLabel, {
-  tagPillSplitSegmentGroupClass,
-  type TagPillSegmentColors,
-} from './TagPillSplitLabel';
-import { Save, Trash2, Image, Users, Tags, FolderPlus, User, Plus, X } from 'lucide-react';
+import { Save, Image, Users, Tags, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { getIcon, DEFAULT_ICONS } from '../lib/eventCardIcons';
 import { useAuth } from '../contexts/AuthContext';
 import { readableTextForBg } from '../lib/colorUtils';
-import IconPicker from './IconPicker';
 import { CUSTOM_COLORS_STORAGE_KEY, PRELOADED_HEX } from '../lib/tagColorPickerData';
 import {
   ensureIdentity,
@@ -25,91 +18,18 @@ import {
 } from '../lib/tagIdentity';
 import { loadAdminTagGroupMembers } from '../lib/adminTagGroupMembers';
 import type { AppSettings } from '../types/appSettings';
-
-function formatTagTypeLabel(tagType: string): string {
-  if (tagType.startsWith('custom:')) {
-    const slug = tagType.slice(7) || 'custom';
-    return `Custom: ${slug.replace(/-/g, ' ')}`;
-  }
-  const map: Record<string, string> = {
-    producer: 'Producer',
-    designer: 'Designer',
-    model: 'Model',
-    hair_makeup: 'Hair & Makeup',
-    venue: 'Venue',
-    header_tags: 'Genre',
-    footer_tags: 'Collection',
-  };
-  return map[tagType] || tagType;
-}
-
-/** Same pattern as App.tsx tag search: "Producer: ", "Designer: ", "Genre: ", etc. */
-function connectSearchTypePrefix(tagType: string): string {
-  if (tagType.startsWith('custom:')) return 'Custom: ';
-  const map: Record<string, string> = {
-    producer: 'Producer',
-    designer: 'Designer',
-    model: 'Model',
-    hair_makeup: 'Hair & Makeup',
-    venue: 'Venue',
-    header_tags: 'Genre',
-    footer_tags: 'Collection',
-  };
-  const label = map[tagType] ?? tagType.replace(/_/g, ' ');
-  return `${label}: `;
-}
-
-const CONNECT_CREATE_TYPE_PILLS: { value: TagType; label: string }[] = [
-  { value: 'producer', label: 'Producer' },
-  { value: 'designer', label: 'Designer' },
-  { value: 'model', label: 'Model' },
-  { value: 'hair_makeup', label: 'Hair & Makeup' },
-  { value: 'header_tags', label: 'Genre' },
-  { value: 'footer_tags', label: 'Collection' },
-];
-
-const CREDIT_PILL_SEGMENT_ACTIVE: TagPillSegmentColors = { backgroundColor: '#d1d5db', color: '#4b5563' };
-const CREDIT_PILL_SEGMENT_IDLE: TagPillSegmentColors = { backgroundColor: '#e5e7eb', color: '#4b5563' };
-const ALIAS_NEUTRAL_PILL_COLORS: TagPillSegmentColors = { backgroundColor: '#d1d5db', color: '#4b5563' };
-
-/** EventCard-aligned: selected adds ring; fill is on each text chunk via segmentColors. */
-function creditPillClass(active: boolean) {
-  return [
-    `${tagPillSplitSegmentGroupClass} p-0 max-w-full text-xs transition-colors hover:opacity-80`,
-    active ? 'ring-2 ring-blue-400 ring-offset-1' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-}
-
-function creditPillSegmentColors(active: boolean): TagPillSegmentColors {
-  return active ? CREDIT_PILL_SEGMENT_ACTIVE : CREDIT_PILL_SEGMENT_IDLE;
-}
-
-/** Same gray chunk styling as credit pills; no blue ring — selection is fill only. */
-function linkedGroupPillClass() {
-  return `${tagPillSplitSegmentGroupClass} p-0 max-w-full text-xs transition-colors hover:opacity-80`;
-}
+import BrandingTab from './settings/BrandingTab';
+import AccountTab, { type CreditRow } from './settings/AccountTab';
+import AdminsTab from './settings/AdminsTab';
+import TagsTab, { BRIGHT_TAG_DEFAULTS, FADED_TAG_DEFAULTS } from './settings/TagsTab';
+import { Button } from './ui';
 
 const PALETTE_STORAGE_KEY = 'tag_settings_palette_v1';
 const COLLECTIONS_STORAGE_KEY = 'tag_color_collections_v1';
 const DEFAULT_TAG_SETTINGS_KEY = 'tag_default_settings_v1';
 
-/** Faded (muted) preset: soft pastels, auto text color */
-const FADED_TAG_DEFAULTS: Record<string, string> = {
-  producer_bg_color: '#f3f4f6', designer_bg_color: '#fef3c7', model_bg_color: '#fce7f3',
-  hair_makeup_bg_color: '#f3e8ff', city_bg_color: '#dbeafe', season_bg_color: '#ffedd5',
-  header_tags_bg_color: '#ccfbf1', countdown_bg_color: '#fef3c7', footer_tags_bg_color: '#d1fae5', optional_tags_bg_color: '#e0e7ff',
-};
 
-/** Vibrant (bright) preset: saturated colors, auto text color */
-const BRIGHT_TAG_DEFAULTS: Record<string, string> = {
-  producer_bg_color: '#fef08a', designer_bg_color: '#f9a8d4', model_bg_color: '#86efac',
-  hair_makeup_bg_color: '#67e8f9', city_bg_color: '#bef264', season_bg_color: '#fdba74',
-  header_tags_bg_color: '#c4b5fd', countdown_bg_color: '#fef3c7', footer_tags_bg_color: '#5eead4', optional_tags_bg_color: '#fda4af',
-};
-
-const BUILT_IN_TAG_DEFAULTS: Pick<AppSettings, 'producer_bg_color' | 'producer_text_color' | 'designer_bg_color' | 'designer_text_color' | 'model_bg_color' | 'model_text_color' | 'hair_makeup_bg_color' | 'hair_makeup_text_color' | 'city_bg_color' | 'city_text_color' | 'season_bg_color' | 'season_text_color' | 'header_tags_bg_color' | 'header_tags_text_color' | 'countdown_bg_color' | 'countdown_text_color' | 'footer_tags_bg_color' | 'footer_tags_text_color' | 'optional_tags_bg_color' | 'optional_tags_text_color' | 'producer_icon' | 'designer_icon' | 'model_icon' | 'hair_makeup_icon' | 'city_icon' | 'season_icon' | 'header_tags_icon' | 'footer_tags_icon'> = {
+const BUILT_IN_TAG_DEFAULTS: Pick<AppSettings, 'producer_bg_color' | 'producer_text_color' | 'designer_bg_color' | 'designer_text_color' | 'model_bg_color' | 'model_text_color' | 'hair_makeup_bg_color' | 'hair_makeup_text_color' | 'city_bg_color' | 'city_text_color' | 'season_bg_color' | 'season_text_color' | 'header_tags_bg_color' | 'header_tags_text_color' | 'countdown_bg_color' | 'countdown_text_color' | 'footer_tags_bg_color' | 'footer_tags_text_color' | 'optional_tags_bg_color' | 'optional_tags_text_color' | 'special_guests_bg_color' | 'special_guests_text_color' | 'producer_icon' | 'designer_icon' | 'model_icon' | 'hair_makeup_icon' | 'city_icon' | 'season_icon' | 'header_tags_icon' | 'footer_tags_icon' | 'special_guests_icon'> = {
   producer_bg_color: '#fef08a',
   producer_text_color: '#713f12',
   designer_bg_color: '#f9a8d4',
@@ -130,6 +50,8 @@ const BUILT_IN_TAG_DEFAULTS: Pick<AppSettings, 'producer_bg_color' | 'producer_t
   footer_tags_text_color: '#134e4a',
   optional_tags_bg_color: '#fda4af',
   optional_tags_text_color: '#881337',
+  special_guests_bg_color: '#e0e7ff',
+  special_guests_text_color: '#3730a3',
   producer_icon: 'Tag',
   designer_icon: 'Tag',
   model_icon: 'Tag',
@@ -138,6 +60,7 @@ const BUILT_IN_TAG_DEFAULTS: Pick<AppSettings, 'producer_bg_color' | 'producer_t
   season_icon: 'Tag',
   header_tags_icon: 'Tag',
   footer_tags_icon: 'Tag',
+  special_guests_icon: 'Mic',
 };
 
 interface ColorCollection {
@@ -146,22 +69,10 @@ interface ColorCollection {
   colors: string[];
 }
 
-interface SettingsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface SettingsPageProps {
   onSettingsUpdated: () => void;
   onSettingsPreview?: (settings: AppSettings) => void;
   onAccountUpdated?: () => void;
-}
-
-interface CreditRow {
-  id: string;
-  identity_id: string;
-  preferred_alias_id: string | null;
-  public_display_alias_id: string | null;
-  tag_type: string;
-  canonical_name: string;
-  aliases: { id: string; alias: string }[];
 }
 
 interface AdminUser {
@@ -173,10 +84,10 @@ interface AdminUser {
 }
 
 type TabId = 'branding' | 'admins' | 'tags' | 'account';
-type CoreTagKey = 'producer' | 'designer' | 'model' | 'hair_makeup' | 'city' | 'season' | 'header_tags' | 'footer_tags';
+type CoreTagKey = 'producer' | 'designer' | 'model' | 'hair_makeup' | 'city' | 'season' | 'header_tags' | 'footer_tags' | 'special_guests';
 type SwatchColorKey = CoreTagKey | 'optional_tags' | 'countdown';
 
-export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSettingsPreview, onAccountUpdated }: SettingsModalProps) {
+export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onAccountUpdated }: SettingsPageProps) {
   const { user, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>('branding');
   const [settings, setSettings] = useState<AppSettings>(() => ({
@@ -213,8 +124,11 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     season_icon: 'Tag',
     header_tags_icon: 'Tag',
     footer_tags_icon: 'Tag',
+    special_guests_icon: 'Mic',
     optional_tags_bg_color: '#fda4af',
     optional_tags_text_color: '#881337',
+    special_guests_bg_color: '#e0e7ff',
+    special_guests_text_color: '#3730a3',
   }));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -287,6 +201,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     { key: 'season', label: 'Season' },
     { key: 'header_tags', label: 'Genre' },
     { key: 'footer_tags', label: 'Collection' },
+    { key: 'special_guests', label: 'Special Guests' },
     { key: 'countdown', label: 'Countdown' },
     { key: 'optional_tags', label: 'Custom' },
   ];
@@ -811,7 +726,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
   }, [creditSearchResults]);
 
   useEffect(() => {
-    if (!isOpen || !isAdmin) return;
+    if (!isAdmin) return;
     if (adminManagedIdentity) {
       setAdminIdentitySearchResults([]);
       setAdminIdentitySearching(false);
@@ -835,10 +750,10 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
         });
     }, 200);
     return () => window.clearTimeout(t);
-  }, [adminIdentitySearch, isOpen, isAdmin, adminManagedIdentity]);
+  }, [adminIdentitySearch, isAdmin, adminManagedIdentity]);
 
   useEffect(() => {
-    if (!isOpen || !isAdmin || !adminManagedIdentity) {
+    if (!isAdmin || !adminManagedIdentity) {
       setAdminMergeSearchResults([]);
       return;
     }
@@ -866,49 +781,29 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
         });
     }, 200);
     return () => window.clearTimeout(t);
-  }, [adminMergeSearch, isOpen, isAdmin, adminManagedIdentity]);
+  }, [adminMergeSearch, isAdmin, adminManagedIdentity]);
 
   useEffect(() => {
-    if (isOpen) {
-      setSettingsLoaded(false);
-      fetchSettings();
-      fetchAdminUsers();
-      if (user) {
-        fetchAccountProfile();
-        fetchCredits();
-      }
-      if (!isAdmin) setActiveTab('account');
-    } else {
-      fetchAdminLinkContextGenRef.current += 1;
-      setSettingsLoaded(false);
-      setAdminIdentitySearch('');
-      setAdminIdentitySearchResults([]);
-      setAdminManagedIdentity(null);
-      setAdminManagedAliases([]);
-      setAdminAliasError(null);
-      setAdminAliasDeleteMode(false);
-      setAdminAddingAlias(false);
-      setNewAdminAliasText('');
-      setEditingAdminAliasId(null);
-      setEditAdminAliasDraft('');
-      setAdminMergeSearch('');
-      setAdminMergeSearchResults([]);
-      setAdminMergeAbsorb(null);
-      setAdminLinking(false);
-      setAdminIdentityClusterMembers([]);
+    setSettingsLoaded(false);
+    fetchSettings();
+    fetchAdminUsers();
+    if (user) {
+      fetchAccountProfile();
+      fetchCredits();
     }
-    // One-shot when modal opens; fetch* helpers are intentionally not deps (unstable identities)
+    if (!isAdmin) setActiveTab('account');
+    // One-shot on mount / auth change; fetch* helpers are intentionally not deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, user?.id, isAdmin]);
+  }, [user?.id, isAdmin]);
 
   useEffect(() => {
-    if (!isOpen || !settingsLoaded || !onSettingsPreview) return;
+    if (!settingsLoaded || !onSettingsPreview) return;
     if (skipNextPreviewRef.current) {
       skipNextPreviewRef.current = false;
       return;
     }
     onSettingsPreview(settings);
-  }, [settings, isOpen, settingsLoaded, onSettingsPreview]);
+  }, [settings, settingsLoaded, onSettingsPreview]);
 
   const fetchSettings = async () => {
     try {
@@ -957,8 +852,11 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
         season_icon: iconValue('season_icon', 'Tag'),
         header_tags_icon: iconValue('header_tags_icon', 'Tag'),
         footer_tags_icon: iconValue('footer_tags_icon', 'Tag'),
+        special_guests_icon: iconValue('special_guests_icon', 'Mic'),
         optional_tags_bg_color: settingsObj.optional_tags_bg_color || '#fda4af',
         optional_tags_text_color: settingsObj.optional_tags_text_color || '#881337',
+        special_guests_bg_color: settingsObj.special_guests_bg_color || '#e0e7ff',
+        special_guests_text_color: settingsObj.special_guests_text_color || '#3730a3',
       });
       skipNextPreviewRef.current = true;
       setSettingsLoaded(true);
@@ -1445,8 +1343,11 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
         { key: 'season_icon', value: settings.season_icon },
         { key: 'header_tags_icon', value: settings.header_tags_icon },
         { key: 'footer_tags_icon', value: settings.footer_tags_icon },
+        { key: 'special_guests_icon', value: settings.special_guests_icon },
         { key: 'optional_tags_bg_color', value: settings.optional_tags_bg_color },
         { key: 'optional_tags_text_color', value: settings.optional_tags_text_color },
+        { key: 'special_guests_bg_color', value: settings.special_guests_bg_color },
+        { key: 'special_guests_text_color', value: settings.special_guests_text_color },
       ];
 
       for (const u of updates) {
@@ -1465,8 +1366,6 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     }
   };
 
-  if (!isOpen) return null;
-
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     ...(isAdmin ? [
       { id: 'branding' as const, label: 'Branding', icon: <Image size={18} /> },
@@ -1476,21 +1375,17 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
     { id: 'account', label: 'Account', icon: <User size={18} /> },
   ];
   return (
-    <ModalShell
-      onClose={onClose}
-      title="Settings"
-      panelClassName="max-w-2xl sm:rounded-xl"
-      bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden p-0"
-    >
-        <div className="flex shrink-0 border-b">
+    <div className="w-full overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex shrink-0 overflow-x-auto border-b border-border">
           {tabs.map((tab) => (
             <button
               key={tab.id}
+              type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              className={`-mb-px flex shrink-0 items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-colors ${
                 activeTab === tab.id
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'border-neutral-900 text-neutral-900'
+                  : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
               }`}
             >
               {tab.icon}
@@ -1499,1086 +1394,137 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
-          <div className="p-5 space-y-5">
+        <form onSubmit={handleSubmit} className="flex flex-col">
+          <div className="space-y-5 p-5">
             {activeTab === 'branding' && (
-              <>
-                <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-sm text-blue-800">
-                  <strong>Images:</strong> Upload to <a href="https://imgur.com" target="_blank" rel="noopener noreferrer" className="underline">Imgur</a> or <a href="https://postimages.org" target="_blank" rel="noopener noreferrer" className="underline">PostImages</a>, then paste the direct URL.
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">App Name</label>
-                  <input
-                    type="text"
-                    value={settings.app_name}
-                    onChange={(e) => setSettings((s) => ({ ...s, app_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tagline</label>
-                  <input
-                    type="text"
-                    value={settings.tagline}
-                    onChange={(e) => setSettings((s) => ({ ...s, tagline: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">App Icon URL</label>
-                  <input
-                    type="url"
-                    value={settings.app_icon_url}
-                    onChange={(e) => setSettings((s) => ({ ...s, app_icon_url: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="https://..."
-                  />
-                  {settings.app_icon_url && <img src={settings.app_icon_url} alt="" className="mt-2 w-12 h-12 rounded-lg border object-cover" />}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">App Logo URL</label>
-                  <input
-                    type="url"
-                    value={settings.app_logo_url}
-                    onChange={(e) => setSettings((s) => ({ ...s, app_logo_url: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="https://..."
-                  />
-                  {settings.app_logo_url && <img src={settings.app_logo_url} alt="" className="mt-2 h-10 object-contain" />}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">App Favicon URL</label>
-                  <input
-                    type="url"
-                    value={settings.app_favicon_url}
-                    onChange={(e) => setSettings((s) => ({ ...s, app_favicon_url: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="https://..."
-                  />
-                  {settings.app_favicon_url && <img src={settings.app_favicon_url} alt="" className="mt-2 w-8 h-8 rounded-lg border object-cover" />}
-                </div>
-              </>
+              <BrandingTab
+                settings={settings}
+                onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
+              />
             )}
 
             {activeTab === 'admins' && (
-              <>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={adminUserIdPublic}
-                    onChange={(e) => setAdminUserIdPublic(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void handleAddAdmin();
-                      }
-                    }}
-                    placeholder="User ID"
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button"
-                    disabled={adminLoading}
-                    onClick={() => void handleAddAdmin()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50"
-                  >
-                    {adminLoading ? 'Adding...' : 'Add Admin'}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 -mt-1">Use the member's public User ID from their profile.</p>
-                <div className="space-y-2">
-                  {adminUsers.map((admin) => (
-                    <div key={admin.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <span className="text-sm font-medium">
-                        {admin.user_id_public ? `@${admin.user_id_public}` : admin.user_id}
-                        {admin.username ? ` (${admin.username})` : ''}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAdmin(admin.id)}
-                        disabled={adminUsers.length <= 1}
-                        className="text-red-500 hover:text-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <section
-                  className="border-t border-stone-100 pt-5 mt-5 space-y-3"
-                  aria-labelledby="admin-tag-aliases-heading"
-                >
-                  <h3 id="admin-tag-aliases-heading" className="text-sm font-semibold text-stone-800">
-                    Tag aliases
-                  </h3>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={adminIdentitySearch}
-                      onChange={(e) => setAdminIdentitySearch(e.target.value)}
-                      placeholder="Search (2+ letters)…"
-                      className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
-                      autoComplete="off"
-                    />
-                    {adminIdentitySearching && (
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">…</span>
-                    )}
-                  </div>
-                  {adminIdentitySearch.trim().length >= 2 && !adminManagedIdentity && adminIdentitySearchResults.length > 0 && (
-                    <div className="rounded-md border border-stone-200 bg-white divide-y divide-stone-100 max-h-40 overflow-y-auto">
-                      {adminIdentitySearchResults.map((row) => (
-                        <button
-                          key={row.id}
-                          type="button"
-                          onClick={() => selectAdminManagedIdentity(row)}
-                          className="w-full flex items-stretch gap-2 px-3 py-2 text-left hover:bg-stone-50"
-                        >
-                          <span className="text-stone-400 text-xs shrink-0">{connectSearchTypePrefix(row.tag_type)}</span>
-                          <span className="text-sm text-stone-900 truncate flex-1">{row.canonical_name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {adminIdentitySearch.trim().length >= 2 && !adminManagedIdentity && !adminIdentitySearching && adminIdentitySearchResults.length === 0 && (
-                    <p className="text-xs text-stone-500">No match.</p>
-                  )}
-
-                  {adminManagedIdentity && (
-                    <div className="rounded-xl border border-stone-200 bg-white p-3 space-y-3">
-                      <div className="flex flex-wrap items-start gap-2">
-                        <div className="min-w-0 flex-1">
-                          {adminIdentityClusterMembers.length >= 2 ? (
-                            <div className="space-y-2 min-w-0">
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span className="inline-flex items-center text-xs px-2 py-1 rounded-md bg-gray-300 text-gray-600 shrink-0">
-                                  {formatTagTypeLabel(adminManagedIdentity.tag_type)}
-                                </span>
-                                <span className="text-stone-300 text-[11px] select-none" aria-hidden>
-                                  ·
-                                </span>
-                                <span className="text-sm font-medium text-stone-900 min-w-0 break-words">
-                                  {adminManagedIdentity.canonical_name}
-                                </span>
-                              </div>
-                              <div
-                                className="flex flex-wrap items-center gap-1.5 pl-0"
-                                role="group"
-                                aria-label="Other names in this linked set"
-                              >
-                                {adminIdentityClusterMembers
-                                  .filter((m) => m.id !== adminManagedIdentity.id)
-                                  .sort((a, b) => a.canonical_name.localeCompare(b.canonical_name))
-                                  .map((m) => (
-                                    <span
-                                      key={m.id}
-                                      className="inline-flex items-center max-w-full gap-0.5"
-                                    >
-                                      <button
-                                        type="button"
-                                        data-tag-pill
-                                        className={linkedGroupPillClass()}
-                                        onClick={() => switchAdminToLinkedMember(m)}
-                                        title={`Edit “${m.canonical_name}”`}
-                                      >
-                                        <TagPillSplitLabel
-                                          text={m.canonical_name}
-                                          segmentColors={creditPillSegmentColors(false)}
-                                        />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="shrink-0 p-0.5 leading-none text-stone-400 hover:text-red-600 disabled:opacity-40"
-                                        disabled={adminLinking}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          void runAdminUnlink(m.id);
-                                        }}
-                                        title={`Remove “${m.canonical_name}” from the linked set`}
-                                        aria-label={`Remove ${m.canonical_name} from the linked set`}
-                                      >
-                                        <X size={12} />
-                                      </button>
-                                    </span>
-                                  ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                              <span className="inline-flex items-center text-xs px-2 py-1 rounded-md bg-gray-300 text-gray-600 shrink-0">
-                                {formatTagTypeLabel(adminManagedIdentity.tag_type)}
-                              </span>
-                              <span className="text-stone-300 text-[11px] select-none" aria-hidden>
-                                ·
-                              </span>
-                              <span className="text-sm font-medium text-stone-900 break-words min-w-0">
-                                {adminManagedIdentity.canonical_name}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end gap-1.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              fetchAdminLinkContextGenRef.current += 1;
-                              setAdminManagedIdentity(null);
-                              setAdminManagedAliases([]);
-                              setAdminAliasDeleteMode(false);
-                              setEditingAdminAliasId(null);
-                              setAdminAddingAlias(false);
-                              setNewAdminAliasText('');
-                              setAdminMergeSearch('');
-                              setAdminMergeSearchResults([]);
-                              setAdminMergeAbsorb(null);
-                              setAdminIdentityClusterMembers([]);
-                            }}
-                            className="text-xs px-2 py-1 rounded border border-stone-200 text-stone-600 hover:bg-stone-50"
-                          >
-                            Back
-                          </button>
-                        </div>
-                      </div>
-                      {adminAliasLoading && <p className="text-xs text-stone-500">Loading…</p>}
-                      {adminAliasError && <p className="text-xs text-amber-800">{adminAliasError}</p>}
-
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] text-stone-500">Aliases</span>
-                          {adminAliasesForDisplay.length > 0 && (
-                            adminAliasDeleteMode ? (
-                              <button
-                                type="button"
-                                onClick={() => setAdminAliasDeleteMode(false)}
-                                className="text-[11px] text-stone-600"
-                              >
-                                Done
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setAdminAliasDeleteMode(true)}
-                                className="text-[11px] text-stone-500"
-                              >
-                                Remove
-                              </button>
-                            )
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 items-center">
-                          {adminAliasesForDisplay.map((al) =>
-                            editingAdminAliasId === al.id ? (
-                              <div key={al.id} className="inline-flex flex-wrap items-center gap-1.5">
-                                <input
-                                  value={editAdminAliasDraft}
-                                  onChange={(e) => setEditAdminAliasDraft(e.target.value)}
-                                  className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white min-w-[140px]"
-                                  autoFocus
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => void saveAdminAliasEdit()}
-                                  className="text-xs px-2.5 py-1.5 rounded-md border border-stone-200 text-stone-700 hover:bg-stone-50"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingAdminAliasId(null);
-                                    setEditAdminAliasDraft('');
-                                  }}
-                                  className="text-xs text-stone-500 hover:text-stone-800"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <span
-                                key={al.id}
-                                data-tag-pill
-                                className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs ${adminAliasDeleteMode ? 'pill-wiggle' : ''}`}
-                              >
-                                <TagPillSplitLabel text={al.alias} segmentColors={ALIAS_NEUTRAL_PILL_COLORS} />
-                                {!adminAliasDeleteMode && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingAdminAliasId(al.id);
-                                      setEditAdminAliasDraft(al.alias);
-                                    }}
-                                    className="ml-1 text-[10px] text-stone-400 hover:text-stone-700 underline"
-                                  >
-                                    Edit
-                                  </button>
-                                )}
-                                {adminAliasDeleteMode && (
-                                  <button
-                                    type="button"
-                                    className="absolute -top-2 -right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white border border-stone-300 text-stone-600 shadow-sm hover:bg-stone-50"
-                                    title="Remove alias"
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      if (!window.confirm('Remove this alias?')) return;
-                                      void deleteAdminAliasRow(al.id);
-                                    }}
-                                    aria-label={`Remove alias ${al.alias}`}
-                                  >
-                                    <X size={16} strokeWidth={2} />
-                                  </button>
-                                )}
-                              </span>
-                            )
-                          )}
-                          {adminAddingAlias ? (
-                            <div className="inline-flex flex-wrap items-center gap-1.5">
-                              <input
-                                value={newAdminAliasText}
-                                onChange={(e) => setNewAdminAliasText(e.target.value)}
-                                placeholder="New alias"
-                                className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white min-w-[140px]"
-                                autoFocus
-                              />
-                              <button
-                                type="button"
-                                onClick={() => void addAdminAliasRow()}
-                                className="text-xs px-2.5 py-1.5 rounded-md border border-stone-200 text-stone-700 hover:bg-stone-50"
-                              >
-                                Add
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setAdminAddingAlias(false);
-                                  setNewAdminAliasText('');
-                                }}
-                                className="text-xs text-stone-500 hover:text-stone-800"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setAdminAddingAlias(true)}
-                              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-dashed border-stone-300 text-stone-600 hover:bg-stone-50"
-                            >
-                              <Plus size={14} className="shrink-0" />
-                              Add spelling
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="pt-2 border-t border-stone-200/80 space-y-2">
-                        <p className="text-[11px] text-stone-500">Link a second profile (same type)</p>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            value={adminMergeSearch}
-                            onChange={(e) => setAdminMergeSearch(e.target.value)}
-                            placeholder="Search other name…"
-                            className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
-                            autoComplete="off"
-                          />
-                          {adminMergeSearching && (
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">…</span>
-                          )}
-                        </div>
-                        {adminMergeSearch.trim().length >= 2 && adminMergeSearchResults.length > 0 && (
-                          <div className="rounded-md border border-stone-200 max-h-32 overflow-y-auto divide-y divide-stone-100">
-                            {adminMergeSearchResults.map((row) => (
-                              <button
-                                key={row.id}
-                                type="button"
-                                onClick={() => selectAdminMergeAbsorb(row)}
-                                className="w-full flex items-center gap-2 text-left px-3 py-2 text-sm text-stone-900 hover:bg-stone-50"
-                              >
-                                <span className="text-stone-400 text-xs shrink-0">{connectSearchTypePrefix(row.tag_type)}</span>
-                                <span className="truncate">{row.canonical_name}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {adminMergeSearch.trim().length >= 2 && !adminMergeSearching && adminMergeSearchResults.length === 0 && (
-                          <p className="text-xs text-stone-500">No match.</p>
-                        )}
-                        {adminMergeAbsorb && (
-                          <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-                            <span className="text-xs text-stone-600">
-                              Link &quot;{adminMergeAbsorb.canonical_name}&quot; with &quot;{adminManagedIdentity.canonical_name}&quot;?
-                            </span>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                className="text-xs px-2 py-1 rounded border border-stone-200"
-                                onClick={() => setAdminMergeAbsorb(null)}
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="button"
-                                disabled={adminLinking}
-                                onClick={() => void runAdminLink()}
-                                className="text-xs px-2 py-1 rounded bg-amber-200 text-amber-950 font-medium disabled:opacity-50"
-                              >
-                                {adminLinking ? '…' : 'Link'}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </section>
-              </>
+              <AdminsTab
+                adminUserIdPublic={adminUserIdPublic}
+                setAdminUserIdPublic={setAdminUserIdPublic}
+                adminLoading={adminLoading}
+                adminUsers={adminUsers}
+                handleAddAdmin={() => void handleAddAdmin()}
+                handleRemoveAdmin={handleRemoveAdmin}
+                adminIdentitySearch={adminIdentitySearch}
+                setAdminIdentitySearch={setAdminIdentitySearch}
+                adminIdentitySearching={adminIdentitySearching}
+                adminManagedIdentity={adminManagedIdentity}
+                setAdminManagedIdentity={setAdminManagedIdentity}
+                setAdminManagedAliases={setAdminManagedAliases}
+                adminIdentitySearchResults={adminIdentitySearchResults}
+                selectAdminManagedIdentity={selectAdminManagedIdentity}
+                adminIdentityClusterMembers={adminIdentityClusterMembers}
+                switchAdminToLinkedMember={switchAdminToLinkedMember}
+                runAdminUnlink={runAdminUnlink}
+                adminLinking={adminLinking}
+                adminAliasLoading={adminAliasLoading}
+                adminAliasError={adminAliasError}
+                adminAliasesForDisplay={adminAliasesForDisplay}
+                adminAliasDeleteMode={adminAliasDeleteMode}
+                setAdminAliasDeleteMode={setAdminAliasDeleteMode}
+                editingAdminAliasId={editingAdminAliasId}
+                setEditingAdminAliasId={setEditingAdminAliasId}
+                editAdminAliasDraft={editAdminAliasDraft}
+                setEditAdminAliasDraft={setEditAdminAliasDraft}
+                saveAdminAliasEdit={saveAdminAliasEdit}
+                deleteAdminAliasRow={deleteAdminAliasRow}
+                adminAddingAlias={adminAddingAlias}
+                setAdminAddingAlias={setAdminAddingAlias}
+                newAdminAliasText={newAdminAliasText}
+                setNewAdminAliasText={setNewAdminAliasText}
+                addAdminAliasRow={addAdminAliasRow}
+                adminMergeSearch={adminMergeSearch}
+                setAdminMergeSearch={setAdminMergeSearch}
+                adminMergeSearching={adminMergeSearching}
+                adminMergeSearchResults={adminMergeSearchResults}
+                setAdminMergeSearchResults={setAdminMergeSearchResults}
+                adminMergeAbsorb={adminMergeAbsorb}
+                setAdminMergeAbsorb={setAdminMergeAbsorb}
+                selectAdminMergeAbsorb={selectAdminMergeAbsorb}
+                runAdminLink={runAdminLink}
+                setAdminIdentityClusterMembers={setAdminIdentityClusterMembers}
+                fetchAdminLinkContextGenRef={fetchAdminLinkContextGenRef}
+              />
             )}
 
             {activeTab === 'tags' && (
-              <>
-                <div className="space-y-5">
-                  <section>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Color scheme</h3>
-                    <p className="text-xs text-gray-500 mb-2">Apply a preset palette. Faded = muted pastels, Vibrant = saturated.</p>
-                    <div className="flex flex-wrap gap-2">
-                      {(['faded', 'bright', 'custom'] as const).map((scheme) => {
-                        const label = scheme === 'faded' ? 'Faded' : scheme === 'bright' ? 'Vibrant' : 'Custom';
-                        const isActive = settings.color_scheme === scheme;
-                        return (
-                          <button
-                            key={scheme}
-                            type="button"
-                            onClick={() => {
-                              if (scheme === 'custom') {
-                                setSettings((s) => ({ ...s, color_scheme: 'custom' }));
-                                return;
-                              }
-                              const preset = scheme === 'faded' ? FADED_TAG_DEFAULTS : BRIGHT_TAG_DEFAULTS;
-                              const updates: Record<string, string> = { color_scheme: scheme };
-                              Object.entries(preset).forEach(([k, bg]) => {
-                                updates[k] = bg;
-                                const textKey = k.replace('_bg_color', '_text_color');
-                                updates[textKey] = readableTextForBg(bg);
-                              });
-                              setSettings((s) => ({ ...s, ...updates }));
-                              onSettingsPreview?.({ ...settings, ...updates });
-                            }}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${
-                              isActive ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-
-                  <section>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Palette</h3>
-                    <p className="text-xs text-gray-500 mb-3">Click a swatch to edit, drag to a collection. Pick colors for tag types below.</p>
-                    <div className="flex flex-wrap gap-2 items-center">
-                      {paletteColors.map((hex) => (
-                        <div key={hex} className="relative group">
-                          {editingColor === hex ? (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="text"
-                                value={editingHex}
-                                onChange={(e) => setEditingHex(e.target.value)}
-                                className="w-20 px-1.5 py-0.5 text-xs border rounded"
-                                placeholder="#ffffff"
-                              />
-                              <label className="inline-flex items-center justify-center w-8 h-8 rounded-lg border cursor-pointer">
-                                <input
-                                  type="color"
-                                  value={editingHex}
-                                  onChange={(e) => setEditingHex(e.target.value)}
-                                  className="sr-only w-0 h-0"
-                                />
-                                <span className="w-full h-full rounded-lg" style={{ backgroundColor: editingHex || '#ccc' }} />
-                              </label>
-                              <button
-                                type="button"
-                                onClick={() => editColorInPalette(hex, editingHex)}
-                                className="px-2 py-0.5 text-xs bg-blue-600 text-white rounded"
-                              >
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditingColor(null)}
-                                className="text-gray-500 hover:text-gray-700"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              <span
-                                draggable
-                                onDragStart={(e) => {
-                                  e.dataTransfer.setData('text/plain', hex);
-                                  e.dataTransfer.effectAllowed = 'copy';
-                                }}
-                                className="inline-block w-8 h-8 rounded-lg border-2 border-gray-200 shadow-sm cursor-pointer select-none"
-                                style={{ backgroundColor: hex, color: readableTextForBg(hex) }}
-                                title={`${hex} (drag to collection)`}
-                                onClick={() => { setEditingColor(hex); setEditingHex(hex); }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removeFromPalette(hex)}
-                                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-red-600"
-                                aria-label={`Remove ${hex}`}
-                              >
-                                ×
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      ))}
-                      <label className="inline-flex items-center justify-center w-8 h-8 rounded-lg border-2 border-dashed border-gray-300 text-gray-500 hover:border-gray-400 cursor-pointer">
-                        <input
-                          type="color"
-                          className="sr-only w-0 h-0"
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            if (v) addToPalette(v);
-                          }}
-                        />
-                        <span className="text-lg leading-none">+</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={resetPaletteToDefaults}
-                        className="text-xs text-gray-500 hover:text-gray-800 font-medium"
-                      >
-                        Reset palette
-                      </button>
-                    </div>
-                  </section>
-
-                  <section>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Collections</h3>
-                    <p className="text-xs text-gray-500 mb-3">Group colors for quick access. Drag swatches from the palette above.</p>
-                    <button
-                      type="button"
-                      onClick={createCollection}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-gray-100 hover:bg-gray-200 rounded-lg mb-3"
-                    >
-                      <FolderPlus size={14} />
-                      New collection
-                    </button>
-                    <div className="space-y-2">
-                      {collections.map((col) => (
-                        <div
-                          key={col.id}
-                          className={`border rounded-lg p-2 transition-colors ${
-                            dragOverCollectionId === col.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                          }`}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.dataTransfer.dropEffect = 'copy';
-                            setDragOverCollectionId(col.id);
-                          }}
-                          onDragLeave={() => setDragOverCollectionId(null)}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            const hex = e.dataTransfer.getData('text/plain');
-                            if (/^#[0-9a-fA-F]{6}$/.test(hex)) addColorToCollection(col.id, hex);
-                            setDragOverCollectionId(null);
-                          }}
-                        >
-                          <div className="flex items-center gap-2 mb-2">
-                            <input
-                              type="text"
-                              value={col.name}
-                              onChange={(e) => updateCollectionName(col.id, e.target.value)}
-                              className="flex-1 text-sm font-medium border-0 border-b border-transparent hover:border-gray-200 focus:border-gray-400 focus:outline-none px-0 py-1"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => deleteCollection(col.id)}
-                              className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-md text-red-500 hover:text-red-700 hover:bg-red-50"
-                              aria-label="Delete collection"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5 items-center min-h-[28px]">
-                            {col.colors.map((c) => (
-                              <span key={c} className="relative group">
-                                <span
-                                  className="inline-block w-9 h-9 sm:w-6 sm:h-6 rounded border border-gray-200"
-                                  style={{ backgroundColor: c, color: readableTextForBg(c) }}
-                                  title={c}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => removeColorFromCollection(col.id, c)}
-                                  className="absolute -top-1.5 -right-1.5 h-11 w-11 rounded-full bg-red-500 text-white text-sm font-semibold leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 max-sm:opacity-100"
-                                  aria-label="Remove color from collection"
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Tag colors</h3>
-                    <p className="text-xs text-gray-500 mb-3">Click a tag type to assign a color from the palette.</p>
-                    <div className="flex flex-wrap gap-2">
-                      {tagOptions.map(({ key, label }) => {
-                        const bgKey = key === 'optional_tags' ? 'optional_tags_bg_color' : `${key}_bg_color`;
-                        const textKey = key === 'optional_tags' ? 'optional_tags_text_color' : `${key}_text_color`;
-                        const bg = (settings as Record<string, string>)[bgKey] || '#e5e7eb';
-                        const text = (settings as Record<string, string>)[textKey] || '#374151';
-                        return (
-                          <div key={key} className="relative">
-                            <button
-                              type="button"
-                              onClick={() => setAssigningTag(assigningTag === key ? null : key)}
-                              className="inline-flex items-center gap-2 px-2 py-1.5 rounded-lg border-2 border-gray-200 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-left"
-                              style={{ backgroundColor: bg, color: text }}
-                              title={`${label} — click to change`}
-                            >
-                              <span className="w-5 h-5 rounded border border-gray-300 shrink-0" style={{ backgroundColor: bg }} />
-                              <span className="text-xs font-medium">{label}</span>
-                            </button>
-                            {assigningTag === key && (
-                              <>
-                                <div className="fixed inset-0 z-10" onClick={() => setAssigningTag(null)} aria-hidden="true" />
-                                <div className="absolute left-0 top-full z-20 mt-1 p-3 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[220px]">
-                                  <div className="text-xs font-medium text-gray-700 mb-2">{label}</div>
-                                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mb-3">
-                                    {(() => {
-                                      const inPalette = new Set(paletteColors.map((h) => h.toLowerCase()));
-                                      const options = inPalette.has(bg.toLowerCase()) ? paletteColors : [bg, ...paletteColors];
-                                      return options;
-                                    })().map((hex) => (
-                                      <button
-                                        key={hex}
-                                        type="button"
-                                        onClick={() => assignColorToTag(key, hex)}
-                                        className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 w-11 h-11 sm:w-8 sm:h-8 rounded-lg border-2 shrink-0 flex items-center justify-center ${hex.toLowerCase() === bg.toLowerCase() ? 'border-gray-800 ring-1 ring-gray-800' : 'border-gray-200 hover:border-gray-400'}`}
-                                        style={{ backgroundColor: hex }}
-                                        title={hex}
-                                      />
-                                    ))}
-                                  </div>
-                                  <label className="inline-flex items-center min-h-11 gap-2 px-2 rounded-md border border-gray-200 hover:bg-gray-50 cursor-pointer text-xs font-medium text-gray-700">
-                                    <input
-                                      type="color"
-                                      value={bg}
-                                      onChange={(e) => {
-                                        const v = e.target.value;
-                                        assignColorToTag(key, v, false);
-                                        addToPalette(v);
-                                      }}
-                                      className="h-11 w-16 min-w-[3rem] sm:h-8 sm:w-10 rounded border border-gray-200 cursor-pointer shrink-0"
-                                    />
-                                    <span>Custom</span>
-                                  </label>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
-
-                  <section>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Icons</h3>
-                    <p className="text-xs text-gray-500 mb-3">Choose an icon for each tag type.</p>
-                    <div className="flex flex-wrap gap-2">
-                      {coreTagOptions.map(({ key: k, label }) => (
-                        <div key={k} className="flex flex-col items-center gap-1">
-                          <span className="text-[10px] text-gray-500">{label}</span>
-                          <IconPicker
-                            label=""
-                            value={(settings as Record<string, string>)[`${k}_icon`]}
-                            onChange={(v) => setSettings((s) => ({ ...s, [`${k}_icon`]: v }))}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Preview</h3>
-                    <p className="text-xs text-gray-500 mb-3">Tag pills as they appear on event cards.</p>
-                    <div className="flex flex-wrap gap-2">
-                      {tagOptions.map(({ key: k, label }) => {
-                        const bgKey = k === 'optional_tags' ? 'optional_tags_bg_color' : k === 'countdown' ? 'countdown_bg_color' : `${k}_bg_color`;
-                        const textKey = k === 'optional_tags' ? 'optional_tags_text_color' : k === 'countdown' ? 'countdown_text_color' : `${k}_text_color`;
-                        const bg = (settings as Record<string, string>)[bgKey] || '#e5e7eb';
-                        const text = (settings as Record<string, string>)[textKey] || '#374151';
-                        const iconName = k === 'optional_tags' || k === 'countdown' ? '' : (settings as Record<string, string>)[`${k}_icon`];
-                        const IconC = !iconName ? null : getIcon(iconName, `${k}_icon` as keyof typeof DEFAULT_ICONS);
-                        return (
-                          <span
-                            key={k}
-                            className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-gray-200"
-                            style={{ backgroundColor: bg, color: text }}
-                          >
-                            {IconC && <IconC size={12} className="shrink-0" />}
-                            {label}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </section>
-
-                  <section className="border-t pt-4 flex flex-wrap items-center gap-3">
-                    <span className="text-xs font-medium text-gray-600">Defaults</span>
-                    <button
-                      type="button"
-                      onClick={setAsDefault}
-                      className="px-3 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
-                    >
-                      Save as default
-                    </button>
-                    <button
-                      type="button"
-                      onClick={revertToDefault}
-                      className="px-3 py-2 text-xs font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
-                    >
-                      Reset to default
-                    </button>
-                  </section>
-                </div>
-              </>
+              <TagsTab
+                settings={settings}
+                setSettings={setSettings}
+                onSettingsPreview={onSettingsPreview}
+                paletteColors={paletteColors}
+                editingColor={editingColor}
+                setEditingColor={setEditingColor}
+                editingHex={editingHex}
+                setEditingHex={setEditingHex}
+                editColorInPalette={editColorInPalette}
+                removeFromPalette={removeFromPalette}
+                addToPalette={addToPalette}
+                resetPaletteToDefaults={resetPaletteToDefaults}
+                collections={collections}
+                createCollection={createCollection}
+                dragOverCollectionId={dragOverCollectionId}
+                setDragOverCollectionId={setDragOverCollectionId}
+                addColorToCollection={addColorToCollection}
+                updateCollectionName={updateCollectionName}
+                deleteCollection={deleteCollection}
+                removeColorFromCollection={removeColorFromCollection}
+                assigningTag={assigningTag}
+                setAssigningTag={(v) => setAssigningTag((v as SwatchColorKey | null) ?? null)}
+                assignColorToTag={assignColorToTag}
+                tagOptions={tagOptions}
+                coreTagOptions={coreTagOptions}
+                setAsDefault={setAsDefault}
+                revertToDefault={revertToDefault}
+              />
             )}
 
             {activeTab === 'account' && user && (
-              <div className="space-y-6">
-                <section>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Profile</h3>
-                  <p className="text-xs text-gray-500 mb-3">Display name and username.</p>
-                  <form onSubmit={saveAccountProfile} className="space-y-4">
-                    <div>
-                      <label htmlFor="editName" className="block text-xs font-medium text-stone-600 mb-1">Your Name</label>
-                      <input
-                        id="editName"
-                        type="text"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        maxLength={80}
-                        className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
-                        placeholder="Jane Doe"
-                      />
-                      <p className="text-xs text-stone-400 mt-0.5">Shown on your profile.</p>
-                    </div>
-                    <div>
-                      <label htmlFor="editUsername" className="block text-xs font-medium text-stone-600 mb-1">Username</label>
-                      <input
-                        id="editUsername"
-                        type="text"
-                        value={editUsername}
-                        onChange={(e) => setEditUsername(e.target.value)}
-                        minLength={4}
-                        maxLength={30}
-                        pattern="[a-zA-Z0-9_-]+"
-                        className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
-                        placeholder="janedoe2024"
-                      />
-                      <p className="text-xs text-stone-400 mt-0.5">Letters, numbers, underscore, hyphen.</p>
-                    </div>
-                    {profileSaveError && <p className="text-sm text-red-600">{profileSaveError}</p>}
-                    <button
-                      type="submit"
-                      disabled={profileSaving}
-                      className="px-4 py-2 text-sm font-medium rounded-lg bg-stone-800 text-white hover:bg-stone-700 disabled:bg-stone-300 disabled:cursor-not-allowed"
-                    >
-                      {profileSaving ? 'Saving…' : 'Save Profile'}
-                    </button>
-                  </form>
-                </section>
-
-                <section>
-                  <h3 className="text-sm font-semibold text-stone-800 mb-1">Tags linked to your profile</h3>
-                  <p className="text-xs text-stone-500 mb-3">Link credits from shows. Pick the name shown on cards.</p>
-                  <div className="space-y-3">
-                    <div className="relative">
-                      <input
-                        ref={connectSearchInputRef}
-                        value={connectName}
-                        onChange={(e) => setConnectName(e.target.value)}
-                        onKeyDown={handleConnectSearchKeyDown}
-                        placeholder="Search shows, designers, models…"
-                        className="w-full text-sm px-3 py-2 rounded-md border border-stone-200 bg-white"
-                        aria-autocomplete="list"
-                        aria-controls="connect-tag-results"
-                        aria-expanded={connectName.trim().length >= 2 && creditSearchResults.length > 0}
-                      />
-                      {creditSearching && (
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">Searching…</span>
-                      )}
-                    </div>
-                    {connectName.trim().length >= 2 && creditSearchResults.length > 0 && (
-                      <div
-                        id="connect-tag-results"
-                        role="listbox"
-                        className="rounded-md border border-stone-200 bg-white divide-y divide-stone-100 max-h-56 overflow-y-auto shadow-sm"
-                      >
-                        {creditSearchResults.map((identity, idx) => (
-                          <div
-                            key={identity.id}
-                            role="option"
-                            aria-selected={idx === connectListActiveIdx}
-                            id={`connect-opt-${idx}`}
-                            className={`flex items-stretch gap-2 px-3 py-2 ${idx === connectListActiveIdx ? 'bg-gray-50' : ''}`}
-                            onMouseEnter={() => setConnectListActiveIdx(idx)}
-                          >
-                            <div className="flex flex-1 min-w-0 items-center gap-2 text-left">
-                              <span className="text-gray-400 text-xs shrink-0">{connectSearchTypePrefix(identity.tag_type)}</span>
-                              <span className="text-sm text-gray-900 truncate">{identity.canonical_name}</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => selectCreditSearchResult(identity)}
-                              className="shrink-0 self-center text-xs px-2.5 py-1.5 rounded-md bg-stone-900 text-white hover:bg-stone-800"
-                            >
-                              Connect
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {connectName.trim().length >= 2 && !creditSearching && creditSearchResults.length === 0 && (
-                      <p className="text-xs text-stone-600">
-                        No match.{' '}
-                        <button
-                          type="button"
-                          className="text-stone-800 underline hover:no-underline"
-                          onClick={() => setShowCreateTagForm(true)}
-                        >
-                          Create tag
-                        </button>
-                      </p>
-                    )}
-                    <div className="pt-1 border-t border-stone-100">
-                      <button
-                        type="button"
-                        onClick={() => setShowCreateTagForm((v) => !v)}
-                        aria-expanded={showCreateTagForm}
-                        className="text-xs text-stone-700 underline hover:text-stone-900"
-                      >
-                        {showCreateTagForm ? 'Hide' : 'Create new tag'}
-                      </button>
-                      {showCreateTagForm && (
-                        <div className="mt-3 p-3 rounded-lg border border-stone-200 bg-white space-y-2">
-                          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tag type">
-                            {CONNECT_CREATE_TYPE_PILLS.map((p) => (
-                              <button
-                                key={p.value}
-                                type="button"
-                                data-tag-pill
-                                onClick={() => setConnectType(p.value)}
-                                className={creditPillClass(connectType === p.value)}
-                              >
-                                <TagPillSplitLabel text={p.label} segmentColors={creditPillSegmentColors(connectType === p.value)} />
-                              </button>
-                            ))}
-                          </div>
-                          <div className="flex flex-wrap gap-2 items-end">
-                            <div className="flex-1 min-w-[140px]">
-                              <label htmlFor="connect-create-name" className="block text-[11px] text-stone-500 mb-0.5">Name</label>
-                              <input
-                                id="connect-create-name"
-                                value={connectName}
-                                onChange={(e) => setConnectName(e.target.value)}
-                                placeholder="Name as it should appear"
-                                className="w-full text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white"
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => connectOrCreateCredit(true)}
-                              className="text-xs px-2.5 py-1.5 rounded-md bg-stone-900 text-white hover:bg-stone-800"
-                            >
-                              Create and link
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {creditConnectSuccess && <p className="text-xs text-green-700 mt-2">{creditConnectSuccess}</p>}
-                  {creditsError && <p className="text-xs text-amber-700 mt-2">{creditsError}</p>}
-                  {credits.length === 0 && (
-                    <div className="mt-4 rounded-lg border border-dashed border-stone-200 bg-stone-50/50 p-4 text-sm text-stone-600">
-                      <p className="font-medium text-stone-800 mb-1">No tags yet</p>
-                      <p className="text-xs text-stone-500">Search for how you are credited on a show. Add aliases after linking.</p>
-                    </div>
-                  )}
-                  {credits.length > 0 && (
-                    <div className="space-y-3 mt-4">
-                      {credits.map((credit) => {
-                        const publicLabel =
-                          credit.aliases.find((a) => a.id === credit.public_display_alias_id)?.alias ?? credit.canonical_name;
-                        const aliasRemovable = (alias: { alias: string }) =>
-                          normalizeTagName(alias.alias) !== normalizeTagName(credit.canonical_name);
-                        const inDeleteMode = aliasDeleteModeIdentityId === credit.identity_id;
-                        return (
-                          <div key={credit.id} className="rounded-xl border border-stone-100 p-3 bg-stone-50/70 space-y-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="inline-flex items-center text-xs px-2 py-1 rounded-md bg-gray-300 text-gray-600">
-                                {formatTagTypeLabel(credit.tag_type)}
-                              </span>
-                              <span className="text-sm font-medium text-stone-900">{publicLabel}</span>
-                              <button
-                                type="button"
-                                onClick={() => { if (window.confirm('Remove this credit from your profile?')) removeCredit(credit.id); }}
-                                className="ml-auto text-[11px] text-stone-400 hover:text-red-600"
-                                title="Remove credit"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                            <div>
-                              <label className="block text-[11px] font-medium text-stone-600 mb-1">Name on event cards</label>
-                              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Name on event cards">
-                                <button
-                                  type="button"
-                                  data-tag-pill
-                                  onClick={() => setPublicDisplayAlias(credit.identity_id, null)}
-                                  className={creditPillClass(!credit.public_display_alias_id)}
-                                  title={`Default · ${credit.canonical_name}`}
-                                >
-                                  <TagPillSplitLabel
-                                    text={`Default · ${credit.canonical_name}`}
-                                    segmentColors={creditPillSegmentColors(!credit.public_display_alias_id)}
-                                  />
-                                </button>
-                                {credit.aliases.map((a) => (
-                                  <button
-                                    key={a.id}
-                                    type="button"
-                                    data-tag-pill
-                                    onClick={() => setPublicDisplayAlias(credit.identity_id, a.id)}
-                                    className={creditPillClass(credit.public_display_alias_id === a.id)}
-                                  >
-                                    <TagPillSplitLabel
-                                      text={a.alias}
-                                      segmentColors={creditPillSegmentColors(credit.public_display_alias_id === a.id)}
-                                    />
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                                <span className="text-[11px] font-medium text-stone-600">Also credited as</span>
-                                {inDeleteMode ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setAliasDeleteModeIdentityId(null)}
-                                    className="text-[11px] text-stone-600 hover:text-stone-900"
-                                  >
-                                    Done
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setAliasDeleteModeIdentityId(credit.identity_id)}
-                                    className="text-[11px] text-stone-500 hover:text-stone-800"
-                                  >
-                                    Remove aliases
-                                  </button>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap gap-1.5 items-center">
-                                {credit.aliases.map((alias) => {
-                                  const removable = aliasRemovable(alias);
-                                  return (
-                                    <span
-                                      key={alias.id}
-                                      data-tag-pill
-                                      className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs ${inDeleteMode && removable ? 'pill-wiggle' : ''}`}
-                                    >
-                                      <TagPillSplitLabel text={alias.alias} segmentColors={ALIAS_NEUTRAL_PILL_COLORS} />
-                                      {inDeleteMode && removable && (
-                                        <button
-                                          type="button"
-                                          className="absolute -top-2 -right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white border border-stone-300 text-stone-600 shadow-sm hover:bg-stone-50"
-                                          title="Remove alias"
-                                          onMouseDown={(e) => e.stopPropagation()}
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            if (!window.confirm('Remove this alias?')) return;
-                                            void removeAliasForCredit(credit, alias.id);
-                                          }}
-                                          aria-label={`Remove alias ${alias.alias}`}
-                                        >
-                                          <X size={16} strokeWidth={2} />
-                                        </button>
-                                      )}
-                                    </span>
-                                  );
-                                })}
-                                {addingAliasForIdentityId === credit.identity_id ? (
-                                  <div className="inline-flex flex-wrap items-center gap-1.5">
-                                    <input
-                                      value={newAliasByIdentity[credit.identity_id] || ''}
-                                      onChange={(e) => setNewAliasByIdentity((prev) => ({ ...prev, [credit.identity_id]: e.target.value }))}
-                                      placeholder="New alias"
-                                      className="text-xs px-2 py-1.5 rounded-md border border-stone-200 bg-white min-w-[140px]"
-                                      autoFocus
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => addAliasForCredit(credit)}
-                                      className="text-xs px-2.5 py-1.5 rounded-md border border-stone-200 text-stone-700 hover:bg-stone-50"
-                                    >
-                                      Add
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setAddingAliasForIdentityId(null)}
-                                      className="text-xs text-stone-500 hover:text-stone-800"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setAddingAliasForIdentityId(credit.identity_id)}
-                                    className="inline-flex items-center justify-center text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50"
-                                    title="Add alias"
-                                  >
-                                    <Plus size={14} />
-                                  </button>
-                                )}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => addProfileNameAsAlias(credit)}
-                                className="mt-2 text-xs text-stone-600 hover:text-stone-900 underline-offset-2 hover:underline"
-                              >
-                                Use profile name as alias
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </section>
-              </div>
+              <AccountTab
+                editName={editName}
+                setEditName={setEditName}
+                editUsername={editUsername}
+                setEditUsername={setEditUsername}
+                profileSaveError={profileSaveError}
+                profileSaving={profileSaving}
+                saveAccountProfile={saveAccountProfile}
+                connectName={connectName}
+                setConnectName={setConnectName}
+                connectType={connectType}
+                setConnectType={setConnectType}
+                creditSearchResults={creditSearchResults}
+                creditSearching={creditSearching}
+                connectListActiveIdx={connectListActiveIdx}
+                setConnectListActiveIdx={setConnectListActiveIdx}
+                showCreateTagForm={showCreateTagForm}
+                setShowCreateTagForm={setShowCreateTagForm}
+                creditConnectSuccess={creditConnectSuccess}
+                creditsError={creditsError}
+                credits={credits}
+                aliasDeleteModeIdentityId={aliasDeleteModeIdentityId}
+                setAliasDeleteModeIdentityId={setAliasDeleteModeIdentityId}
+                addingAliasForIdentityId={addingAliasForIdentityId}
+                setAddingAliasForIdentityId={setAddingAliasForIdentityId}
+                newAliasByIdentity={newAliasByIdentity}
+                setNewAliasByIdentity={setNewAliasByIdentity}
+                connectSearchInputRef={connectSearchInputRef}
+                handleConnectSearchKeyDown={handleConnectSearchKeyDown}
+                selectCreditSearchResult={selectCreditSearchResult}
+                connectOrCreateCredit={connectOrCreateCredit}
+                removeCredit={removeCredit}
+                setPublicDisplayAlias={setPublicDisplayAlias}
+                removeAliasForCredit={removeAliasForCredit}
+                addAliasForCredit={addAliasForCredit}
+                addProfileNameAsAlias={addProfileNameAsAlias}
+              />
             )}
+
           </div>
 
           {(error || success) && (
@@ -2588,18 +1534,14 @@ export default function SettingsModal({ isOpen, onClose, onSettingsUpdated, onSe
             </div>
           )}
 
-          <div className="p-5 border-t bg-gray-50">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50"
-            >
+          <div className="border-t border-border bg-muted p-5">
+            <Button type="submit" disabled={loading} className="w-full">
               <Save size={18} />
               {loading ? 'Saving...' : 'Save Settings'}
-            </button>
+            </Button>
           </div>
         </form>
-    </ModalShell>
+    </div>
   );
 }
 

@@ -4,7 +4,8 @@ import { registerSW } from 'virtual:pwa-register';
 import './index.css';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config';
 
-registerSW({ immediate: true });
+// Register SW without forcing an immediate page reload on every land.
+registerSW({ immediate: true, onNeedRefresh() { /* stay on current build until next navigation */ } });
 
 const supabaseUrl = SUPABASE_URL;
 const supabaseAnonKey = SUPABASE_ANON_KEY;

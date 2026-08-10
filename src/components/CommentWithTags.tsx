@@ -3,6 +3,7 @@ import { findAccentInsensitiveMatch, normalizeTagNameKey } from '../lib/normaliz
 import { Event } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 import { effectiveHeaderTags } from '../lib/eventHeaderTags';
+import { getSpecialGuests, isSpecialGuestsSlug } from '../lib/specialGuests';
 import type { CommentTagColors } from '../lib/commentTagParsing';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 
@@ -48,7 +49,7 @@ export default function CommentWithTags({
     if (type === 'producer') {
       bg = tagColors?.producer_bg_color || '#f3f4f6';
       text = tagColors?.producer_text_color || '#374151';
-    } else if (type === 'designer') {
+    } else if (type === 'designer' || type === 'artist') {
       bg = tagColors?.designer_bg_color || '#fef3c7';
       text = tagColors?.designer_text_color || '#b45309';
     } else if (type === 'model') {
@@ -81,6 +82,8 @@ export default function CommentWithTags({
 
   (event.producers || []).forEach((v) => add(v, 'producer'));
   (event.featured_designers || []).forEach((v) => add(v, 'designer'));
+  (event.featured_artists || []).forEach((v) => add(v, 'artist'));
+  getSpecialGuests(event.custom_tags).forEach((v) => add(v, 'artist'));
   (event.models || []).forEach((v) => add(v, 'model'));
   (event.hair_makeup || []).forEach((v) => add(v, 'hair_makeup'));
   effectiveHeaderTags(event).forEach((v) => add(v, 'header_tags'));
@@ -89,6 +92,7 @@ export default function CommentWithTags({
   if (event.date) add(getSeasonFromDate(event.date), 'season');
   if (event.custom_tags && typeof event.custom_tags === 'object') {
     Object.entries(event.custom_tags).forEach(([slug, vals]) => {
+      if (isSpecialGuestsSlug(slug)) return;
       (vals || []).forEach((v) => add(v, 'custom', slug));
     });
   }

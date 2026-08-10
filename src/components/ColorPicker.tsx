@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Palette, Plus, X } from 'lucide-react';
 import { readableTextForBg } from '../lib/colorUtils';
 import { CUSTOM_COLORS_STORAGE_KEY, PRELOADED_HEX } from '../lib/tagColorPickerData';
+import { formControlClass, formControlPaddingClass, formControlTextClass } from './ui/field';
 
 interface ColorPickerProps {
   label?: string;
@@ -112,7 +113,7 @@ export default function ColorPicker({
         <button
           type="button"
           onClick={() => setIsOpen((v) => !v)}
-          className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className={`flex min-h-[44px] w-full items-center gap-2 ${formControlClass} ${formControlPaddingClass} ${formControlTextClass} hover:bg-muted`}
           title="Pick color"
           aria-label="Pick color"
         >
@@ -149,7 +150,7 @@ export default function ColorPicker({
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-gray-600">Saved</span>
                     {manageMode ? (
-                      <button type="button" onClick={() => setManageMode(false)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                      <button type="button" onClick={() => setManageMode(false)} className="text-xs text-neutral-900 hover:text-neutral-800 font-medium">
                         Done
                       </button>
                     ) : (

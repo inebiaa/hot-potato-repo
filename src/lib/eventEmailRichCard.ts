@@ -29,15 +29,6 @@ export function buildEventEmailPlainText(event: Event): string {
   }
   const v = venueLine(event);
   if (v) lines.push(v);
-  const addr =
-    (event.formatted_address && event.formatted_address.trim()) ||
-    (event.address && event.address.trim()) ||
-    '';
-  if (addr) lines.push(addr.replace(/\r\n/g, '\n'));
-  if (event.description?.trim()) {
-    lines.push('');
-    lines.push(event.description.trim());
-  }
   const ticket = event.countdown_link?.trim();
   if (ticket && (ticket.startsWith('http://') || ticket.startsWith('https://'))) {
     lines.push('');

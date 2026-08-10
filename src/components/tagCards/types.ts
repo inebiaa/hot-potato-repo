@@ -8,6 +8,7 @@ export type TagRatingEventSlice = Pick<
   | 'date'
   | 'producers'
   | 'featured_designers'
+  | 'featured_artists'
   | 'models'
   | 'hair_makeup'
   | 'city'
@@ -35,6 +36,7 @@ export interface TagColorsForPills {
   season_icon?: string;
   header_tags_icon?: string;
   footer_tags_icon?: string;
+  special_guests_icon?: string;
   producer_bg_color?: string;
   producer_text_color?: string;
   designer_bg_color?: string;
@@ -53,6 +55,8 @@ export interface TagColorsForPills {
   footer_tags_text_color?: string;
   optional_tags_bg_color?: string;
   optional_tags_text_color?: string;
+  special_guests_bg_color?: string;
+  special_guests_text_color?: string;
 }
 
 export interface TagEntityCardSharedProps {

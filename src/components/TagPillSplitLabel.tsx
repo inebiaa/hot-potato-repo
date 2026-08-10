@@ -2,6 +2,7 @@ import type { ReactNode, RefObject } from 'react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { splitTagPillLabel } from '../lib/commentTagParsing';
 import { splitTagLabelByWidth } from '../lib/splitTagLabelByWidth';
+import { TAG_PILL_SIZE_CLASS, tagPillSegmentShellClass } from './tagPillShell';
 
 const tagPillSplitContainerBase =
   'inline-flex max-w-full min-w-0 flex-wrap items-center gap-y-0.5 text-left';
@@ -25,7 +26,7 @@ export type TagPillSegmentColors = {
 };
 
 const FONT_PROBE_CLASS =
-  'sr-only text-xs px-2 py-1 whitespace-nowrap font-normal tabular-nums';
+  `sr-only ${TAG_PILL_SIZE_CLASS} whitespace-nowrap font-normal tabular-nums`;
 
 /** Nearest wrapping flex row width, or a sensible fallback (px). */
 function findTagRowBudgetWidth(wrapEl: HTMLElement): number {
@@ -53,6 +54,10 @@ type TagPillSplitLabelProps = {
    */
   leadingSlot?: ReactNode;
   /**
+   * When `segmentColors` is set, renders inside the **last** segment pill only — e.g. TagInput remove.
+   */
+  trailingSlot?: ReactNode;
+  /**
    * When set, each chunk is its own filled rounded pill so long tags read as separate boxes
    * instead of one large rectangle.
    */
@@ -72,11 +77,14 @@ type TagPillSplitLabelProps = {
 
 /** Reserve width so first-line word-wrap leaves room for `leadingSlot` inside the first pill. */
 const LEADING_SLOT_WIDTH_FUDGE_PX = 22;
+/** Reserve width for remove control inside the last segment. */
+const TRAILING_SLOT_WIDTH_FUDGE_PX = 18;
 
 export default function TagPillSplitLabel({
   text,
   chunkClassName = '',
   leadingSlot,
+  trailingSlot,
   segmentColors,
   fitToContainer = false,
   layoutWidthRef,
@@ -86,10 +94,8 @@ export default function TagPillSplitLabel({
   const useLayoutWidth = Boolean(layoutWidthRef);
   const useWidthSplit = fitToContainer || useLayoutWidth;
   const reserveFirstLineForLeadingSlot = Boolean(leadingSlot && segmentColors);
+  const reserveLastLineForTrailingSlot = Boolean(trailingSlot && segmentColors);
   const [chunks, setChunks] = useState<string[]>(() => splitTagPillLabel(text));
-
-  const segmentShell =
-    'inline-flex whitespace-nowrap rounded-md px-2 py-1 text-xs';
 
   useLayoutEffect(() => {
     if (!useWidthSplit) {
@@ -114,10 +120,10 @@ export default function TagPillSplitLabel({
       const font = fontProbeRef.current
         ? getComputedStyle(fontProbeRef.current).font
         : '400 12px ui-sans-serif, system-ui, sans-serif';
-      const splitBudget = reserveFirstLineForLeadingSlot
-        ? Math.max(32, rowWidth - LEADING_SLOT_WIDTH_FUDGE_PX)
-        : rowWidth;
-      setChunks(splitTagLabelByWidth(text, splitBudget, font));
+      let splitBudget = rowWidth;
+      if (reserveFirstLineForLeadingSlot) splitBudget -= LEADING_SLOT_WIDTH_FUDGE_PX;
+      if (reserveLastLineForTrailingSlot) splitBudget -= TRAILING_SLOT_WIDTH_FUDGE_PX;
+      setChunks(splitTagLabelByWidth(text, Math.max(32, splitBudget), font));
     };
 
     compute();
@@ -144,10 +150,18 @@ export default function TagPillSplitLabel({
     else ro.observe(wrap);
 
     return () => ro.disconnect();
-  }, [text, useWidthSplit, layoutWidthRef, reserveFirstLineForLeadingSlot]);
+  }, [
+    text,
+    useWidthSplit,
+    layoutWidthRef,
+    reserveFirstLineForLeadingSlot,
+    reserveLastLineForTrailingSlot,
+  ]);
 
   const inner = chunks.map((chunk, j) => {
     const leadInFirstSegment = Boolean(leadingSlot) && j === 0 && segmentColors;
+    const trailInLastSegment = Boolean(trailingSlot) && j === chunks.length - 1 && segmentColors;
+    const hasInlineSlot = leadInFirstSegment || trailInLastSegment;
     return segmentColors ? (
       <span
         key={j}
@@ -156,13 +170,18 @@ export default function TagPillSplitLabel({
           color: segmentColors.color,
         }}
         className={
-          [segmentShell, leadInFirstSegment ? 'items-center gap-x-1' : '', chunkClassName].filter(Boolean).join(' ')
+          [tagPillSegmentShellClass, hasInlineSlot ? 'items-center gap-x-1' : '', chunkClassName]
+            .filter(Boolean)
+            .join(' ')
         }
       >
         {leadInFirstSegment ? (
           <span className="inline-flex shrink-0 items-center self-center">{leadingSlot}</span>
         ) : null}
         {chunk}
+        {trailInLastSegment ? (
+          <span className="inline-flex shrink-0 items-center self-center">{trailingSlot}</span>
+        ) : null}
       </span>
     ) : (
       <span key={j} className={['inline-flex whitespace-nowrap', chunkClassName].filter(Boolean).join(' ')}>

@@ -4,6 +4,8 @@ import {
   type CustomPerformerCategoryOption,
 } from '../lib/tags';
 import { tagMatchesQuery } from '../lib/normalize';
+import { Input } from './ui';
+import { cn } from '../lib/utils';
 
 const MAX_SUGGESTIONS = 8;
 
@@ -85,7 +87,7 @@ export default function CustomPerformerCategoryInput({
 
   return (
     <div className="relative">
-      <input
+      <Input
         ref={inputRef}
         id={id}
         type="text"
@@ -105,11 +107,10 @@ export default function CustomPerformerCategoryInput({
         }}
         placeholder={placeholder}
         autoComplete="off"
-        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
       />
       {showSuggestions && suggestions.length > 0 && (
         <div
-          className="absolute z-50 mt-1 w-full max-h-40 overflow-auto bg-white border border-gray-200 rounded-md shadow-lg py-1"
+          className="absolute z-50 mt-1 max-h-40 w-full overflow-auto rounded-lg border border-border bg-card py-1 shadow-lg"
           role="listbox"
         >
           {suggestions.map((c, i) => (
@@ -118,9 +119,10 @@ export default function CustomPerformerCategoryInput({
               type="button"
               role="option"
               aria-selected={i === highlightedIndex}
-              className={`min-h-[44px] w-full text-left px-3 py-3 text-base sm:min-h-0 sm:py-2 sm:text-sm hover:bg-blue-50 ${
-                i === highlightedIndex ? 'bg-blue-50' : ''
-              }`}
+              className={cn(
+                'min-h-[44px] w-full px-3 py-3 text-left text-base hover:bg-muted sm:min-h-0 sm:py-2 sm:text-sm',
+                i === highlightedIndex ? 'bg-muted' : '',
+              )}
               onMouseDown={(e) => {
                 e.preventDefault();
                 pick(c.slug, c.label);

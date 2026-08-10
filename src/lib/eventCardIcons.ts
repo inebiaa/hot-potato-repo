@@ -81,6 +81,7 @@ export const DEFAULT_ICONS = {
   season_icon: 'Calendar',
   header_tags_icon: 'Tag',
   footer_tags_icon: 'Tag',
+  special_guests_icon: 'Mic',
 } as const;
 
 export function getIcon(name: string | undefined, fallback: keyof typeof DEFAULT_ICONS): LucideIcon {

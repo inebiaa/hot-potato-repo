@@ -1,6 +1,14 @@
 import { supabase } from './supabase';
+import { isSpecialGuestsSlug } from './specialGuests';
 
-export type TagColumn = 'producers' | 'featured_designers' | 'models' | 'hair_makeup' | 'header_tags' | 'footer_tags';
+export type TagColumn =
+  | 'producers'
+  | 'featured_designers'
+  | 'featured_artists'
+  | 'models'
+  | 'hair_makeup'
+  | 'header_tags'
+  | 'footer_tags';
 
 /** Fetch all unique tag values from a given column across all events */
 export async function fetchExistingTags(column: TagColumn): Promise<string[]> {
@@ -139,6 +147,7 @@ export async function fetchExistingCustomPerformerCategories(): Promise<CustomPe
     }
   }
   return Array.from(slugs)
+    .filter((slug) => !isSpecialGuestsSlug(slug))
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
     .map((slug) => ({ slug, label: slugToCustomCategoryLabel(slug) }));
 }

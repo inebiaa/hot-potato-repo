@@ -2,6 +2,8 @@ import { supabase } from './supabase';
 import type { Event } from './supabase';
 import { effectiveHeaderTags } from './eventHeaderTags';
 import { coalesceTagList } from './eventTagArray';
+import { formatEventDateDisplay } from './formatEventDate';
+import { isSpecialGuestsSlug } from './specialGuests';
 import { normalizeTagName, tagArrayContainsNormalized, type TagType } from './tagIdentity';
 
 /**
@@ -22,7 +24,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 /**
  * Human-readable text for the search bar / filter chip. Filter `value` is often a tag `identity` uuid;
- * the map (or an explicit label from a pill/suggestion) supplies the name to show.
+ * the map (or an explicit label from a pill) supplies the name to show.
  */
 export function displayLabelForTagFilter(
   type: string,
@@ -30,8 +32,14 @@ export function displayLabelForTagFilter(
   map: TagResolutionMap | null | undefined,
   explicitLabel?: string
 ): string {
+  if (type === 'date') {
+    return formatEventDateDisplay(value) || explicitLabel?.trim() || value;
+  }
   if (explicitLabel && explicitLabel.trim()) return explicitLabel.trim();
   if (!value) return value;
+  if (type === 'show_type') {
+    return value === 'music' ? 'Music' : value === 'fashion' ? 'Fashion' : value;
+  }
   if (!map) return value;
 
   if (type === 'custom_performer' && value.includes('\x00')) {
@@ -93,6 +101,7 @@ function collectTagPairs(events: Event[]): Map<string, { type: string; raw: stri
   for (const e of events) {
     coalesceTagList(e.producers).forEach((v) => add('producer', v));
     coalesceTagList(e.featured_designers).forEach((v) => add('designer', v));
+    coalesceTagList(e.featured_artists).forEach((v) => add('artist', v));
     coalesceTagList(e.models).forEach((v) => add('model', v));
     coalesceTagList(e.hair_makeup).forEach((v) => add('hair_makeup', v));
     effectiveHeaderTags(e).forEach((v) => add('header_tags', v));
@@ -100,7 +109,8 @@ function collectTagPairs(events: Event[]): Map<string, { type: string; raw: stri
     if (e.location) add('venue', e.location);
     if (e.custom_tags && typeof e.custom_tags === 'object') {
       Object.entries(e.custom_tags).forEach(([slug, vals]) => {
-        (vals || []).forEach((v) => add(`custom:${slug}` as TagType, v));
+        const asArtist = isSpecialGuestsSlug(slug);
+        (vals || []).forEach((v) => add(asArtist ? 'artist' : (`custom:${slug}` as TagType), v));
       });
     }
   }

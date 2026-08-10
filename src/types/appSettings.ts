@@ -33,6 +33,9 @@ export interface AppSettings {
   season_icon?: string;
   header_tags_icon?: string;
   footer_tags_icon?: string;
+  special_guests_icon?: string;
   optional_tags_bg_color?: string;
   optional_tags_text_color?: string;
+  special_guests_bg_color?: string;
+  special_guests_text_color?: string;
 }

@@ -177,7 +177,7 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
       suppressContentEditableWarning
       onInput={handleInput}
       data-placeholder={placeholder}
-      className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-700 [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-gray-400 ${className}`}
+      className={`w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-muted-foreground ${className}`}
       style={{ minHeight: `${rows * 1.5}rem` }}
     />
   );

@@ -151,7 +151,8 @@ export default defineConfig({
     tsconfigPaths(),
     staticSitePlugin(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // Prompt instead of auto-reload — autoUpdate hard-refreshes the tab whenever a new SW ships.
+      registerType: 'prompt',
       includeAssets: ['og-default.png', 'robots.txt', 'CNAME'],
       manifest: {
         name: APP_NAME,

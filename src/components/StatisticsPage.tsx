@@ -5,6 +5,7 @@ import { getSeasonFromDate, sortSeasonsByDate } from '../lib/season';
 import { sameTagSpelling } from '../lib/tagIdentity';
 import { effectiveHeaderTags } from '../lib/eventHeaderTags';
 import { eventArrayMatchesFilter, type TagResolutionMap } from '../lib/tagDisplayResolution';
+import { getSpecialGuests } from '../lib/specialGuests';
 import TagRatingsModal from './TagRatingsModal';
 import { clearAppModalParams, parseAppModal, setAppModalParams } from '../lib/searchParamsModal';
 import type { AppSettings } from '../types/appSettings';
@@ -115,6 +116,10 @@ export default function StatisticsPage({
       if (selectedType === 'all' || selectedType === 'designer') {
         event.featured_designers?.forEach(d => addTag(d, 'designer'));
       }
+      if (selectedType === 'all' || selectedType === 'artist') {
+        event.featured_artists?.forEach(a => addTag(a, 'artist'));
+        getSpecialGuests(event.custom_tags).forEach(a => addTag(a, 'artist'));
+      }
       if (selectedType === 'all' || selectedType === 'model') {
         event.models?.forEach(m => addTag(m, 'model'));
       }
@@ -141,6 +146,7 @@ export default function StatisticsPage({
   const getTagColors = (type: string) => {
     switch (type) {
       case 'designer':
+      case 'artist':
         return {
           bg: tagColors.designer_bg_color || '#fef3c7',
           text: tagColors.designer_text_color || '#b45309'
@@ -217,6 +223,11 @@ export default function StatisticsPage({
     switch (type) {
       case 'producer': return eventArrayMatchesFilter(tagResolutionMap, 'producer', e.producers, value);
       case 'designer': return eventArrayMatchesFilter(tagResolutionMap, 'designer', e.featured_designers, value);
+      case 'artist':
+        return (
+          eventArrayMatchesFilter(tagResolutionMap, 'artist', e.featured_artists, value) ||
+          eventArrayMatchesFilter(tagResolutionMap, 'artist', getSpecialGuests(e.custom_tags), value)
+        );
       case 'model': return eventArrayMatchesFilter(tagResolutionMap, 'model', e.models, value);
       case 'hair_makeup': return eventArrayMatchesFilter(tagResolutionMap, 'hair_makeup', e.hair_makeup, value);
       case 'city': return sameTagSpelling(e.city, value);

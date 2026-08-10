@@ -1,10 +1,15 @@
-/** Jan–May = Spring, Jun–Jul = Summer, Aug–Dec = Fall. Returns "Spring 2024", "Summer 2024", etc. */
+/**
+ * Four equal meteorological seasons (3 months each).
+ * Winter Dec–Feb, Spring Mar–May, Summer Jun–Aug, Fall Sep–Nov.
+ * Returns "Winter 2024", "Fall 2024", etc. (calendar year of the date).
+ */
 export function getSeasonFromDate(dateString: string): string {
   const [year, monthStr] = dateString.split('-');
   const month = parseInt(monthStr || '1', 10);
   const y = year || new Date().getFullYear().toString();
-  if (month >= 1 && month <= 5) return `Spring ${y}`;
-  if (month >= 6 && month <= 7) return `Summer ${y}`;
+  if (month === 12 || month === 1 || month === 2) return `Winter ${y}`;
+  if (month >= 3 && month <= 5) return `Spring ${y}`;
+  if (month >= 6 && month <= 8) return `Summer ${y}`;
   return `Fall ${y}`;
 }
 
@@ -15,7 +20,12 @@ export function getYearFromDate(dateString: string): string {
 }
 
 /** Order for sorting season names (e.g. "Spring 2024") by calendar date */
-export const SEASON_ORDER: Record<string, number> = { Spring: 0, Summer: 1, Fall: 2 };
+export const SEASON_ORDER: Record<string, number> = {
+  Winter: 0,
+  Spring: 1,
+  Summer: 2,
+  Fall: 3,
+};
 
 export function sortSeasonsByDate(seasons: string[]): string[] {
   return [...seasons].sort((a, b) => {
