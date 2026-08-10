@@ -363,20 +363,7 @@ function PlaylistTitle({
 
 interface ProfileReviewsPlaylistProps {
   rows: ProfileReviewPlaylistRow[];
-  onOpenEvent?: (
-    eventId: string,
-    openWithWiggle?: boolean,
-    reorderSection?: keyof {
-      producers: string[];
-      featured_designers: string[];
-      featured_artists: string[];
-      models: string[];
-      hair_makeup: string[];
-      header_tags: string[];
-      footer_tags: string[];
-    } | 'custom',
-    reorderCustomSlug?: string
-  ) => void;
+  onOpenEvent?: (eventId: string) => void;
 }
 
 export default function ProfileReviewsPlaylist({ rows, onOpenEvent }: ProfileReviewsPlaylistProps) {
