@@ -27,8 +27,10 @@ export function buildEventOgDescription(event: Event, maxLen = 200): string {
 
 function eventShareImageUrl(
   event: Event,
-  prerender?: EventJsonLdPrerender & { brandImageUrl?: string },
+  prerender?: EventJsonLdPrerender & { brandImageUrl?: string; shareImageUrl?: string },
 ): string | undefined {
+  const mirrored = prerender?.shareImageUrl?.trim();
+  if (mirrored) return mirrored;
   const fromEvent = eventAbsoluteImageUrl(event.image_url, prerender);
   if (fromEvent) return fromEvent;
   const brand = prerender?.brandImageUrl?.trim() || getRuntimeBrandShareImage();
@@ -44,7 +46,8 @@ export function stripSiteSocialFromHtml(html: string): string {
   return html
     .replace(/<link\b[^>]*\brel=["']canonical["'][^>]*>\s*/gi, '')
     .replace(/<meta\b[^>]*\bdata-secret-blogger-site-social\b[^>]*>\s*/gi, '')
-    .replace(/<meta\b[^>]*\bproperty=["']og:[^"']+["'][^>]*>\s*/gi, '');
+    .replace(/<meta\b[^>]*\bproperty=["']og:[^"']+["'][^>]*>\s*/gi, '')
+    .replace(/<meta\b[^>]*\bname=["']twitter:[^"']+["'][^>]*>\s*/gi, '');
 }
 
 /**
@@ -53,7 +56,7 @@ export function stripSiteSocialFromHtml(html: string): string {
  */
 export function buildEventSocialMetaTagsHtml(
   event: Event,
-  prerender?: EventJsonLdPrerender & { brandImageUrl?: string },
+  prerender?: EventJsonLdPrerender & { brandImageUrl?: string; shareImageUrl?: string },
 ): string {
   const canonical = prerender
     ? canonicalEventUrlFromParts(event.id, prerender.siteOrigin, prerender.viteBase)
@@ -78,10 +81,15 @@ export function buildEventSocialMetaTagsHtml(
   ];
   if (image) {
     const mime = ogImageMimeFromUrl(image);
-    lines.push(`<meta property="og:image" content="${escapeHtmlAttr(image)}" ${sb} />`);
-    lines.push(`<meta property="og:image:secure_url" content="${escapeHtmlAttr(image)}" ${sb} />`);
+    const imgEsc = escapeHtmlAttr(image);
+    lines.push(`<meta property="og:image" content="${imgEsc}" ${sb} />`);
+    lines.push(`<meta property="og:image:secure_url" content="${imgEsc}" ${sb} />`);
     if (mime) lines.push(`<meta property="og:image:type" content="${mime}" ${sb} />`);
     lines.push(`<meta property="og:image:alt" content="${titleEsc}" ${sb} />`);
+    lines.push(`<meta name="twitter:card" content="summary_large_image" ${sb} />`);
+    lines.push(`<meta name="twitter:title" content="${titleEsc}" ${sb} />`);
+    lines.push(`<meta name="twitter:description" content="${descEsc}" ${sb} />`);
+    lines.push(`<meta name="twitter:image" content="${imgEsc}" ${sb} />`);
   }
   return lines.map((l) => `  ${l}`).join('\n');
 }
@@ -93,7 +101,7 @@ export type SocialMetaTagSpec =
 /** DOM-friendly list for runtime injection (same fields as HTML string). */
 export function buildEventSocialMetaTagSpecs(
   event: Event,
-  prerender?: EventJsonLdPrerender & { brandImageUrl?: string },
+  prerender?: EventJsonLdPrerender & { brandImageUrl?: string; shareImageUrl?: string },
 ): SocialMetaTagSpec[] {
   const canonical = prerender
     ? canonicalEventUrlFromParts(event.id, prerender.siteOrigin, prerender.viteBase)
@@ -116,6 +124,10 @@ export function buildEventSocialMetaTagSpecs(
     specs.push({ kind: 'property', key: 'og:image:secure_url', content: image });
     if (mime) specs.push({ kind: 'property', key: 'og:image:type', content: mime });
     specs.push({ kind: 'property', key: 'og:image:alt', content: title });
+    specs.push({ kind: 'name', key: 'twitter:card', content: 'summary_large_image' });
+    specs.push({ kind: 'name', key: 'twitter:title', content: title });
+    specs.push({ kind: 'name', key: 'twitter:description', content: description });
+    specs.push({ kind: 'name', key: 'twitter:image', content: image });
   }
   return specs;
 }

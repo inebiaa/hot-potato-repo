@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import tsconfigPaths from "vite-tsconfig-paths";
 import { VitePWA } from 'vite-plugin-pwa'
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, extname, resolve } from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import type { Plugin } from 'vite'
 import type { Event } from './src/lib/eventTypes'
@@ -37,6 +37,80 @@ function escapeTitleText(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+const SHARE_MIRROR_MAX_BYTES = 1_800_000
+
+function shareExtFromContentType(ct: string): string {
+  const t = ct.split(';')[0].trim().toLowerCase()
+  if (t.includes('png')) return '.png'
+  if (t.includes('webp')) return '.webp'
+  if (t.includes('gif')) return '.gif'
+  return '.jpg'
+}
+
+function shareExtFromUrl(url: string): string {
+  try {
+    const ext = extname(new URL(url).pathname).toLowerCase()
+    if (['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) {
+      return ext === '.jpeg' ? '.jpg' : ext
+    }
+  } catch {
+    /* ignore */
+  }
+  return '.jpg'
+}
+
+/**
+ * Copy a remote image into dist/share/… so crawlers fetch it from our site origin
+ * (more reliable for iMessage/Slack/Facebook than hotlinked Storage URLs).
+ */
+async function mirrorShareImage(
+  sourceUrl: string,
+  destPathWithoutExt: string,
+): Promise<string | null> {
+  const src = sourceUrl.trim()
+  if (!src || !/^https?:\/\//i.test(src)) return null
+  try {
+    const res = await fetch(src, {
+      redirect: 'follow',
+      headers: {
+        Accept: 'image/*,*/*;q=0.8',
+        'User-Agent': 'SecretBloggerShareMirror/1.0',
+      },
+    })
+    if (!res.ok) return null
+    const contentType = (res.headers.get('content-type') || '').toLowerCase()
+    const buf = Buffer.from(await res.arrayBuffer())
+    if (!buf.byteLength || buf.byteLength > SHARE_MIRROR_MAX_BYTES) return null
+    const ext = contentType.startsWith('image/')
+      ? shareExtFromContentType(contentType)
+      : shareExtFromUrl(src)
+    const filePath = `${destPathWithoutExt}${ext}`
+    mkdirSync(dirname(filePath), { recursive: true })
+    writeFileSync(filePath, buf)
+    const marker = `${resolve(process.cwd(), 'dist')}`
+    const rel = filePath.startsWith(marker)
+      ? filePath.slice(marker.length).replace(/\\/g, '/').replace(/^\//, '')
+      : `share/${filePath.split(/[/\\]/).pop()}`
+    return rel
+  } catch {
+    return null
+  }
+}
+
+async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let i = 0
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++
+      results[idx] = await fn(items[idx])
+    }
+  }
+  const n = Math.max(1, Math.min(concurrency, items.length || 1))
+  await Promise.all(Array.from({ length: n }, () => worker()))
+  return results
+}
+
 /** JSON-LD safe inside <script> (prevents closing script if event text contains HTML). */
 function jsonLdForHtml(json: string): string {
   return json.replace(/</g, '\\u003c')
@@ -48,8 +122,9 @@ function injectEventSeoShell(
   site: string,
   viteBase: string,
   brandImageUrl?: string,
+  shareImageUrl?: string,
 ): string {
-  const prerender = { siteOrigin: site, viteBase, brandImageUrl }
+  const prerender = { siteOrigin: site, viteBase, brandImageUrl, shareImageUrl }
   const canonical = canonicalEventUrlFromParts(event.id, site, viteBase)
   const jsonLd = jsonLdForHtml(eventJsonLdScriptContentPrerender(event, prerender))
   const socialMeta = buildEventSocialMetaTagsHtml(event, prerender)
@@ -116,7 +191,7 @@ function staticSitePlugin(): Plugin {
         for (const row of settingsRes.data || []) {
           if (row?.key && typeof row.value === 'string') settingsMap[row.key] = row.value
         }
-        const brandImage = brandShareImageUrl({
+        const brandImageRemote = brandShareImageUrl({
           app_logo_url: settingsMap.app_logo_url,
           app_icon_url: settingsMap.app_icon_url,
           app_favicon_url: settingsMap.app_favicon_url,
@@ -125,6 +200,19 @@ function staticSitePlugin(): Plugin {
         const copyOverrides = parseCopyOverrides(settingsMap.copy_overrides)
         const brandDescription =
           tCopy('home.subtitleSignedIn', copyOverrides).trim() || APP_DESCRIPTION
+
+        const shareDir = resolve(distDir, 'share')
+        mkdirSync(shareDir, { recursive: true })
+        let brandImage = brandImageRemote
+        if (brandImageRemote) {
+          const brandRel = await mirrorShareImage(brandImageRemote, resolve(shareDir, 'brand'))
+          if (brandRel) {
+            brandImage = `${site}/${brandRel}`
+            console.log('[static-site] Mirrored brand share image →', brandRel)
+          } else {
+            console.warn('[static-site] Could not mirror brand share image; using remote URL')
+          }
+        }
 
         const rows = (data || []) as Event[]
         const urls = [site + '/', ...rows.map((row) => `${site}/event/${row.id}`)]
@@ -148,13 +236,35 @@ ${urls.map((loc) => `  <url><loc>${escapeXml(loc)}</loc><changefreq>weekly</chan
           console.warn('[static-site] No app_logo_url / app_icon_url / app_favicon_url — homepage OG image unchanged')
         }
 
+        const eventsDir = resolve(shareDir, 'events')
+        mkdirSync(eventsDir, { recursive: true })
+        const mirrored = await mapPool(rows, 6, async (row) => {
+          const src = typeof row.image_url === 'string' ? row.image_url.trim() : ''
+          if (!src) return { id: row.id, shareImageUrl: undefined as string | undefined }
+          const rel = await mirrorShareImage(src, resolve(eventsDir, row.id))
+          return {
+            id: row.id,
+            shareImageUrl: rel ? `${site}/${rel}` : undefined,
+          }
+        })
+        const shareById = new Map(mirrored.map((m) => [m.id, m.shareImageUrl]))
+        const mirroredCount = mirrored.filter((m) => m.shareImageUrl).length
+        console.log('[static-site] Mirrored', mirroredCount, 'event share image(s) into dist/share/events')
+
         let eventPages = 0
         for (const row of rows) {
           const id = row?.id
           if (!id || typeof id !== 'string') continue
           const dir = resolve(distDir, 'event', id)
           mkdirSync(dir, { recursive: true })
-          const html = injectEventSeoShell(indexHtml, row, site, viteBase, brandImage)
+          const html = injectEventSeoShell(
+            indexHtml,
+            row,
+            site,
+            viteBase,
+            brandImage,
+            shareById.get(id),
+          )
           writeFileSync(resolve(dir, 'index.html'), html, 'utf8')
           eventPages += 1
         }
@@ -232,6 +342,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Share mirrors are for crawlers only — do not precache hundreds of event posters.
+        globIgnores: ['**/share/**'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api/],
       },
