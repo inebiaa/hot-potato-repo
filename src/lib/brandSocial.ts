@@ -109,6 +109,30 @@ export function applyBrandShareImageToSiteHtml(
     );
   }
 
+  // Twitter / iMessage-friendly cards (same image as OG).
+  if (/name=["']twitter:card["'][^>]*\bdata-secret-blogger-site-social\b/i.test(out)) {
+    out = out.replace(
+      /<meta\b[^>]*\bname=["']twitter:card["'][^>]*\bdata-secret-blogger-site-social\b[^>]*>/gi,
+      `<meta name="twitter:card" content="summary_large_image" ${sb} />`,
+    );
+  } else {
+    out = out.replace(
+      /(<meta property="og:image:alt"[^>]*>)/i,
+      `$1\n    <meta name="twitter:card" content="summary_large_image" ${sb} />`,
+    );
+  }
+  if (/name=["']twitter:image["'][^>]*\bdata-secret-blogger-site-social\b/i.test(out)) {
+    out = out.replace(
+      /<meta\b[^>]*\bname=["']twitter:image["'][^>]*\bdata-secret-blogger-site-social\b[^>]*>/gi,
+      `<meta name="twitter:image" content="${escUrl}" ${sb} />`,
+    );
+  } else {
+    out = out.replace(
+      /(<meta name="twitter:card"[^>]*>)/i,
+      `$1\n    <meta name="twitter:image" content="${escUrl}" ${sb} />`,
+    );
+  }
+
   return out;
 }
 
@@ -165,6 +189,21 @@ export function syncSiteSocialOgImageInDocument(imageUrl: string | undefined, im
   } else {
     typeEl?.remove();
   }
+
+  const setNameMeta = (name: string, content: string) => {
+    let el = document.querySelector<HTMLMetaElement>(
+      `meta[${SITE_SOCIAL_ATTR}][name="${name}"]`,
+    );
+    if (!el) {
+      el = document.createElement('meta');
+      el.setAttribute(SITE_SOCIAL_ATTR, '');
+      el.setAttribute('name', name);
+      document.head.appendChild(el);
+    }
+    el.setAttribute('content', content);
+  };
+  setNameMeta('twitter:card', 'summary_large_image');
+  setNameMeta('twitter:image', url);
 
   document
     .querySelectorAll(
