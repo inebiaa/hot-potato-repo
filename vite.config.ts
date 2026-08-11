@@ -11,9 +11,11 @@ import { canonicalEventUrlFromParts } from './src/lib/siteBase'
 import { eventJsonLdScriptContentPrerender } from './src/lib/eventJsonLd'
 import { buildEventSocialMetaTagsHtml, stripSiteSocialFromHtml } from './src/lib/eventSocialMeta'
 import {
+  applyBrandDescriptionToSiteHtml,
   applyBrandShareImageToSiteHtml,
   brandShareImageUrl,
 } from './src/lib/brandSocial'
+import { parseCopyOverrides, t as tCopy } from './src/copy'
 
 const APP_NAME = (process.env.VITE_APP_NAME || 'Secret Blogger').trim() || 'Secret Blogger'
 const APP_DESCRIPTION =
@@ -105,7 +107,7 @@ function staticSitePlugin(): Plugin {
           client
             .from('app_settings')
             .select('key, value')
-            .in('key', ['app_logo_url', 'app_icon_url', 'app_favicon_url', 'app_name']),
+            .in('key', ['app_logo_url', 'app_icon_url', 'app_favicon_url', 'app_name', 'copy_overrides']),
         ])
         if (error) throw error
         if (settingsRes.error) throw settingsRes.error
@@ -120,6 +122,9 @@ function staticSitePlugin(): Plugin {
           app_favicon_url: settingsMap.app_favicon_url,
         })
         const brandAlt = (settingsMap.app_name || APP_NAME).trim() || APP_NAME
+        const copyOverrides = parseCopyOverrides(settingsMap.copy_overrides)
+        const brandDescription =
+          tCopy('home.subtitleSignedIn', copyOverrides).trim() || APP_DESCRIPTION
 
         const rows = (data || []) as Event[]
         const urls = [site + '/', ...rows.map((row) => `${site}/event/${row.id}`)]
@@ -132,11 +137,14 @@ ${urls.map((loc) => `  <url><loc>${escapeXml(loc)}</loc><changefreq>weekly</chan
         console.log('[static-site] Wrote sitemap.xml', `(${urls.length} URLs)`)
 
         let indexHtml = readFileSync(rootIndex, 'utf8')
+        indexHtml = applyBrandDescriptionToSiteHtml(indexHtml, brandDescription)
+        console.log('[static-site] Homepage OG description set from home subtitle')
         if (brandImage) {
           indexHtml = applyBrandShareImageToSiteHtml(indexHtml, brandImage, brandAlt)
           writeFileSync(rootIndex, indexHtml, 'utf8')
           console.log('[static-site] Homepage OG image set from brand settings')
         } else {
+          writeFileSync(rootIndex, indexHtml, 'utf8')
           console.warn('[static-site] No app_logo_url / app_icon_url / app_favicon_url — homepage OG image unchanged')
         }
 
