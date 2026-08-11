@@ -7,6 +7,7 @@ import {
   type CopyOverrides,
 } from '../../copy';
 import { Input, Label, Textarea } from '../ui';
+import BrandImageField from '../BrandImageField';
 
 type BrandingTabProps = {
   settings: AppSettings;
@@ -87,42 +88,33 @@ export default function BrandingTab({ settings, onChange }: BrandingTabProps) {
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-neutral-800 border-b border-neutral-200 pb-1">Images</h3>
-        <div>
-          <Label htmlFor="settings-app-icon">App Icon URL</Label>
-          <Input
-            id="settings-app-icon"
-            type="url"
-            value={settings.app_icon_url}
-            onChange={(e) => onChange({ app_icon_url: e.target.value })}
-          />
-          {settings.app_icon_url ? (
-            <img src={settings.app_icon_url} alt="" className="mt-2 h-12 w-12 rounded-lg border object-cover" />
-          ) : null}
-        </div>
-        <div>
-          <Label htmlFor="settings-app-logo">App Logo URL</Label>
-          <Input
-            id="settings-app-logo"
-            type="url"
-            value={settings.app_logo_url}
-            onChange={(e) => onChange({ app_logo_url: e.target.value })}
-          />
-          {settings.app_logo_url ? (
-            <img src={settings.app_logo_url} alt="" className="mt-2 h-10 object-contain" />
-          ) : null}
-        </div>
-        <div>
-          <Label htmlFor="settings-app-favicon">App Favicon URL</Label>
-          <Input
-            id="settings-app-favicon"
-            type="url"
-            value={settings.app_favicon_url}
-            onChange={(e) => onChange({ app_favicon_url: e.target.value })}
-          />
-          {settings.app_favicon_url ? (
-            <img src={settings.app_favicon_url} alt="" className="mt-2 h-8 w-8 rounded-lg border object-cover" />
-          ) : null}
-        </div>
+        <BrandImageField
+          label="App icon"
+          slot="icon"
+          imageUrl={settings.app_icon_url}
+          onImageUrlChange={(url) => onChange({ app_icon_url: url })}
+          fileInputId="settings-app-icon-file"
+          urlInputId="settings-app-icon"
+          previewClassName="mt-2 h-12 w-12 rounded-lg border object-cover"
+        />
+        <BrandImageField
+          label="App logo"
+          slot="logo"
+          imageUrl={settings.app_logo_url}
+          onImageUrlChange={(url) => onChange({ app_logo_url: url })}
+          fileInputId="settings-app-logo-file"
+          urlInputId="settings-app-logo"
+          previewClassName="mt-2 h-10 object-contain"
+        />
+        <BrandImageField
+          label="App favicon"
+          slot="favicon"
+          imageUrl={settings.app_favicon_url}
+          onImageUrlChange={(url) => onChange({ app_favicon_url: url })}
+          fileInputId="settings-app-favicon-file"
+          urlInputId="settings-app-favicon"
+          previewClassName="mt-2 h-8 w-8 rounded-lg border object-cover"
+        />
       </section>
     </div>
   );
