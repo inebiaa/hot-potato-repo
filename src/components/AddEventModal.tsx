@@ -18,10 +18,12 @@ import {
   withSpecialGuestsMeta,
 } from '../lib/specialGuests';
 import { useT } from '../contexts/CopyContext';
+import { ensureEventImageStored } from '../lib/eventImageUpload';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';
 import CustomPerformerCategoryInput from './CustomPerformerCategoryInput';
 import ModalShell from './ModalShell';
+import EventImageField from './EventImageField';
 import { Button, Input, Label } from './ui';
 import { cn } from '../lib/utils';
 
@@ -125,6 +127,14 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       const cityVal = (city && city[0]) || '';
       const formattedAddress = await resolveVenueFormattedAddress(venueVal, cityVal);
 
+      const storedImage = await ensureEventImageStored(imageUrl);
+      if ('error' in storedImage) {
+        setError(storedImage.error);
+        setLoading(false);
+        return;
+      }
+      if (storedImage.url) setImageUrl(storedImage.url);
+
       const { error: insertError } = await supabase.from('events').insert({
         name,
         date,
@@ -133,7 +143,7 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
         show_type: showType,
         location: venueVal,
         formatted_address: formattedAddress,
-        image_url: imageUrl || null,
+        image_url: storedImage.url,
         countdown_link: normalizedCountdownLink,
         producers: resolvedProducers.length ? resolvedProducers : null,
         featured_designers: resolvedDesigners.length ? resolvedDesigners : null,
@@ -445,16 +455,11 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
             expandable
           />
 
-          <div>
-            <Label htmlFor="imageUrl">Show Image URL</Label>
-            <Input
-              id="imageUrl"
-              type="url"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://…"
-            />
-          </div>
+          <EventImageField
+            imageUrl={imageUrl}
+            onImageUrlChange={setImageUrl}
+            userId={user?.id}
+          />
 
           <div>
             <Label htmlFor="countdownLink">Official ticket link</Label>

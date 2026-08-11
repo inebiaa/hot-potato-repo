@@ -49,6 +49,11 @@ export type CopyKey =
   | 'form.collection'
   | 'form.collection.placeholder.fashion'
   | 'form.collection.placeholder.music'
+  | 'form.showPhoto'
+  | 'form.imageUrl'
+  | 'form.imageUrl.placeholder'
+  | 'form.imageUploading'
+  | 'form.imageUploadSignIn'
   | 'empty.noShows.title'
   | 'empty.noShows.body'
   | 'empty.noShows.cta'
@@ -230,6 +235,23 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     label: 'Form: Collection placeholder (music)',
     group: 'form',
   },
+  'form.showPhoto': { default: 'Show photo', label: 'Form: Show photo', group: 'form' },
+  'form.imageUrl': { default: 'Or image URL', label: 'Form: Image URL', group: 'form' },
+  'form.imageUrl.placeholder': {
+    default: 'https://…',
+    label: 'Form: Image URL placeholder',
+    group: 'form',
+  },
+  'form.imageUploading': {
+    default: 'Uploading…',
+    label: 'Form: Image uploading',
+    group: 'form',
+  },
+  'form.imageUploadSignIn': {
+    default: 'Sign in to upload a photo.',
+    label: 'Form: Image upload sign-in',
+    group: 'form',
+  },
   'empty.noShows.title': {
     default: 'No shows yet',
     label: 'Empty: no shows title',
@@ -299,4 +321,5 @@ export const COPY_SETTINGS_KEYS: CopyKey[] = [
   'form.genre.placeholder.music',
   'form.collection.placeholder.fashion',
   'form.collection.placeholder.music',
+  'form.imageUrl.placeholder',
 ];

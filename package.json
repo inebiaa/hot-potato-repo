@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "check": "tsc --noEmit",
     "verify:jsonld": "node scripts/verify-event-jsonld.mjs",
+    "backfill:event-images": "node scripts/backfill-event-images.mjs",
+    "backfill:branding-images": "node scripts/backfill-branding-images.mjs",
     "generate:pwa-icons": "node scripts/create-pwa-icons.mjs",
     "server:dev": "nodemon",
     "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\""

@@ -3,7 +3,7 @@ import { Calendar, MapPin, Star, Edit, Trash2, Share2, Mail, MoreVertical } from
 import { Event, Rating, supabase } from '../lib/supabase';
 import { getIcon } from '../lib/eventCardIcons';
 import { getSeasonFromDate } from '../lib/season';
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import RatingModal from './RatingModal';
 import EditEventModal from './EditEventModal';
 import ViewRatingsModal from './ViewRatingsModal';
@@ -28,6 +28,8 @@ import {
   getSpecialGuests,
   isSpecialGuestsSlug,
 } from '../lib/specialGuests';
+import { eventCardImageUrl } from '../lib/eventCardImageUrl';
+import { deleteStoredEventImage } from '../lib/eventImageUpload';
 
 /** City / season / genre: shared pill shell + hover (same metrics as TagInput chips). */
 const HEADER_ICON_INSIDE_PILL_CLASS = `${tagPillShellClass} transition-colors hover:opacity-80`;
@@ -303,6 +305,8 @@ export default function EventCard({
 
       if (error) throw error;
 
+      void deleteStoredEventImage(event.image_url);
+
       onEventUpdated();
     } catch (error) {
       console.error('Error deleting event:', error);
@@ -320,12 +324,14 @@ export default function EventCard({
     onViewClick(event.id);
   };
 
+  const cardImageSrc = eventCardImageUrl(event.image_url);
+
   if (stackPhotoOnly) {
     return (
-      <div className={`rounded-lg shadow-md overflow-hidden shrink-0 h-48 ${event.image_url ? 'bg-transparent' : 'bg-gray-200'}`}>
-        {event.image_url ? (
+      <div className={`rounded-lg shadow-md overflow-hidden shrink-0 h-48 ${cardImageSrc ? 'bg-transparent' : 'bg-gray-200'}`}>
+        {cardImageSrc ? (
           <img
-            src={event.image_url}
+            src={cardImageSrc}
             alt=""
             loading="lazy"
             decoding="async"
@@ -346,11 +352,11 @@ export default function EventCard({
         tabIndex={onViewClick ? 0 : undefined}
         onKeyDown={onViewClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewClick(event.id); } } : undefined}
       >
-        {event.image_url && (
+        {cardImageSrc && (
           <div className="overflow-hidden rounded-t-lg shrink-0">
             <img
-              src={event.image_url}
-              alt={event.name}
+              src={cardImageSrc}
+              alt=""
               loading="lazy"
               decoding="async"
               className="w-full h-48 object-cover flex-shrink-0 rounded-t-lg"

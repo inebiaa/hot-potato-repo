@@ -25,6 +25,10 @@ import AdminsTab from './settings/AdminsTab';
 import TagsTab, { BRIGHT_TAG_DEFAULTS, FADED_TAG_DEFAULTS } from './settings/TagsTab';
 import { Button } from './ui';
 import { COPY_OVERRIDES_SETTING_KEY } from '../copy';
+import {
+  deleteStoredBrandImage,
+  ensureBrandImageStored,
+} from '../lib/brandImageUpload';
 
 const PALETTE_STORAGE_KEY = 'tag_settings_palette_v1';
 const COLLECTIONS_STORAGE_KEY = 'tag_color_collections_v1';
@@ -147,6 +151,11 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [dragOverCollectionId, setDragOverCollectionId] = useState<string | null>(null);
   const skipNextPreviewRef = useRef(false);
+  const savedBrandingImagesRef = useRef({
+    app_icon_url: '',
+    app_logo_url: '',
+    app_favicon_url: '',
+  });
   /** Drop stale in-flight `fetchAdminLinkContext` results (e.g. fast Back + pick another name). */
   const fetchAdminLinkContextGenRef = useRef(0);
 
@@ -862,6 +871,11 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
         special_guests_bg_color: settingsObj.special_guests_bg_color || '#e0e7ff',
         special_guests_text_color: settingsObj.special_guests_text_color || '#3730a3',
       });
+      savedBrandingImagesRef.current = {
+        app_icon_url: settingsObj.app_icon_url || '',
+        app_logo_url: settingsObj.app_logo_url || '',
+        app_favicon_url: settingsObj.app_favicon_url || '',
+      };
       skipNextPreviewRef.current = true;
       setSettingsLoaded(true);
     } catch (err) {
@@ -1313,11 +1327,45 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
     setSuccess('');
     setLoading(true);
     try {
+      const iconStored = await ensureBrandImageStored(settings.app_icon_url, 'icon');
+      if ('error' in iconStored) throw new Error(iconStored.error);
+      const logoStored = await ensureBrandImageStored(settings.app_logo_url, 'logo');
+      if ('error' in logoStored) throw new Error(logoStored.error);
+      const faviconStored = await ensureBrandImageStored(settings.app_favicon_url, 'favicon');
+      if ('error' in faviconStored) throw new Error(faviconStored.error);
+
+      const nextIcon = iconStored.url || '';
+      const nextLogo = logoStored.url || '';
+      const nextFavicon = faviconStored.url || '';
+      if (
+        nextIcon !== settings.app_icon_url ||
+        nextLogo !== settings.app_logo_url ||
+        nextFavicon !== settings.app_favicon_url
+      ) {
+        setSettings((prev) => ({
+          ...prev,
+          app_icon_url: nextIcon,
+          app_logo_url: nextLogo,
+          app_favicon_url: nextFavicon,
+        }));
+      }
+
+      const prev = savedBrandingImagesRef.current;
+      if (prev.app_icon_url && prev.app_icon_url !== nextIcon) {
+        void deleteStoredBrandImage(prev.app_icon_url);
+      }
+      if (prev.app_logo_url && prev.app_logo_url !== nextLogo) {
+        void deleteStoredBrandImage(prev.app_logo_url);
+      }
+      if (prev.app_favicon_url && prev.app_favicon_url !== nextFavicon) {
+        void deleteStoredBrandImage(prev.app_favicon_url);
+      }
+
       const updates = [
         { key: 'app_name', value: settings.app_name },
-        { key: 'app_icon_url', value: settings.app_icon_url },
-        { key: 'app_logo_url', value: settings.app_logo_url },
-        { key: 'app_favicon_url', value: settings.app_favicon_url },
+        { key: 'app_icon_url', value: nextIcon },
+        { key: 'app_logo_url', value: nextLogo },
+        { key: 'app_favicon_url', value: nextFavicon },
         { key: 'tagline', value: settings.tagline },
         { key: COPY_OVERRIDES_SETTING_KEY, value: settings.copy_overrides || '' },
         { key: 'color_scheme', value: settings.color_scheme },
@@ -1361,6 +1409,11 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
           .upsert({ key: u.key, value: u.value, updated_by: user.id, updated_at: new Date().toISOString() }, { onConflict: 'key' });
         if (err) throw err;
       }
+      savedBrandingImagesRef.current = {
+        app_icon_url: nextIcon,
+        app_logo_url: nextLogo,
+        app_favicon_url: nextFavicon,
+      };
       setSuccess('Settings saved');
       onSettingsUpdated();
       setTimeout(() => setSuccess(''), 3000);
