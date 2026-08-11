@@ -1,8 +1,9 @@
 import { Search, X } from 'lucide-react';
-import type { DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import type { AppSettings } from '../types/appSettings';
 import { showTypePillColors } from '../lib/showType';
 import { getPillColors } from './tagCards/getPillColors';
+import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 import { useT } from '../contexts/CopyContext';
 
 export type CustomPerformerTagDef = { slug: string; bg_color: string; text_color: string };
@@ -25,7 +26,6 @@ interface PrimarySearchBarProps {
   embeddedInHeader?: boolean;
   customPerformerTags?: CustomPerformerTagDef[];
   searchDragOver: boolean;
-  searchFocused: boolean;
   selectedTags: TagFilter[];
   searchQuery: string;
   tagSuggestions: TagSuggestion[];
@@ -37,8 +37,6 @@ interface PrimarySearchBarProps {
   onSearchDrop: (e: DragEvent) => void;
   onSearchDragOver: (e: DragEvent) => void;
   onSearchDragLeave: () => void;
-  onSearchFocus: () => void;
-  onSearchBlur: () => void;
   onSearchQueryChange: (value: string) => void;
   onSelectTagFilter: (type: string, value: string, label?: string) => void;
   onRemoveTagFilter: (type: string, value: string) => void;
@@ -63,10 +61,7 @@ function tagLabel(type: string): string {
   return '';
 }
 
-/** Lucide X on each filter chip (same size/weight as query-clear). */
-const chipDismissBtn =
-  'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-80 transition-opacity hover:bg-black/10 hover:opacity-100';
-
+/** Lucide X on the query-clear control (filter chips use TagPillSplitLabel trailingSlot). */
 const queryClearBtn =
   'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-600 opacity-80 transition-opacity hover:bg-gray-100 hover:opacity-100';
 
@@ -111,7 +106,6 @@ export default function PrimarySearchBar({
   embeddedInHeader = false,
   customPerformerTags,
   searchDragOver,
-  searchFocused,
   selectedTags,
   searchQuery,
   tagSuggestions,
@@ -123,8 +117,6 @@ export default function PrimarySearchBar({
   onSearchDrop,
   onSearchDragOver,
   onSearchDragLeave,
-  onSearchFocus,
-  onSearchBlur,
   onSearchQueryChange,
   onSelectTagFilter,
   onRemoveTagFilter,
@@ -132,6 +124,27 @@ export default function PrimarySearchBar({
 }: PrimarySearchBarProps) {
   void _onClearFilters;
   const t = useT();
+  const fieldRef = useRef<HTMLDivElement>(null);
+  const [fieldFocused, setFieldFocused] = useState(false);
+
+  // Track focus via focusin/focusout so suggestion clicks and re-focus don't leave a stale "blurred" state.
+  useEffect(() => {
+    const el = fieldRef.current;
+    if (!el) return;
+    const sync = () => setFieldFocused(el.contains(document.activeElement));
+    const onFocusOut = () => {
+      // After the browser finishes moving focus (incl. to a suggestion button).
+      requestAnimationFrame(sync);
+    };
+    el.addEventListener('focusin', sync);
+    el.addEventListener('focusout', onFocusOut);
+    sync();
+    return () => {
+      el.removeEventListener('focusin', sync);
+      el.removeEventListener('focusout', onFocusOut);
+    };
+  }, []);
+
   const hasFilterActivity = Boolean(searchQuery) || selectedTags.length > 0;
   const showCounts =
     !embeddedInHeader &&
@@ -139,7 +152,7 @@ export default function PrimarySearchBar({
     typeof filteredCount === 'number' &&
     typeof totalCount === 'number';
 
-  const showTagSuggestions = searchFocused && tagSuggestions.length > 0;
+  const showTagSuggestions = fieldFocused && tagSuggestions.length > 0;
 
   const searchFieldClass = embeddedInHeader
     ? `relative flex h-10 w-full min-w-0 flex-nowrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-900 shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'bg-neutral-100 ring-2 ring-neutral-400' : ''}`
@@ -152,6 +165,7 @@ export default function PrimarySearchBar({
     <div className={embeddedInHeader ? 'w-full min-w-0' : 'mb-6 border-b border-gray-200 pb-4'}>
       <div className={embeddedInHeader ? 'w-full' : 'flex flex-wrap items-center gap-3'}>
         <div
+          ref={fieldRef}
           className={searchFieldClass}
           onDragOver={onSearchDragOver}
           onDragLeave={onSearchDragLeave}
@@ -163,33 +177,33 @@ export default function PrimarySearchBar({
               const { type, value, label } = selectedTag;
               const { bg, text } = pillColorsForFilter(type, value, appSettings, customPerformerTags);
               const shown = (label || value).replace(/\r\n|\r|\n/g, ' ').trim();
+              const pillText = `${tagLabel(type)}${shown}`;
               return (
                 <span
                   key={`${type}:${value}`}
-                  className="inline-grid min-w-0 max-w-[min(28rem,100%)] shrink grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 overflow-hidden rounded-md text-xs"
-                  title={`${tagLabel(type)}${shown}`}
+                  className={`${tagPillSplitSegmentGroupClass} min-w-0 max-w-[min(28rem,100%)] shrink p-0`}
+                  title={pillText}
                 >
-                  <span
-                    className="min-w-0 truncate rounded-md px-2 py-1 text-xs"
-                    style={{ backgroundColor: bg, color: text }}
-                  >
-                    {tagLabel(type)}
-                    {shown}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onRemoveTagFilter(type, value);
-                    }}
-                    className={`${chipDismissBtn} -mr-0.5`}
-                    style={{ color: text }}
-                    aria-label={`Remove ${shown} filter`}
-                  >
-                    <span className="sr-only">Remove filter</span>
-                    <X size={14} strokeWidth={2} aria-hidden />
-                  </button>
+                  <TagPillSplitLabel
+                    text={pillText}
+                    segmentColors={{ backgroundColor: bg, color: text }}
+                    trailingSlot={
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onRemoveTagFilter(type, value);
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className="inline-flex items-center justify-center p-0 opacity-80 hover:opacity-100"
+                        style={{ color: text }}
+                        aria-label={`Remove ${shown} filter`}
+                      >
+                        <X size={12} strokeWidth={2.5} aria-hidden />
+                      </button>
+                    }
+                  />
                 </span>
               );
             })}
@@ -211,8 +225,6 @@ export default function PrimarySearchBar({
               placeholder={selectedTags.length ? '' : t('search.placeholder')}
               value={searchQuery}
               onChange={(e) => onSearchQueryChange(e.target.value)}
-              onFocus={onSearchFocus}
-              onBlur={onSearchBlur}
               className="min-h-0 min-w-0 flex-1 border-0 bg-transparent py-0.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"
             />
           </div>

@@ -52,6 +52,7 @@ import {
 import {
   brandShareImageUrl,
   setRuntimeBrandShareImage,
+  syncSiteSocialOgDescriptionInDocument,
   syncSiteSocialOgImageInDocument,
 } from './lib/brandSocial';
 import {
@@ -106,7 +107,6 @@ function App() {
   const [hasMoreEvents, setHasMoreEvents] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [deepLinkFailed, setDeepLinkFailed] = useState(false);
-  const [searchFocused, setSearchFocused] = useState(false);
   const [searchDragOver, setSearchDragOver] = useState(false);
   const [tagResolutionMap, setTagResolutionMap] = useState<TagResolutionMap | null>(null);
   const [profileReviewCounts, setProfileReviewCounts] = useState<{ visible: number; total: number } | null>(null);
@@ -548,6 +548,7 @@ function App() {
     const image = brandShareImageUrl(appSettings);
     setRuntimeBrandShareImage(image);
     syncSiteSocialOgImageInDocument(image, appSettings.app_name || 'Secret Blogger');
+    syncSiteSocialOgDescriptionInDocument(copyT('home.subtitleSignedIn', overridesFromSettings(appSettings)));
   }, [appSettings]);
 
   const identityIdsInUse = useMemo(() => {
@@ -1220,7 +1221,6 @@ function App() {
               embeddedInHeader
               appSettings={appSettings}
               searchDragOver={searchDragOver}
-              searchFocused={searchFocused}
               selectedTags={selectedTags}
               searchQuery={searchQuery}
               tagSuggestions={tagSuggestions}
@@ -1229,8 +1229,6 @@ function App() {
               onSearchDrop={handleSearchDrop}
               onSearchDragOver={handleSearchDragOver}
               onSearchDragLeave={handleSearchDragLeave}
-              onSearchFocus={() => setSearchFocused(true)}
-              onSearchBlur={() => setTimeout(() => setSearchFocused(false), 150)}
               onSearchQueryChange={setSearchQuery}
               onSelectTagFilter={selectTagFilter}
               onRemoveTagFilter={removeTagFilter}
@@ -1303,7 +1301,6 @@ function App() {
               embeddedInHeader
               appSettings={appSettings}
               searchDragOver={searchDragOver}
-              searchFocused={searchFocused}
               selectedTags={selectedTags}
               searchQuery={searchQuery}
               tagSuggestions={tagSuggestions}
@@ -1312,8 +1309,6 @@ function App() {
               onSearchDrop={handleSearchDrop}
               onSearchDragOver={handleSearchDragOver}
               onSearchDragLeave={handleSearchDragLeave}
-              onSearchFocus={() => setSearchFocused(true)}
-              onSearchBlur={() => setTimeout(() => setSearchFocused(false), 150)}
               onSearchQueryChange={setSearchQuery}
               onSelectTagFilter={selectTagFilter}
               onRemoveTagFilter={removeTagFilter}
@@ -1445,7 +1440,6 @@ function App() {
               embeddedInHeader
               appSettings={appSettings}
               searchDragOver={searchDragOver}
-              searchFocused={searchFocused}
               selectedTags={selectedTags}
               searchQuery={searchQuery}
               tagSuggestions={tagSuggestions}
@@ -1456,8 +1450,6 @@ function App() {
               onSearchDrop={handleSearchDrop}
               onSearchDragOver={handleSearchDragOver}
               onSearchDragLeave={handleSearchDragLeave}
-              onSearchFocus={() => setSearchFocused(true)}
-              onSearchBlur={() => setTimeout(() => setSearchFocused(false), 150)}
               onSearchQueryChange={setSearchQuery}
               onSelectTagFilter={selectTagFilter}
               onRemoveTagFilter={removeTagFilter}
@@ -1594,7 +1586,6 @@ function App() {
             embeddedInHeader
             appSettings={appSettings}
             searchDragOver={searchDragOver}
-            searchFocused={searchFocused}
             selectedTags={selectedTags}
             searchQuery={searchQuery}
             tagSuggestions={tagSuggestions}
@@ -1603,8 +1594,6 @@ function App() {
             onSearchDrop={handleSearchDrop}
             onSearchDragOver={handleSearchDragOver}
             onSearchDragLeave={handleSearchDragLeave}
-            onSearchFocus={() => setSearchFocused(true)}
-            onSearchBlur={() => setTimeout(() => setSearchFocused(false), 150)}
             onSearchQueryChange={setSearchQuery}
             onSelectTagFilter={selectTagFilter}
             onRemoveTagFilter={removeTagFilter}

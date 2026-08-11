@@ -4,13 +4,15 @@ import { registerSW } from 'virtual:pwa-register';
 import './index.css';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config';
 
-// Apply waiting service-worker updates so deploys (feed horizon, branding, etc.) actually reach clients.
-const updateSW = registerSW({
-  immediate: true,
-  onNeedRefresh() {
-    void updateSW(true);
-  },
-});
+// Production only — a service worker in Vite dev fights HMR and can blank the tab.
+if (import.meta.env.PROD) {
+  const updateSW = registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      void updateSW(true);
+    },
+  });
+}
 
 const supabaseUrl = SUPABASE_URL;
 const supabaseAnonKey = SUPABASE_ANON_KEY;
