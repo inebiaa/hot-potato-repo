@@ -1,0 +1,21 @@
+﻿---
+description: One canonical spelling per artist when adminning events
+alwaysApply: true
+---
+
+# Artist name spelling
+
+When inserting or updating events (`featured_artists`, special guests, or other artist tag values), **reuse the existing catalog spelling** - never invent a second casing/styling for the same act.
+
+## Before bulk insert
+1. For each artist you’re about to write, query distinct existing values (case/accent-insensitive), e.g. match on `lower(translate(...))` / strip non-alphanumerics.
+2. If any spelling already exists → **use that exact string** everywhere in the batch.
+3. If several variants already exist → pick the majority (or official stylization if clear), normalize the batch to that one, and fix the minority rows in the same pass.
+4. If the artist is new → pick one form and stick to it for the whole batch (prefer the artist’s own / label stylization: `horsegiirL`, `ADÉLA`, `Charli XCX`).
+
+## Do not
+- Mix `SOMBR` / `Sombr`, `KETTAMA` / `Kettama`, `HorsegiirL` / `horsegiirL`, etc. in one admin pass
+- “Fix” styling per festival poster if the DB already has another form
+
+## After bulk insert
+Re-check for collisions on the names you touched; merge any leftovers to the single chosen spelling before finishing.

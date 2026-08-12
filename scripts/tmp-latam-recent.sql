@@ -1,0 +1,7 @@
+UPDATE events SET image_url = 'https://billboard.ar/wp-content/uploads/2025/03/IMG_9945-scaled.jpg' WHERE id = 'e3c8b244-90fa-4c35-9005-0d7733818eed';
+UPDATE events SET image_url = 'https://www.clarin.com/img/2025/03/23/wv34ftomd_0x750__1.jpg' WHERE id = 'd0e33547-a787-4ef3-82ac-a86a4ec5a920';
+UPDATE events SET image_url = 'https://www.clarin.com/img/2025/03/23/ou-G5sy40_0x750__1.jpg' WHERE id = '6ec11c69-16fb-4c80-bd23-3fe525d248a8';
+UPDATE events SET image_url = 'https://www.rockaxis.com/img/newsList/3433251.JPG' WHERE id = 'c450adad-46db-447a-992e-c529d3942bd7';
+UPDATE events SET image_url = 'https://s2-g1.glbimg.com/buOMsLuogYrehZ3DLVj_ef_YQX0=/0x0:2000x1333/1000x0/smart/filters:strip_icc()/i.s3.glbimg.com/v1/AUTH_59edd422c0c84a879bd37670ae4f538a/internal_photos/bs/2026/A/S/bpNkjgQbaOIc6QCGddrA/lorde-lolla2026-f99a1626-fabio-tito.jpg' WHERE id = 'b70488b7-1b43-49b3-824f-6fb37eb64ee4';
+UPDATE events SET image_url = 'https://s2-g1.glbimg.com/tD_d9YdLxCHQZzugac7b3uhnp3o=/0x0:2000x1333/984x0/smart/filters:strip_icc()/i.s3.glbimg.com/v1/AUTH_59edd422c0c84a879bd37670ae4f538a/internal_photos/bs/2026/A/S/bpNkjgQbaOIc6QCGddrA/lorde-lolla2026-f99a1626-fabio-tito.jpg' WHERE id = '4304e3a1-690e-4daa-9bde-f55c2dc27c49';
+UPDATE events SET image_url = 'https://s2-g1.glbimg.com/Qt3xm2oOzuKI9CW0wj17TzjSo5c=/0x0:1920x1280/984x0/smart/filters:strip_icc()/i.s3.glbimg.com/v1/AUTH_59edd422c0c84a879bd37670ae4f538a/internal_photos/bs/2026/M/v/MSOVv2RdAy4BzDa8yerw/f99a1606.jpg' WHERE id = '81349b44-fab8-4012-a6b7-3b59ed8ca463';

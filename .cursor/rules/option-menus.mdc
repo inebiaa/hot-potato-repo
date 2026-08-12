@@ -1,5 +1,5 @@
----
-description: Option / overflow menus (⋮) — row layout, dividers, typography
+﻿---
+description: Option / overflow menus (⋮) - row layout, dividers, typography
 alwaysApply: true
 ---
 
@@ -9,7 +9,7 @@ For three-dot / overflow / actions menus (e.g. event card, library board):
 
 ## Rows
 - Each option: icon + label with `flex items-center gap-2`, **left-aligned**.
-- Do **not** use `justify-between` just for icon + label — that pushes text to the right.
+- Do **not** use `justify-between` just for icon + label - that pushes text to the right.
 - Trailing status only when real (e.g. “Copied!”): keep label left (`flex-1` / `min-w-0`), status `shrink-0` on the right.
 - Icons: same size and muted color treatment on every row (`size={14}`, `text-gray-500` / neutral equivalent).
 
@@ -26,7 +26,7 @@ For three-dot / overflow / actions menus (e.g. event card, library board):
 ## Example
 
 ```tsx
-// ❌ BAD — label shoved right
+// ❌ BAD - label shoved right
 <button className="… flex items-center justify-between">
   <Share2 size={14} />
   <span>Copy link</span>
