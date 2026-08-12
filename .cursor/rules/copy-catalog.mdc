@@ -1,4 +1,4 @@
----
+﻿---
 description: Copy catalog defaults vs Settings → Copy (examples only)
 alwaysApply: true
 ---
@@ -6,7 +6,7 @@ alwaysApply: true
 # Copy catalog sync
 
 ## Code catalog (`src/copy/catalog.ts`)
-When adding or changing **user-facing text** in the UI, add a key + default in the catalog and render with `useT()` / `t('…')` — do not leave a hardcoded string in the component.
+When adding or changing **user-facing text** in the UI, add a key + default in the catalog and render with `useT()` / `t('…')` - do not leave a hardcoded string in the component.
 
 ## Settings → Copy (`COPY_SETTINGS_KEYS`)
 Only list **example / placeholder** strings there (e.g. `form.*.placeholder*`, `search.placeholder`).
@@ -14,7 +14,7 @@ Only list **example / placeholder** strings there (e.g. `form.*.placeholder*`, `
 Do **not** put in Settings → Copy:
 - Basic chrome: nav, home title, empty-state CTAs, “Back to shows”
 - Obvious section labels: Produced By, Starring, Genre, etc.
-- Singular/plural pairs (e.g. Special Guest / Special Guests) — keep both in the catalog for code; only edit via code defaults
+- Singular/plural pairs (e.g. Special Guest / Special Guests) - keep both in the catalog for code; only edit via code defaults
 
 When adding a new **example** placeholder to the UI, add it to both `COPY_CATALOG` and `COPY_SETTINGS_KEYS`. When adding a basic label, catalog only.
 

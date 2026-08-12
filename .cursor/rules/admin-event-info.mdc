@@ -1,0 +1,56 @@
+---
+description: When adminning events, research and fill full consistent event fields
+alwaysApply: true
+---
+
+# Admin event info
+
+When the user asks to **admin / add / update / insert / fix event info**, do not half-fill cards. Research official sources and write a complete, catalog-consistent row (or batch). Prefer official festival/tour/venue/presenter pages over resale or wiki alone.
+
+## Always resolve
+
+| Field | Expectation |
+|--------|-------------|
+| `name` | Match catalog patterns below; reuse existing spelling for the same brand/tour |
+| `date` | Correct local calendar day (timestamptz date portion) |
+| `city` | `City, XX` per city-format rule |
+| `location` | Venue / site name as billed |
+| `season` | From date (`Winter`/`Spring`/`Summer`/`Fall` + year) |
+| `show_type` | Usually `music` for concerts/fests |
+| `featured_artists` | Full day/tour bill when building festival cards; catalog spelling |
+| `header_tags` | Genres + `Festival` on festival cards (genres alone is not enough) |
+| `producers` | Only with explicit presenter credit (producers-accuracy) |
+| `countdown_link` | Official tickets / event page (artist Ticketmaster hub, fest site, venue). Not StubHub/SeatGeek unless nothing else exists |
+| `image_url` | **Horizontal** (landscape) promo art or a real photo of **that** show/fest/tour. Recent edition when possible. Official press, lineup, or tour art preferred |
+| `custom_tags` | Openers as `special-guests` when billed that way |
+| `created_by` | Admin `9ab4f944-acce-463b-8f0d-a1a12b52a24c` on inserts |
+
+Also set `formatted_address` when you can resolve a stable venue address.
+
+## Naming
+
+- Tours: `Artist: Tour Name` (colon separator; no em dash / hyphen title splits)
+- Recurring festivals: include edition year (`Coachella '26:…`, `Beyond the Valley '25: Day 1`, `Wildlands Brisbane '26`)
+- One-off shows: no year in the title unless the official name includes it
+- Multi-day fests: `…: Day N` (or Coachella `Weekend N: Weekday` when that is official)
+- Same edition = same year token on every day of that run (NYE fests use the marketed edition year, e.g. Dec 2025–Jan 2026 → `'25`)
+
+## Consistency checks
+
+1. Query existing rows for the same artist/fest/tour before insert; mirror producers, genres, link, image, and title shape.
+2. Artist / producer / guest strings: catalog spelling (artist-name-spelling).
+3. After a batch: re-check for duplicate spellings, missing `Festival` on fest cards, and bare recurring titles that collide across years.
+4. If unsure on producers or a fact, leave null / ask; do not invent.
+
+## Images
+
+- Must be wider than tall (card-friendly landscape). Reject square/vertical-only assets when a horizontal exists.
+- Must be connected to the event: that festival’s grounds/crowd/stage, that tour’s official promo, or that night’s billed art. Not a random artist headshot, Unsplash crowd, or decade-old Wikimedia of a different year.
+- Festivals: prefer recent press from **that** fest. Tours: official tour poster / press still used for that run.
+
+## Do not
+
+- Ship festival days with only genre tags and no `Festival`
+- Reuse one tour image for an unrelated festival day (or the reverse) without a reason
+- Leave `countdown_link` empty when an official URL is findable in a normal search
+- Use vertical posters, generic stock, or old photos from a different edition when a current horizontal promo exists

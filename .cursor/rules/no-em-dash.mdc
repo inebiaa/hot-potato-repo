@@ -1,0 +1,25 @@
+---
+description: Never use em dashes in copy, code, data, or commits
+alwaysApply: true
+---
+
+# No em dashes
+
+Never use an em dash (`—`, U+2014) anywhere: UI copy, catalog strings, comments, commit messages, event titles, docs, or chat replies.
+
+## Use instead
+- Colon (preferred for event titles): `Coachella Weekend 1: Day 1`, `ADÉLA: The Red Bottoms Tour`
+- Comma or period to break a sentence
+- Parentheses for asides
+- Do not use hyphens as title separators either (`Name - Day 1`); use `Name: Day 1`
+
+```text
+❌ Coachella Weekend 1 — Day 1
+❌ Coachella Weekend 1 - Day 1
+✅ Coachella Weekend 1: Day 1
+
+❌ Fixed images — now from 2025 press
+✅ Fixed images: now from 2025 press
+```
+
+If you see an existing em dash while editing, replace it in the same pass.

@@ -1,4 +1,4 @@
----
+﻿---
 description: Do not add hints or helper copy unless the user asks
 alwaysApply: true
 ---
@@ -7,5 +7,5 @@ alwaysApply: true
 
 - Do **not** add field hints, helper text, instructional blurbs, “how to edit” callouts, or grey guidance under inputs unless the user explicitly asks for them.
 - Do **not** reintroduce a `hint` prop or similar directional copy on forms.
-- Placeholders are fine only when the user wants them or they already exist in the copy catalog — do not invent new instructional placeholders (e.g. “Type and press Enter…”).
+- Placeholders are fine only when the user wants them or they already exist in the copy catalog - do not invent new instructional placeholders (e.g. “Type and press Enter…”).
 - Prefer bare labels and controls; keep UI copy minimal.

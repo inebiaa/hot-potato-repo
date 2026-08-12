@@ -1,0 +1,13 @@
+UPDATE events SET image_url = 'https://www.pressenterprise.com/wp-content/uploads/2026/04/RPE-L-CF-PHOTO-W1-D1-0411-39-WP_4ba975-2.jpg' WHERE id = '0b89e992-a935-490b-92fc-eb341f629330';
+UPDATE events SET image_url = 'https://www.pressenterprise.com/wp-content/uploads/2026/04/RPE-L-CF-PHOTO-W1-D2-0412-04-WP-5.jpg' WHERE id = 'b0ba8a8c-7343-46d4-b913-0117dbffa69c';
+UPDATE events SET image_url = 'https://www.pressenterprise.com/wp-content/uploads/2026/04/RPE-L-CF-PHOTO-W1-D3-0413-13-WP-2.jpg' WHERE id = '5519a744-2516-47ec-9da1-87086be12cf7';
+UPDATE events SET image_url = 'https://www.pressenterprise.com/wp-content/uploads/2026/04/RPE-L-CF-PHOTO-W1-D1-0411-05-WP-2.jpg' WHERE id = '6d57271b-f867-41a4-8e3c-33105aa7589a';
+UPDATE events SET image_url = 'https://www.pressenterprise.com/wp-content/uploads/2026/04/RPE-L-CF-PHOTO-W1-D2-0412-11-WP-2.jpg' WHERE id = '778c9bb8-cc8b-432f-8ffa-8c37407080cf';
+UPDATE events SET image_url = 'https://www.pressenterprise.com/wp-content/uploads/2026/04/RPE-L-CF-PHOTO-W1-D3-0413-08-WP_3c9fa9-2.jpg' WHERE id = '46267ac8-783b-403f-bfeb-fd0cbd1ac1f0';
+UPDATE events SET image_url = 'https://api.floodmagazine.com/wp-content/uploads/2024/06/DSC02907.jpg' WHERE id = '1bc038ef-d9b9-4223-9c90-087934897eec';
+UPDATE events SET image_url = 'https://api.floodmagazine.com/wp-content/uploads/2024/06/DSC02908.jpg' WHERE id = '062c0ebc-4595-4392-a1ce-dd9852e322ad';
+UPDATE events SET image_url = 'https://api.floodmagazine.com/wp-content/uploads/2024/06/DSC02968.jpg' WHERE id = '21260c55-8b10-4ef5-b0f1-76c7607c8c77';
+UPDATE events SET image_url = 'https://api.floodmagazine.com/wp-content/uploads/2024/06/DSC02778.jpg' WHERE id = '24dc9b77-6f2a-41e5-a475-8a15044ce0d6';
+UPDATE events SET image_url = 'https://api.floodmagazine.com/wp-content/uploads/2024/06/DSC02861.jpg' WHERE id = '279de993-fafe-4118-9692-20b32fcdce28';
+UPDATE events SET image_url = 'https://i0.wp.com/maze.fr/wp-content/uploads/2023/07/P1140867-scaled.jpg?fit=1600%2C1067&ssl=1' WHERE id = '8811b3fb-c408-4080-9d86-d379b8dd72be';
+UPDATE events SET image_url = 'https://i0.wp.com/maze.fr/wp-content/uploads/2023/07/canopee-1.jpeg?fit=1600%2C1067&ssl=1' WHERE id = '1341276b-2c57-4e70-80ca-f3c6b8a134b7';

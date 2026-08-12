@@ -1,5 +1,5 @@
----
-description: UI design system — grey chrome, shared controls, tag pills
+﻿---
+description: UI design system - grey chrome, shared controls, tag pills
 alwaysApply: true
 ---
 
@@ -8,7 +8,7 @@ alwaysApply: true
 ## Color
 - App chrome is **black / white / grey only** (neutral palette + CSS tokens in `src/index.css`).
 - Do **not** use Tailwind `blue-*` (or other accent hues) for buttons, links, focus rings, headers, or backgrounds.
-- Tag **type colors** on event cards may stay colorful via settings / `getPillColors` — that is content, not chrome.
+- Tag **type colors** on event cards may stay colorful via settings / `getPillColors` - that is content, not chrome.
 
 ## Shared controls
 - Prefer `src/components/ui/` (`Button`, `Input`, `Label`, `Textarea`, `Modal`) and `formControlClass` from `ui/field.ts`.
@@ -16,7 +16,7 @@ alwaysApply: true
 
 ## Tag pills
 - Size/shape come only from `src/components/tagPillShell.ts` (`TAG_PILL_SIZE_CLASS`, `tagPillShellClass`, `tagPillSegmentShellClass`).
-- Event cards and TagInput must use `TagPillSplitLabel` + those shells — never a custom larger chip.
+- Event cards and TagInput must use `TagPillSplitLabel` + those shells - never a custom larger chip.
 - In TagInput, the remove **X** sits **inside** the last segment (`trailingSlot`), not as its own pill.
 
 ## Settings

@@ -1,4 +1,4 @@
----
+﻿---
 description: City labels must use region/country initials only
 alwaysApply: true
 ---
@@ -7,9 +7,9 @@ alwaysApply: true
 
 Event `city` values must be **`City, XX`** with a **2–3 letter uppercase** region or country code.
 
-- US/Canada: state/province — `Denver, CO`, `Toronto, ON`
-- Elsewhere: ISO-style country code — `Sydney, AU`, `Paris, FR`, `London, UK`, `Prague, CZ`
+- US/Canada: state/province - `Denver, CO`, `Toronto, ON`
+- Elsewhere: ISO-style country code - `Sydney, AU`, `Paris, FR`, `London, UK`, `Prague, CZ`
 
 Never write full country or region names (`Sydney, Australia`, `Paris, France`, `Berlin, Germany`).
 
-The DB enforces this (`events_city_canonical_format`). UI uses `isCanonicalCityLabel` / city suggestions from `cityPlaces.ts`. When bulk-inserting events, always use initials — do not invent spelled-out countries.
+The DB enforces this (`events_city_canonical_format`). UI uses `isCanonicalCityLabel` / city suggestions from `cityPlaces.ts`. When bulk-inserting events, always use initials - do not invent spelled-out countries.
