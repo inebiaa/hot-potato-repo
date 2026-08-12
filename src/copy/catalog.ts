@@ -38,8 +38,8 @@ export type CopyKey =
   | 'event.makeListPublic'
   | 'event.makeListPrivate'
   | 'event.editList'
-  | 'event.addShow'
   | 'event.deleteList'
+  | 'event.addShow'
   | 'profile.yourLibrary'
   | 'auth.prompt.saveShow'
   | 'auth.prompt.addToList'
@@ -232,18 +232,18 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     group: 'event',
   },
   'event.editList': {
-    default: 'Edit list',
+    default: 'Edit details',
     label: 'Edit list name and description',
-    group: 'event',
-  },
-  'event.addShow': {
-    default: 'Add show',
-    label: 'Add show to list',
     group: 'event',
   },
   'event.deleteList': {
     default: 'Delete list',
     label: 'Delete list',
+    group: 'event',
+  },
+  'event.addShow': {
+    default: 'Add show',
+    label: 'Add show to list',
     group: 'event',
   },
   'auth.prompt.saveShow': {

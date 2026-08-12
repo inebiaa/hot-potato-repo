@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { Plus, Trash2, ChevronRight, Copy, RefreshCw, Link2, MoreVertical, Pencil } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, Copy, RefreshCw, Link2, MoreVertical, Pencil, Lock, Unlock } from 'lucide-react';
 import { supabase, UserList, UserListEvent, Rating, Event } from '../lib/supabase';
 import EventCard from './EventCard';
 import MasonryLaneFeed, { type MasonryLaneItem } from './MasonryLaneFeed';
@@ -119,14 +118,13 @@ export default function ProfilePage({
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [listLinkCopied, setListLinkCopied] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
-  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
-  const [boardMenuPos, setBoardMenuPos] = useState<{ top: number; right: number } | null>(null);
-  const boardMenuBtnRef = useRef<HTMLButtonElement | null>(null);
+  const [showBoardMenu, setShowBoardMenu] = useState(false);
   const [isEditListOpen, setIsEditListOpen] = useState(false);
   const [editListName, setEditListName] = useState('');
   const [editListDescription, setEditListDescription] = useState('');
   const [editListError, setEditListError] = useState('');
   const [editListBusy, setEditListBusy] = useState(false);
+  const boardMenuRef = useRef<HTMLDivElement | null>(null);
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -362,9 +360,50 @@ export default function ProfilePage({
       return;
     }
     if (!window.confirm('Delete this list? Events in it are not deleted.')) return;
+    setShowBoardMenu(false);
     await supabase.from('user_lists').delete().eq('id', listId);
     setManageListId(null);
     fetchProfile();
+  };
+
+  const openEditList = () => {
+    const current =
+      libraryLists.find((l) => l.id === manageListId) || lists.find((l) => l.id === manageListId);
+    if (!current || isSystemLibraryList(current)) return;
+    setEditListName(current.name || '');
+    setEditListDescription(current.description || '');
+    setEditListError('');
+    setShowBoardMenu(false);
+    setIsEditListOpen(true);
+  };
+
+  const saveEditList = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manageListId || editListBusy) return;
+    const name = editListName.trim();
+    if (!name) {
+      setEditListError('Name is required');
+      return;
+    }
+    setEditListBusy(true);
+    setEditListError('');
+    try {
+      const { error } = await supabase
+        .from('user_lists')
+        .update({
+          name,
+          description: editListDescription.trim() || null,
+        })
+        .eq('id', manageListId);
+      if (error) {
+        setEditListError(error.message || 'Failed to update list');
+        return;
+      }
+      setIsEditListOpen(false);
+      await fetchProfile();
+    } finally {
+      setEditListBusy(false);
+    }
   };
 
   const openAddEvent = async () => {
@@ -482,7 +521,6 @@ export default function ProfilePage({
   const copyBoardLink = async () => {
     if (!manageListId || shareBusy) return;
     setShareBusy(true);
-    setBoardMenuOpen(false);
     try {
       const realId = await resolveRealListId(manageListId);
       if (!realId) return;
@@ -503,7 +541,6 @@ export default function ProfilePage({
   const toggleBoardPublic = async () => {
     if (!manageListId || !isOwnProfile || shareBusy) return;
     setShareBusy(true);
-    setBoardMenuOpen(false);
     try {
       const realId = await resolveRealListId(manageListId);
       if (!realId) return;
@@ -520,46 +557,6 @@ export default function ProfilePage({
       await fetchProfile();
     } finally {
       setShareBusy(false);
-    }
-  };
-
-  const openEditList = () => {
-    const current =
-      libraryLists.find((l) => l.id === manageListId) || lists.find((l) => l.id === manageListId);
-    if (!current || isSystemLibraryList(current)) return;
-    setEditListName(current.name || '');
-    setEditListDescription(current.description || '');
-    setEditListError('');
-    setBoardMenuOpen(false);
-    setIsEditListOpen(true);
-  };
-
-  const saveEditList = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!manageListId || editListBusy) return;
-    const name = editListName.trim();
-    if (!name) {
-      setEditListError('Name is required');
-      return;
-    }
-    setEditListBusy(true);
-    setEditListError('');
-    try {
-      const { error } = await supabase
-        .from('user_lists')
-        .update({
-          name,
-          description: editListDescription.trim() || null,
-        })
-        .eq('id', manageListId);
-      if (error) {
-        setEditListError(error.message || 'Failed to update list');
-        return;
-      }
-      setIsEditListOpen(false);
-      await fetchProfile();
-    } finally {
-      setEditListBusy(false);
     }
   };
 
@@ -627,7 +624,7 @@ export default function ProfilePage({
             onClick={() => {
               setManageListId(null);
               setIsAddEventOpen(false);
-              setBoardMenuOpen(false);
+              setShowBoardMenu(false);
               setIsEditListOpen(false);
             }}
             className="text-sm text-neutral-500 hover:text-neutral-900 mb-6 transition-colors"
@@ -644,44 +641,25 @@ export default function ProfilePage({
               )}
             </div>
             {isOwnProfile && (
-              <div className="relative shrink-0">
+              <div className="relative shrink-0" ref={boardMenuRef}>
                 <button
-                  ref={boardMenuBtnRef}
                   type="button"
-                  onClick={() => {
-                    if (boardMenuOpen) {
-                      setBoardMenuOpen(false);
-                      return;
-                    }
-                    const el = boardMenuBtnRef.current;
-                    if (el) {
-                      const rect = el.getBoundingClientRect();
-                      setBoardMenuPos({
-                        top: rect.bottom + 4,
-                        right: Math.max(8, window.innerWidth - rect.right),
-                      });
-                    }
-                    setBoardMenuOpen(true);
-                  }}
+                  onClick={() => setShowBoardMenu((v) => !v)}
                   className="p-1.5 text-neutral-400 hover:text-neutral-700 rounded-lg transition-colors"
+                  title="Actions"
                   aria-haspopup="true"
-                  aria-expanded={boardMenuOpen}
-                  aria-label="List actions"
+                  aria-expanded={showBoardMenu}
                 >
                   <MoreVertical size={20} />
                 </button>
-                {boardMenuOpen && boardMenuPos && createPortal(
+                {showBoardMenu && (
                   <>
                     <div
-                      className="fixed inset-0 z-[80]"
-                      onClick={() => setBoardMenuOpen(false)}
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowBoardMenu(false)}
                       aria-hidden="true"
                     />
-                    <div
-                      className="fixed z-[90] w-52 bg-white rounded-lg shadow-lg border border-neutral-200 py-1"
-                      style={{ top: boardMenuPos.top, right: boardMenuPos.right }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50">
                       {canDeleteList && (
                         <button
                           type="button"
@@ -692,108 +670,72 @@ export default function ProfilePage({
                           <span>{t('event.editList')}</span>
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => { void toggleBoardPublic(); }}
-                        disabled={shareBusy}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-                      >
-                        {currentList?.is_public ? t('event.makeListPrivate') : t('event.makeListPublic')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { void copyBoardLink(); }}
-                        disabled={shareBusy}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center justify-between gap-2 disabled:opacity-50"
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <Link2 size={14} className="text-neutral-500" />
-                          {t('event.copyListLink')}
-                        </span>
-                        {listLinkCopied ? (
-                          <span className="text-xs text-neutral-500">{t('event.listLinkCopied')}</span>
-                        ) : null}
-                      </button>
                       {canAddShows && (
                         <button
                           type="button"
                           onClick={() => {
-                            setBoardMenuOpen(false);
+                            setShowBoardMenu(false);
                             void openAddEvent();
                           }}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 border-t border-neutral-100"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2"
                         >
                           <Plus size={14} className="text-neutral-500" />
                           <span>{t('event.addShow')}</span>
                         </button>
                       )}
+                      <button
+                        type="button"
+                        disabled={shareBusy}
+                        onClick={() => {
+                          void copyBoardLink().then(() => {
+                            /* keep menu open briefly so “Copied” is visible */
+                          });
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center justify-between gap-2 disabled:opacity-50"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <Link2 size={14} className="text-neutral-500" />
+                          <span>{t('event.copyListLink')}</span>
+                        </span>
+                        {listLinkCopied ? (
+                          <span className="text-xs text-neutral-500">{t('event.listLinkCopied')}</span>
+                        ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={shareBusy}
+                        onClick={() => {
+                          void toggleBoardPublic();
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {(currentList?.is_public !== false) ? (
+                          <Lock size={14} className="shrink-0 text-neutral-500" />
+                        ) : (
+                          <Unlock size={14} className="shrink-0 text-neutral-500" />
+                        )}
+                        <span>
+                          {(currentList?.is_public !== false)
+                            ? t('event.makeListPrivate')
+                            : t('event.makeListPublic')}
+                        </span>
+                      </button>
                       {canDeleteList && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setBoardMenuOpen(false);
-                            void deleteList(manageListId);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 text-red-600 border-t border-neutral-100"
+                          onClick={() => deleteList(manageListId)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 text-red-600 border-t border-neutral-100 mt-1"
                         >
                           <Trash2 size={14} />
                           <span>{t('event.deleteList')}</span>
                         </button>
                       )}
                     </div>
-                  </>,
-                  document.body,
+                  </>
                 )}
               </div>
             )}
           </div>
-
-          {isEditListOpen && (
-            <div
-              className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[95]"
-              onClick={(e) => e.target === e.currentTarget && !editListBusy && setIsEditListOpen(false)}
-            >
-              <div
-                className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <h3 className="mb-4 text-lg font-semibold text-foreground">{t('event.editList')}</h3>
-                <form onSubmit={saveEditList} className="space-y-4">
-                  <div>
-                    <Label htmlFor="edit-list-name">Name</Label>
-                    <Input
-                      id="edit-list-name"
-                      type="text"
-                      value={editListName}
-                      onChange={(e) => setEditListName(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-list-description">Description</Label>
-                    <Input
-                      id="edit-list-description"
-                      type="text"
-                      value={editListDescription}
-                      onChange={(e) => setEditListDescription(e.target.value)}
-                    />
-                  </div>
-                  {editListError && <p className="text-sm text-destructive">{editListError}</p>}
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={editListBusy}>Save</Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={editListBusy}
-                      onClick={() => setIsEditListOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
 
           {boardRows.length === 0 ? (
             <div className="rounded-2xl bg-white/80 py-16 px-6 text-center">
@@ -820,7 +762,7 @@ export default function ProfilePage({
             <div className="relative max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
               <div className="bg-white rounded-xl w-full max-h-[80vh] flex flex-col">
                 <div className="p-4 border-b">
-                  <h3 className="font-semibold">Add show to list</h3>
+                  <h3 className="font-semibold">{t('event.addShow')}</h3>
                 </div>
                 {addEventError && (
                   <p className="px-4 py-2 text-sm text-red-600 bg-red-50">{addEventError}</p>
@@ -831,6 +773,7 @@ export default function ProfilePage({
                     placeholder="Search shows..."
                     value={addEventSearch}
                     onChange={(e) => setAddEventSearch(e.target.value)}
+                    autoFocus
                   />
                 </div>
                 <ul className="overflow-y-auto flex-1 p-4 space-y-1">
@@ -852,6 +795,50 @@ export default function ProfilePage({
                   )}
                 </ul>
               </div>
+            </div>
+          </div>
+        )}
+
+        {isEditListOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={(e) => e.target === e.currentTarget && setIsEditListOpen(false)}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="mb-4 text-lg font-semibold text-foreground">{t('event.editList')}</h3>
+              <form onSubmit={saveEditList} className="space-y-4">
+                <div>
+                  <Label htmlFor="edit-list-name">Name</Label>
+                  <Input
+                    id="edit-list-name"
+                    type="text"
+                    value={editListName}
+                    onChange={(e) => setEditListName(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-list-description">Description</Label>
+                  <Input
+                    id="edit-list-description"
+                    type="text"
+                    value={editListDescription}
+                    onChange={(e) => setEditListDescription(e.target.value)}
+                  />
+                </div>
+                {editListError && <p className="text-sm text-destructive">{editListError}</p>}
+                <div className="flex gap-2">
+                  <Button type="submit" disabled={editListBusy}>
+                    Save
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={() => setIsEditListOpen(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
             </div>
           </div>
         )}
