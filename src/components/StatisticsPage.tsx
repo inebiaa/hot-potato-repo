@@ -120,9 +120,6 @@ export default function StatisticsPage({
         event.featured_artists?.forEach(a => addTag(a, 'artist'));
         getSpecialGuests(event.custom_tags).forEach(a => addTag(a, 'artist'));
       }
-      if (selectedType === 'all' || selectedType === 'model') {
-        event.models?.forEach(m => addTag(m, 'model'));
-      }
       if (selectedType === 'all' || selectedType === 'producer') {
         event.producers?.forEach(p => addTag(p, 'producer'));
       }
@@ -150,11 +147,6 @@ export default function StatisticsPage({
         return {
           bg: tagColors.designer_bg_color || '#fef3c7',
           text: tagColors.designer_text_color || '#b45309'
-        };
-      case 'model':
-        return {
-          bg: tagColors.model_bg_color || '#fce7f3',
-          text: tagColors.model_text_color || '#be185d'
         };
       case 'producer':
         return {
@@ -228,7 +220,6 @@ export default function StatisticsPage({
           eventArrayMatchesFilter(tagResolutionMap, 'artist', e.featured_artists, value) ||
           eventArrayMatchesFilter(tagResolutionMap, 'artist', getSpecialGuests(e.custom_tags), value)
         );
-      case 'model': return eventArrayMatchesFilter(tagResolutionMap, 'model', e.models, value);
       case 'hair_makeup': return eventArrayMatchesFilter(tagResolutionMap, 'hair_makeup', e.hair_makeup, value);
       case 'city': return sameTagSpelling(e.city, value);
       case 'season': return (e.season || getSeasonFromDate(e.date)) === value;

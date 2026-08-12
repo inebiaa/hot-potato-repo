@@ -45,6 +45,19 @@ export function canonicalListUrl(listId: string): string {
   return `${publicSiteOrigin()}${listPagePath(listId)}`;
 }
 
+/** Path to a public profile page (`/handle`; @ is display-only in the app). */
+export function profilePagePath(handle: string): string {
+  const base = viteBasePath();
+  const prefix = base === '/' ? '' : base.slice(0, -1);
+  const safe = encodeURIComponent(handle.trim());
+  return `${prefix}/${safe}`.replace(/\/{2,}/g, '/');
+}
+
+/** Full canonical URL for a public profile page. */
+export function canonicalProfileUrl(handle: string): string {
+  return `${publicSiteOrigin()}${profilePagePath(handle)}`;
+}
+
 /**
  * Canonical event URL when `import.meta.env` is not available (e.g. Node prerender).
  * `viteBase` is `process.env.VITE_BASE` (e.g. `/` or `/repo/`).

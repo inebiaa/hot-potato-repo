@@ -9,7 +9,6 @@ export type TagRatingEventSlice = Pick<
   | 'producers'
   | 'featured_designers'
   | 'featured_artists'
-  | 'models'
   | 'hair_makeup'
   | 'city'
   | 'location'

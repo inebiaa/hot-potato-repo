@@ -7,8 +7,6 @@ export function getRoleLabelForTagType(tagType: string): string {
       return 'Designer';
     case 'artist':
       return 'Artist';
-    case 'model':
-      return 'Model';
     case 'hair_makeup':
       return 'Hair & Makeup Artist';
     case 'city':

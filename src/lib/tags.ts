@@ -5,7 +5,6 @@ export type TagColumn =
   | 'producers'
   | 'featured_designers'
   | 'featured_artists'
-  | 'models'
   | 'hair_makeup'
   | 'header_tags'
   | 'footer_tags';

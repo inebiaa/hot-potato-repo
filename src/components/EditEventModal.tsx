@@ -53,7 +53,6 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
   const [designers, setDesigners] = useState<string[]>(() => coalesceTagList(event.featured_designers));
   const [artists, setArtists] = useState<string[]>(() => coalesceTagList(event.featured_artists));
   const [specialGuests, setSpecialGuests] = useState<string[]>(() => getSpecialGuests(event.custom_tags));
-  const [models, setModels] = useState<string[]>(() => coalesceTagList(event.models));
   const [hairMakeup, setHairMakeup] = useState<string[]>(() => coalesceTagList(event.hair_makeup));
   const [headerTags, setHeaderTags] = useState<string[]>(() => effectiveHeaderTags(event));
   const [footerTags, setFooterTags] = useState<string[]>(() => coalesceTagList(event.footer_tags));
@@ -87,7 +86,6 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       setDesigners(coalesceTagList(event.featured_designers));
       setArtists(coalesceTagList(event.featured_artists));
       setSpecialGuests(getSpecialGuests(event.custom_tags));
-      setModels(coalesceTagList(event.models));
       setHairMakeup(coalesceTagList(event.hair_makeup));
       setHeaderTags(effectiveHeaderTags(event));
       setFooterTags(coalesceTagList(event.footer_tags));
@@ -139,7 +137,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
     }
 
     try {
-      /** Keep exact spellings; trim, dedupe by normalized form only. Identities are for search & credits, not to rewrite event text. */
+      /** Keep exact spellings; trim, dedupe by normalized form only. Identities are for search, not to rewrite event text. */
       const resolveTags = (newTags: string[]): string[] => {
         const seenNorm = new Set<string>();
         const out: string[] = [];
@@ -158,7 +156,6 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
       const resolvedDesigners = showType === 'fashion' ? resolveTags(clean(designers)) : [];
       const resolvedArtists = showType === 'music' ? resolveTags(clean(artists)) : [];
       const isMusic = showType === 'music';
-      const resolvedModels = isMusic ? [] : resolveTags(clean(models));
       const resolvedHairMakeup = isMusic ? [] : resolveTags(clean(hairMakeup));
       const resolvedHeaderTags = resolveTags(clean(headerTags));
       const resolvedFooterTags = resolveTags(clean(footerTags));
@@ -206,7 +203,6 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           producers: resolvedProducers.length ? resolvedProducers : null,
           featured_designers: resolvedDesigners.length ? resolvedDesigners : null,
           featured_artists: resolvedArtists.length ? resolvedArtists : null,
-          models: resolvedModels.length ? resolvedModels : null,
           hair_makeup: resolvedHairMakeup.length ? resolvedHairMakeup : null,
           header_tags: resolvedHeaderTags.length ? resolvedHeaderTags : null,
           footer_tags: resolvedFooterTags.length ? resolvedFooterTags : null,
@@ -234,7 +230,6 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           producers: resolvedProducers,
           featured_designers: resolvedDesigners,
           featured_artists: resolvedArtists,
-          models: resolvedModels,
           hair_makeup: resolvedHairMakeup,
           header_tags: resolvedHeaderTags,
           footer_tags: resolvedFooterTags,
@@ -372,27 +367,15 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
           />
 
           {showType === 'fashion' && (
-            <>
-              <TagInput
-                id="models"
-                label={t('form.featuredModels')}
-                value={models}
-                onChange={setModels}
-                tagColumn="models"
-                placeholder={t('form.featuredModels.placeholder')}
-                expandable
-              />
-
-              <TagInput
-                id="hairMakeup"
-                label={t('form.hairMakeup')}
-                value={hairMakeup}
-                onChange={setHairMakeup}
-                tagColumn="hair_makeup"
-                placeholder={t('form.hairMakeup.placeholder')}
-                expandable
-              />
-            </>
+            <TagInput
+              id="hairMakeup"
+              label={t('form.hairMakeup')}
+              value={hairMakeup}
+              onChange={setHairMakeup}
+              tagColumn="hair_makeup"
+              placeholder={t('form.hairMakeup.placeholder')}
+              expandable
+            />
           )}
 
           <TagInput

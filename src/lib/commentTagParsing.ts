@@ -83,7 +83,6 @@ export function getEventTagStyles(
   (event.featured_designers || []).forEach((v) => add(v, 'designer'));
   (event.featured_artists || []).forEach((v) => add(v, 'artist'));
   getSpecialGuests(event.custom_tags).forEach((v) => add(v, 'artist'));
-  (event.models || []).forEach((v) => add(v, 'model'));
   (event.hair_makeup || []).forEach((v) => add(v, 'hair_makeup'));
   effectiveHeaderTags(event).forEach((v) => add(v, 'header_tags'));
   (event.footer_tags || []).forEach((v) => add(v, 'footer_tags'));
@@ -139,8 +138,9 @@ export function splitTagPillLabel(label: string, maxLineChars = 48): string[] {
       rest = tail;
       if (!rest) break;
     } else {
-      out.push(rest.slice(0, maxLineChars));
-      rest = rest.slice(maxLineChars).trimStart();
+      // No space in the window — keep the rest as one chunk (don’t mid-word chop).
+      out.push(rest);
+      break;
     }
   }
   return out.filter(Boolean);

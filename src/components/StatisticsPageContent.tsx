@@ -96,16 +96,6 @@ export default function StatisticsPageContent({
                 Artists
               </button>
               <button
-                onClick={() => setSelectedType('model')}
-                className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
-                style={{
-                  backgroundColor: selectedType === 'model' ? getTagColors('model').bg : '#f3f4f6',
-                  color: selectedType === 'model' ? getTagColors('model').text : '#374151',
-                }}
-              >
-                Models
-              </button>
-              <button
                 onClick={() => setSelectedType('producer')}
                 className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
                 style={{

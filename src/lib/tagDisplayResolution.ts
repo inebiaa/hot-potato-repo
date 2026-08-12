@@ -69,7 +69,7 @@ export interface TagDisplayEntry {
   identityId: string | null;
   /** On event cards, this is always the string stored on the event (per-show spelling) */
   display: string;
-  /** Identity’s canonical name; used for search/credits, not to overwrite event text */
+  /** Identity’s canonical name; used for search, not to overwrite event text */
   canonical: string;
   /** Strings that match search: canonical + this event raw when different */
   searchable: string[];
@@ -97,7 +97,6 @@ function collectTagPairs(events: Event[]): Map<string, { type: string; raw: stri
     coalesceTagList(e.producers).forEach((v) => add('producer', v));
     coalesceTagList(e.featured_designers).forEach((v) => add('designer', v));
     coalesceTagList(e.featured_artists).forEach((v) => add('artist', v));
-    coalesceTagList(e.models).forEach((v) => add('model', v));
     coalesceTagList(e.hair_makeup).forEach((v) => add('hair_makeup', v));
     effectiveHeaderTags(e).forEach((v) => add('header_tags', v));
     coalesceTagList(e.footer_tags).forEach((v) => add('footer_tags', v));

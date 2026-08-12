@@ -1,3 +1,4 @@
+export { default as BackIconButton } from './BackIconButton';
 export { default as Button } from './Button';
 export type { ButtonProps } from './Button';
 export { default as Input } from './Input';

@@ -6,7 +6,6 @@ export type TagType =
   | 'producer'
   | 'designer'
   | 'artist'
-  | 'model'
   | 'hair_makeup'
   | 'venue'
   | 'header_tags'
@@ -14,7 +13,7 @@ export type TagType =
   | `custom:${string}`;
 
 export interface TagIdentityRecord {
-  /** `tag_identities.id` — use for admin, credits, and filters. */
+  /** `tag_identities.id` — use for admin and filters. */
   id: string;
   /**
    * Same as `id` (one name per identity; no linked groups).
@@ -134,7 +133,6 @@ const EVENT_TAG_COLUMNS: { key: keyof EventTagSource; tagType: TagType }[] = [
   { key: 'producers', tagType: 'producer' },
   { key: 'featured_designers', tagType: 'designer' },
   { key: 'featured_artists', tagType: 'artist' },
-  { key: 'models', tagType: 'model' },
   { key: 'hair_makeup', tagType: 'hair_makeup' },
   { key: 'header_tags', tagType: 'header_tags' },
   { key: 'footer_tags', tagType: 'footer_tags' },
@@ -145,7 +143,6 @@ export interface EventFieldsForIdentitySync {
   producers?: string[] | null;
   featured_designers?: string[] | null;
   featured_artists?: string[] | null;
-  models?: string[] | null;
   hair_makeup?: string[] | null;
   header_tags?: string[] | null;
   footer_tags?: string[] | null;
@@ -213,7 +210,6 @@ interface EventTagSource {
   producers?: string[] | null;
   featured_designers?: string[] | null;
   featured_artists?: string[] | null;
-  models?: string[] | null;
   hair_makeup?: string[] | null;
   location?: string | null;
   header_tags?: string[] | null;
@@ -228,7 +224,7 @@ export async function searchEventTags(query: string): Promise<Pick<TagIdentityRe
 
   const { data: events, error } = await supabase
     .from('events')
-    .select('producers, featured_designers, featured_artists, models, hair_makeup, location, header_tags, footer_tags, custom_tags')
+    .select('producers, featured_designers, featured_artists, hair_makeup, location, header_tags, footer_tags, custom_tags')
     .order('date', { ascending: false })
     .limit(500);
 

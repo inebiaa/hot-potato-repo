@@ -1,5 +1,5 @@
 /** Padding + gap budget so segment pills don’t kiss the row edge (px). */
-const WIDTH_FUDGE_PX = 8;
+const WIDTH_FUDGE_PX = 4;
 
 let measureCanvas: HTMLCanvasElement | null = null;
 let measureCtx: CanvasRenderingContext2D | null = null;
@@ -20,7 +20,7 @@ export function measureTextWidthPx(text: string, fontCss: string): number {
 
 /**
  * Split label into segments that each fit within `maxWidthPx` (measured with `fontCss`).
- * Greedy word wrap; only hard-splits inside a word when a single word is wider than the budget.
+ * Greedy word wrap — keeps whole words; never mid-word chops (a long word may exceed the budget).
  */
 export function splitTagLabelByWidth(text: string, maxWidthPx: number, fontCss: string): string[] {
   const t = text.trim();
@@ -34,44 +34,17 @@ export function splitTagLabelByWidth(text: string, maxWidthPx: number, fontCss: 
 
   const lineFits = (s: string) => measureTextWidthPx(s, fontCss) <= budget;
 
-  const pushHardBreakWord = (word: string) => {
-    let rest = word;
-    while (rest.length > 0) {
-      if (lineFits(rest)) {
-        out.push(rest);
-        rest = '';
-        break;
-      }
-      let lo = 1;
-      let hi = rest.length;
-      let best = 1;
-      while (lo <= hi) {
-        const mid = (lo + hi) >> 1;
-        const prefix = rest.slice(0, mid);
-        if (lineFits(prefix)) {
-          best = mid;
-          lo = mid + 1;
-        } else {
-          hi = mid - 1;
-        }
-      }
-      if (best < 1) best = 1;
-      out.push(rest.slice(0, best));
-      rest = rest.slice(best);
-    }
-  };
-
   for (const word of words) {
     const trial = line ? `${line} ${word}` : word;
     if (lineFits(trial)) {
       line = trial;
     } else {
       if (line) out.push(line);
-      if (lineFits(word)) {
-        line = word;
-      } else {
+      // Keep the whole word even if it is wider than the budget.
+      line = word;
+      if (!lineFits(word)) {
+        out.push(word);
         line = '';
-        pushHardBreakWord(word);
       }
     }
   }

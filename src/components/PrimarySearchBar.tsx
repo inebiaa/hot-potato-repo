@@ -46,7 +46,6 @@ interface PrimarySearchBarProps {
 function tagLabel(type: string): string {
   if (type === 'designer') return 'Designer: ';
   if (type === 'artist') return 'Artist: ';
-  if (type === 'model') return 'Model: ';
   if (type === 'producer') return 'Producer: ';
   if (type === 'city') return 'City: ';
   if (type === 'venue') return 'Venue: ';

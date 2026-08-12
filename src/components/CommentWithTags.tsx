@@ -82,7 +82,6 @@ export default function CommentWithTags({
   (event.featured_designers || []).forEach((v) => add(v, 'designer'));
   (event.featured_artists || []).forEach((v) => add(v, 'artist'));
   getSpecialGuests(event.custom_tags).forEach((v) => add(v, 'artist'));
-  (event.models || []).forEach((v) => add(v, 'model'));
   (event.hair_makeup || []).forEach((v) => add(v, 'hair_makeup'));
   effectiveHeaderTags(event).forEach((v) => add(v, 'header_tags'));
   (event.footer_tags || []).forEach((v) => add(v, 'footer_tags'));

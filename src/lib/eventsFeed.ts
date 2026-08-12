@@ -24,7 +24,7 @@ export function feedUpcomingHorizonYmd(todayYmd: string = localCalendarYmd()): s
 
 /** Columns needed for cards / search — avoid select('*'). */
 export const EVENT_FEED_COLUMNS =
-  'id, name, date, city, season, show_type, location, formatted_address, image_url, countdown_link, producers, featured_designers, featured_artists, models, hair_makeup, header_tags, footer_tags, custom_tags, custom_tag_meta, created_by, created_at';
+  'id, name, date, city, season, show_type, location, formatted_address, image_url, countdown_link, producers, featured_designers, featured_artists, hair_makeup, header_tags, footer_tags, custom_tags, custom_tag_meta, created_by, created_at';
 
 export type EventWithStats = Event & {
   average_rating: number;

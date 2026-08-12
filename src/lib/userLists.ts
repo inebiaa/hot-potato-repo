@@ -1,7 +1,7 @@
 import { supabase, type UserList } from './supabase';
 
-export const LIKED_EVENTS_LIST_NAME = 'Your Liked Events';
-export const RATED_EVENTS_LIST_NAME = 'Your Ratings';
+export const LIKED_EVENTS_LIST_NAME = 'Liked Events';
+export const RATED_EVENTS_LIST_NAME = 'Reviews';
 /** Sentinel when viewing ratings without a DB system row (e.g. another user’s profile). */
 export const VIRTUAL_RATINGS_LIST_ID = '__ratings__';
 /** Sentinel when Liked list row is missing from DB. */
@@ -71,12 +71,12 @@ async function ensureSystemList(
 
 /** Ensure the system Liked list exists for this user; return it. */
 export async function ensureLikedList(userId: string): Promise<{ data: UserList | null; error: Error | null }> {
-  return ensureSystemList(userId, 'is_liked_list', LIKED_EVENTS_LIST_NAME, -1);
+  return ensureSystemList(userId, 'is_liked_list', LIKED_EVENTS_LIST_NAME, -2);
 }
 
-/** Ensure the system Ratings list exists (library identity; events come from ratings). */
+/** Ensure the system Reviews list exists (library identity; events come from ratings). */
 export async function ensureRatedList(userId: string): Promise<{ data: UserList | null; error: Error | null }> {
-  return ensureSystemList(userId, 'is_rated_list', RATED_EVENTS_LIST_NAME, -2);
+  return ensureSystemList(userId, 'is_rated_list', RATED_EVENTS_LIST_NAME, -1);
 }
 
 /** Ensure both system library lists for the signed-in owner. */
@@ -271,12 +271,12 @@ type LibrarySortable = {
 };
 
 function libraryRank(list: LibrarySortable): number {
-  if (list.is_rated_list) return -2;
-  if (list.is_liked_list) return -1;
+  if (list.is_liked_list) return -2;
+  if (list.is_rated_list) return -1;
   return 0;
 }
 
-/** Ratings, then Liked, then custom playlists. */
+/** Liked, then Reviews, then custom playlists. */
 export function sortListsLibraryFirst<T extends LibrarySortable>(lists: T[]): T[] {
   return [...lists].sort((a, b) => {
     const ra = libraryRank(a);

@@ -9,8 +9,6 @@ export function getPillColors(tagType: string, tagColors?: TagColorsForPills): {
     case 'designer':
     case 'artist':
       return { bg: c.designer_bg_color || '#fef3c7', text: c.designer_text_color || '#b45309' };
-    case 'model':
-      return { bg: c.model_bg_color || '#fce7f3', text: c.model_text_color || '#be185d' };
     case 'hair_makeup':
       return { bg: c.hair_makeup_bg_color || '#f3e8ff', text: c.hair_makeup_text_color || '#7c3aed' };
     case 'city':

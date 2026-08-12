@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { validateProfileDisplayName, validateProfileHandle } from '../lib/userProfile';
 import { Button, Input, Label, Modal } from './ui';
 
 interface AuthModalProps {
@@ -14,8 +15,8 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [yourName, setYourName] = useState('');
-  const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [handle, setHandle] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
@@ -36,11 +37,23 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
       setError('Passwords do not match.');
       return;
     }
+    if (!isLogin) {
+      const nameError = validateProfileDisplayName(displayName);
+      if (nameError) {
+        setError(nameError);
+        return;
+      }
+      const handleError = validateProfileHandle(handle);
+      if (handleError) {
+        setError(handleError);
+        return;
+      }
+    }
     setLoading(true);
 
     const { error } = isLogin
       ? await signIn(email, password)
-      : await signUp(email, password, yourName, username);
+      : await signUp(email, password, displayName, handle);
 
     setLoading(false);
 
@@ -56,8 +69,8 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
       setEmail('');
       setPassword('');
       setConfirmPassword('');
-      setYourName('');
-      setUsername('');
+      setDisplayName('');
+      setHandle('');
     }
   };
 
@@ -91,37 +104,35 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', pro
           {!isLogin && (
             <>
               <div>
-                <Label htmlFor="yourName" required>
-                  Display Name
+                <Label htmlFor="displayName" required>
+                  Name
                 </Label>
                 <Input
-                  id="yourName"
+                  id="displayName"
                   type="text"
-                  value={yourName}
-                  onChange={(e) => setYourName(e.target.value)}
-                  required={!isLogin}
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  required
                   maxLength={80}
-                  placeholder="e.g., Jane Doe"
+                  autoComplete="name"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">Your public display name for credits and mentions</p>
               </div>
               <div>
-                <Label htmlFor="username" required>
+                <Label htmlFor="handle" required>
                   Username
                 </Label>
                 <Input
-                  id="username"
+                  id="handle"
                   type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required={!isLogin}
+                  value={handle}
+                  onChange={(e) => setHandle(e.target.value)}
+                  required
                   minLength={4}
                   maxLength={30}
                   pattern="[a-zA-Z0-9_-]+"
                   title="Username must be 4-30 characters and contain only letters, numbers, underscores, and hyphens"
-                  placeholder="e.g., janedoe2024"
+                  autoComplete="username"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">Your unique username for your profile link and credits</p>
               </div>
             </>
           )}

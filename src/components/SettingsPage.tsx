@@ -4,21 +4,14 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { readableTextForBg } from '../lib/colorUtils';
 import { CUSTOM_COLORS_STORAGE_KEY, PRELOADED_HEX } from '../lib/tagColorPickerData';
-import {
-  ensureIdentity,
-  findIdentityByName,
-  normalizeTagName,
-  searchTagIdentities,
-  searchEventTags,
-  type TagType,
-} from '../lib/tagIdentity';
 import type { AppSettings } from '../types/appSettings';
 import BrandingTab from './settings/BrandingTab';
 import CopyTab from './settings/CopyTab';
-import AccountTab, { type CreditRow } from './settings/AccountTab';
+import AccountTab from './settings/AccountTab';
 import AdminsTab from './settings/AdminsTab';
 import TagsTab, { BRIGHT_TAG_DEFAULTS, FADED_TAG_DEFAULTS } from './settings/TagsTab';
 import { Button } from './ui';
+import { deleteStoredProfileImage } from '../lib/profileImageUpload';
 import { COPY_OVERRIDES_SETTING_KEY } from '../copy';
 import {
   deleteStoredBrandImage,
@@ -154,23 +147,13 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
 
   const [editName, setEditName] = useState('');
   const [editUsername, setEditUsername] = useState('');
+  const [editAvatarUrl, setEditAvatarUrl] = useState('');
   const [profileSaveError, setProfileSaveError] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
-  const [credits, setCredits] = useState<CreditRow[]>([]);
-  const [creditsError, setCreditsError] = useState<string | null>(null);
-  const [connectName, setConnectName] = useState('');
-  const [connectType, setConnectType] = useState<TagType>('producer');
-  const [creditSearchResults, setCreditSearchResults] = useState<{ id: string; tag_type: string; canonical_name: string; fromEvent?: boolean }[]>([]);
-  const [creditSearching, setCreditSearching] = useState(false);
-  const [showCreateTagForm, setShowCreateTagForm] = useState(false);
-  const [creditConnectSuccess, setCreditConnectSuccess] = useState('');
-  const [connectListActiveIdx, setConnectListActiveIdx] = useState(-1);
-  const connectSearchInputRef = useRef<HTMLInputElement>(null);
 
   const tagOptions: { key: SwatchColorKey; label: string }[] = [
     { key: 'producer', label: 'Producer' },
     { key: 'designer', label: 'Designer' },
-    { key: 'model', label: 'Model' },
     { key: 'hair_makeup', label: 'Hair & Makeup' },
     { key: 'city', label: 'City' },
     { key: 'season', label: 'Season' },
@@ -399,54 +382,17 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
 
   const fetchAccountProfile = async () => {
     if (!userId) return;
-    const { data } = await supabase.from('user_profiles').select('username, user_id_public').eq('user_id', userId).maybeSingle();
+    const { data } = await supabase
+      .from('user_profiles')
+      .select('username, user_id_public, avatar_url')
+      .eq('user_id', userId)
+      .maybeSingle();
     setEditName(data?.username || '');
     setEditUsername(data?.user_id_public || '');
+    setEditAvatarUrl(data?.avatar_url || '');
   };
 
-  const fetchCredits = async () => {
-    if (!userId) return;
-    const { data: creditRows, error: creditsErr } = await supabase.from('user_tag_credits').select('id, identity_id').eq('user_id', userId);
-    if (creditsErr) {
-      setCreditsError(creditsErr.message || 'Could not load credits');
-      setCredits([]);
-      return;
-    }
-    const identityIds = (creditRows || []).map((r: { identity_id: string }) => r.identity_id);
-    if (identityIds.length === 0) {
-      setCreditsError(null);
-      setCredits([]);
-      return;
-    }
-    const { data: identities, error: identitiesErr } = await supabase
-      .from('tag_identities')
-      .select('id, tag_type, canonical_name')
-      .in('id', identityIds);
-    if (identitiesErr) {
-      setCreditsError(identitiesErr.message || 'Could not load credit identities');
-      setCredits([]);
-      return;
-    }
-    const identityMap = new Map(
-      (identities || []).map((i: { id: string; tag_type: string; canonical_name: string }) => [i.id, i])
-    );
-    const merged: CreditRow[] = (creditRows || []).map((c: { id: string; identity_id: string }) => {
-      const identity = identityMap.get(c.identity_id) as
-        | { tag_type: string; canonical_name: string }
-        | undefined;
-      return {
-        id: c.id,
-        identity_id: c.identity_id,
-        tag_type: identity?.tag_type || 'unknown',
-        canonical_name: identity?.canonical_name || 'Unknown',
-      };
-    });
-    setCreditsError(null);
-    setCredits(merged);
-  };
-
-  const saveAccountProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveAccountProfile = async () => {
     setProfileSaveError('');
     setProfileSaving(true);
     try {
@@ -467,15 +413,37 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
         setProfileSaving(false);
         return;
       }
+      const newAvatar = editAvatarUrl.trim() || null;
+      const { data: existingProfile } = await supabase
+        .from('user_profiles')
+        .select('avatar_url')
+        .eq('user_id', userId)
+        .maybeSingle();
       const { error } = await supabase
         .from('user_profiles')
-        .update({ username: newName, user_id_public: newUsername, updated_at: new Date().toISOString() })
-        .eq('user_id', userId);
+        .upsert(
+          {
+            user_id: userId,
+            username: newName,
+            user_id_public: newUsername,
+            avatar_url: newAvatar,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' },
+        );
       if (error) {
-        setProfileSaveError(error.message || 'Could not save profile.');
+        const msg = error.code === '23505'
+          ? 'That username is already taken.'
+          : (error.message || 'Could not save profile.');
+        setProfileSaveError(msg);
         setProfileSaving(false);
         return;
       }
+      const prevAvatar = existingProfile?.avatar_url?.trim() || null;
+      if (prevAvatar && prevAvatar !== newAvatar) {
+        await deleteStoredProfileImage(prevAvatar);
+      }
+      await fetchAccountProfile();
       setSuccess('Profile saved');
       onSettingsUpdated();
       onAccountUpdated?.();
@@ -487,120 +455,12 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
     }
   };
 
-  const connectCreditByIdentity = async (identity: { id: string; tag_type: string; canonical_name: string }) => {
-    const { data: existing } = await supabase.from('user_tag_credits').select('id').eq('user_id', userId).eq('identity_id', identity.id).maybeSingle();
-    if (!existing) {
-      const { error } = await supabase.from('user_tag_credits').insert({ user_id: userId, identity_id: identity.id });
-      if (error) {
-        setCreditsError(error.message || 'Could not connect credit');
-        return;
-      }
-    }
-    setConnectName('');
-    setCreditSearchResults([]);
-    setCreditsError(null);
-    setCreditConnectSuccess('Connected');
-    setTimeout(() => setCreditConnectSuccess(''), 3500);
-    fetchCredits();
-    window.setTimeout(() => connectSearchInputRef.current?.focus(), 0);
-  };
-
-  const handleConnectSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const list = creditSearchResults;
-    if (list.length === 0) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setConnectListActiveIdx((i) => (i < list.length - 1 ? i + 1 : 0));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setConnectListActiveIdx((i) => (i <= 0 ? list.length - 1 : i - 1));
-    } else if (e.key === 'Enter' && connectListActiveIdx >= 0 && connectListActiveIdx < list.length) {
-      e.preventDefault();
-      void selectCreditSearchResult(list[connectListActiveIdx]);
-    }
-  };
-
-  const selectCreditSearchResult = async (item: { id: string; tag_type: string; canonical_name: string; fromEvent?: boolean }) => {
-    let identity: { id: string; tag_type: string; canonical_name: string };
-    if (item.fromEvent) {
-      const resolved = await ensureIdentity(item.tag_type as TagType, item.canonical_name, userId);
-      if (!resolved) {
-        setCreditsError('Could not add tag');
-        return;
-      }
-      identity = resolved;
-    } else {
-      identity = item;
-    }
-    await connectCreditByIdentity(identity);
-  };
-
-  const connectOrCreateCredit = async (createIfMissing: boolean) => {
-    const name = connectName.trim();
-    if (!name) return;
-    let identity = await findIdentityByName(connectType, name);
-    if (!identity && createIfMissing) identity = await ensureIdentity(connectType, name, userId);
-    if (!identity) {
-      setCreditsError('No matching tag. Try another name or use Create new tag.');
-      return;
-    }
-    await connectCreditByIdentity(identity);
-  };
-
-  const removeCredit = async (creditId: string) => {
-    const { error } = await supabase.from('user_tag_credits').delete().eq('id', creditId);
-    if (error) {
-      setCreditsError(error.message || 'Could not remove credit');
-      return;
-    }
-    fetchCredits();
-  };
-
-  useEffect(() => {
-    const q = connectName.trim();
-    if (q.length < 2 || !userId) {
-      setCreditSearchResults([]);
-      return;
-    }
-    const t = window.setTimeout(() => {
-      setCreditSearching(true);
-      Promise.all([searchTagIdentities(q), searchEventTags(q)])
-        .then(([identities, eventTags]) => {
-          const seen = new Set<string>();
-          const combined: { id: string; tag_type: string; canonical_name: string; fromEvent?: boolean }[] = [];
-          for (const r of identities) {
-            const key = `${r.tag_type}:${normalizeTagName(r.canonical_name)}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              combined.push({ ...r, fromEvent: false });
-            }
-          }
-          for (const r of eventTags) {
-            const key = `${r.tag_type}:${normalizeTagName(r.canonical_name)}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              combined.push({ id: `event:${r.tag_type}:${encodeURIComponent(r.canonical_name)}`, tag_type: r.tag_type, canonical_name: r.canonical_name, fromEvent: true });
-            }
-          }
-          setCreditSearchResults(combined.slice(0, 20));
-          setCreditSearching(false);
-        })
-        .catch(() => setCreditSearching(false));
-    }, 200);
-    return () => window.clearTimeout(t);
-  }, [connectName, userId]);
-
-  useEffect(() => {
-    setConnectListActiveIdx(creditSearchResults.length > 0 ? 0 : -1);
-  }, [creditSearchResults]);
-
   useEffect(() => {
     setSettingsLoaded(false);
     fetchSettings();
     fetchAdminUsers();
     if (user) {
       fetchAccountProfile();
-      fetchCredits();
     }
     if (!isAdmin) setActiveTab('account');
     // One-shot on mount / auth change; fetch* helpers are intentionally not deps
@@ -979,31 +839,17 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
 
             {activeTab === 'account' && user && (
               <AccountTab
+                accountEmail={user.email}
                 editName={editName}
                 setEditName={setEditName}
                 editUsername={editUsername}
                 setEditUsername={setEditUsername}
+                editAvatarUrl={editAvatarUrl}
+                setEditAvatarUrl={setEditAvatarUrl}
+                userId={userId}
                 profileSaveError={profileSaveError}
                 profileSaving={profileSaving}
                 saveAccountProfile={saveAccountProfile}
-                connectName={connectName}
-                setConnectName={setConnectName}
-                connectType={connectType}
-                setConnectType={setConnectType}
-                creditSearchResults={creditSearchResults}
-                creditSearching={creditSearching}
-                connectListActiveIdx={connectListActiveIdx}
-                setConnectListActiveIdx={setConnectListActiveIdx}
-                showCreateTagForm={showCreateTagForm}
-                setShowCreateTagForm={setShowCreateTagForm}
-                creditConnectSuccess={creditConnectSuccess}
-                creditsError={creditsError}
-                credits={credits}
-                connectSearchInputRef={connectSearchInputRef}
-                handleConnectSearchKeyDown={handleConnectSearchKeyDown}
-                selectCreditSearchResult={selectCreditSearchResult}
-                connectOrCreateCredit={connectOrCreateCredit}
-                removeCredit={removeCredit}
               />
             )}
 
