@@ -79,6 +79,8 @@ export type CopyKey =
   | 'form.showPhoto'
   | 'form.profilePicture'
   | 'form.profilePictureRemove'
+  | 'form.profileCover'
+  | 'form.profileCoverRemove'
   | 'form.listCover'
   | 'form.listCoverRemove'
   | 'form.imageUrl'
@@ -398,6 +400,8 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
   'form.showPhoto': { default: 'Show photo', label: 'Form: Show photo', group: 'form' },
   'form.profilePicture': { default: 'Profile picture', label: 'Form: Profile picture', group: 'form' },
   'form.profilePictureRemove': { default: 'Remove', label: 'Form: Remove profile picture', group: 'form' },
+  'form.profileCover': { default: 'Cover image', label: 'Form: Profile cover image', group: 'form' },
+  'form.profileCoverRemove': { default: 'Remove', label: 'Form: Remove profile cover', group: 'form' },
   'form.listCover': { default: 'Cover image', label: 'Form: List cover image', group: 'form' },
   'form.listCoverRemove': { default: 'Remove', label: 'Form: Remove list cover', group: 'form' },
   'form.imageUrl': { default: 'Or image URL', label: 'Form: Image URL', group: 'form' },

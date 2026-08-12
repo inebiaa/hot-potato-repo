@@ -19,6 +19,7 @@ export type ResolvedUserProfile = {
   username: string;
   user_id_public: string;
   avatar_url: string | null;
+  cover_image_url: string | null;
 };
 
 /** Handle shape only — used for URL routing and DB lookup. */
@@ -61,7 +62,7 @@ export async function resolveProfileByHandle(handle: string): Promise<ResolvedUs
 
   const { data, error } = await supabase
     .from('user_profiles')
-    .select('user_id, username, user_id_public, avatar_url')
+    .select('user_id, username, user_id_public, avatar_url, cover_image_url')
     .ilike('user_id_public', handle.trim())
     .maybeSingle();
 

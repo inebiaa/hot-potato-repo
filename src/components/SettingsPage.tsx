@@ -148,6 +148,7 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
   const [editName, setEditName] = useState('');
   const [editUsername, setEditUsername] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
+  const [editCoverUrl, setEditCoverUrl] = useState('');
   const [profileSaveError, setProfileSaveError] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
 
@@ -384,12 +385,39 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
     if (!userId) return;
     const { data } = await supabase
       .from('user_profiles')
-      .select('username, user_id_public, avatar_url')
+      .select('username, user_id_public, avatar_url, cover_image_url')
       .eq('user_id', userId)
       .maybeSingle();
     setEditName(data?.username || '');
     setEditUsername(data?.user_id_public || '');
     setEditAvatarUrl(data?.avatar_url || '');
+    setEditCoverUrl(data?.cover_image_url || '');
+  };
+
+  /** Persist cover as soon as it is uploaded/removed so it shows on the profile without a separate Save. */
+  const persistCoverUrl = async (nextUrl: string) => {
+    const previous = editCoverUrl;
+    setEditCoverUrl(nextUrl);
+    if (!userId) return;
+    setProfileSaveError('');
+    const newCover = nextUrl.trim() || null;
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({
+        cover_image_url: newCover,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId);
+    if (error) {
+      setEditCoverUrl(previous);
+      setProfileSaveError(error.message || 'Could not save cover photo.');
+      return;
+    }
+    const prevCover = previous.trim() || null;
+    if (prevCover && prevCover !== newCover) {
+      await deleteStoredProfileImage(prevCover);
+    }
+    onAccountUpdated?.();
   };
 
   const saveAccountProfile = async () => {
@@ -414,9 +442,10 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
         return;
       }
       const newAvatar = editAvatarUrl.trim() || null;
+      const newCover = editCoverUrl.trim() || null;
       const { data: existingProfile } = await supabase
         .from('user_profiles')
-        .select('avatar_url')
+        .select('avatar_url, cover_image_url')
         .eq('user_id', userId)
         .maybeSingle();
       const { error } = await supabase
@@ -427,6 +456,7 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
             username: newName,
             user_id_public: newUsername,
             avatar_url: newAvatar,
+            cover_image_url: newCover,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'user_id' },
@@ -442,6 +472,10 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
       const prevAvatar = existingProfile?.avatar_url?.trim() || null;
       if (prevAvatar && prevAvatar !== newAvatar) {
         await deleteStoredProfileImage(prevAvatar);
+      }
+      const prevCover = existingProfile?.cover_image_url?.trim() || null;
+      if (prevCover && prevCover !== newCover) {
+        await deleteStoredProfileImage(prevCover);
       }
       await fetchAccountProfile();
       setSuccess('Profile saved');
@@ -846,6 +880,10 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
                 setEditUsername={setEditUsername}
                 editAvatarUrl={editAvatarUrl}
                 setEditAvatarUrl={setEditAvatarUrl}
+                editCoverUrl={editCoverUrl}
+                setEditCoverUrl={(url) => {
+                  void persistCoverUrl(url);
+                }}
                 userId={userId}
                 profileSaveError={profileSaveError}
                 profileSaving={profileSaving}

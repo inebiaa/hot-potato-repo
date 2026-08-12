@@ -133,7 +133,9 @@ export default function PrimarySearchBar({
     const sync = () => setFieldFocused(el.contains(document.activeElement));
     const onFocusOut = () => {
       // After the browser finishes moving focus (incl. to a suggestion button).
-      requestAnimationFrame(sync);
+      requestAnimationFrame(() => {
+        setFieldFocused(el.contains(document.activeElement));
+      });
     };
     el.addEventListener('focusin', sync);
     el.addEventListener('focusout', onFocusOut);

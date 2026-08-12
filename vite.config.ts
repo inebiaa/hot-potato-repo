@@ -15,7 +15,6 @@ import {
   applyBrandShareImageToSiteHtml,
   brandShareImageUrl,
 } from './src/lib/brandSocial'
-import { parseCopyOverrides, t as tCopy } from './src/copy'
 
 const APP_NAME = (process.env.VITE_APP_NAME || 'Secret Blogger').trim() || 'Secret Blogger'
 const APP_DESCRIPTION =
@@ -198,6 +197,8 @@ function staticSitePlugin(): Plugin {
           app_favicon_url: settingsMap.app_favicon_url,
         })
         const brandAlt = (settingsMap.app_name || APP_NAME).trim() || APP_NAME
+        // Dynamic import so editing copy/catalog does not restart the Vite config in dev.
+        const { parseCopyOverrides, t: tCopy } = await import('./src/copy')
         const copyOverrides = parseCopyOverrides(settingsMap.copy_overrides)
         const brandDescription =
           tCopy('home.subtitleSignedIn', copyOverrides).trim() || APP_DESCRIPTION
@@ -351,6 +352,9 @@ export default defineConfig({
     }),
   ],
   server: {
+    host: '127.0.0.1',
+    port: 5173,
+    strictPort: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

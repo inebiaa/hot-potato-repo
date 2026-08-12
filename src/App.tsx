@@ -41,6 +41,7 @@ import {
   searchTagIdentities,
   type TagIdentityRecord,
 } from './lib/tagIdentity';
+import { collectSearchableTagsFromEvents } from './lib/searchableTagsFromEvents';
 import PrimarySearchBar from './components/PrimarySearchBar';
 import MasonryLaneFeed, { type MasonryLaneItem } from './components/MasonryLaneFeed';
 import EventJsonLd from './components/EventJsonLd';
@@ -114,6 +115,11 @@ function App() {
   const [searchDragOver, setSearchDragOver] = useState(false);
   const [tagResolutionMap, setTagResolutionMap] = useState<TagResolutionMap | null>(null);
   const [profileReviewCounts, setProfileReviewCounts] = useState<{ visible: number; total: number } | null>(null);
+  const [profileBoardEvents, setProfileBoardEvents] = useState<Event[] | null>(null);
+  const [profileHeaderBack, setProfileHeaderBack] = useState<{
+    label: string;
+    onClick: () => void;
+  } | null>(null);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [profileResolving, setProfileResolving] = useState(false);
   const [profileNotFound, setProfileNotFound] = useState(false);
@@ -566,75 +572,15 @@ function App() {
     return s;
   }, [tagResolutionMap]);
 
-  const searchableTags = useMemo(() => {
-    const seen = new Set<string>();
-    const tags: { type: string; value: string; label: string }[] = [];
-    const add = (type: string, value: string, label?: string) => {
-      const lab = label ?? value;
-      const key = `${type}:${value}:${lab}`;
-      if (!seen.has(key) && value) {
-        seen.add(key);
-        tags.push({ type, value, label: lab });
-      }
-    };
-    const map = tagResolutionMap;
-    const expandIdentity = (tagType: string, raw: string) => {
-      const entry = map?.get(tagResolutionKey(tagType, raw));
-      const filterValue = entry?.identityId ?? raw;
-      const label = entry?.display ?? raw;
-      add(tagType, filterValue, label);
-      if (entry) {
-        entry.searchable.forEach((s) => {
-          if (normalizeTagName(s) !== normalizeTagName(label)) {
-            add(tagType, filterValue, s);
-          }
-        });
-      }
-    };
-    events.forEach((e) => {
-      (e.producers || []).forEach((v) => expandIdentity('producer', v));
-      (e.featured_designers || []).forEach((v) => expandIdentity('designer', v));
-      (e.featured_artists || []).forEach((v) => expandIdentity('artist', v));
-      getSpecialGuests(e.custom_tags).forEach((v) => expandIdentity('artist', v));
-      (e.hair_makeup || []).forEach((v) => expandIdentity('hair_makeup', v));
-      effectiveHeaderTags(e).forEach((v) => expandIdentity('header_tags', v));
-      (e.footer_tags || []).forEach((v) => expandIdentity('footer_tags', v));
-      if (e.city) add('city', e.city);
-      if (e.location) expandIdentity('venue', e.location);
-      add('season', getSeasonFromDate(e.date));
-      {
-        const showType = normalizeShowType(e.show_type);
-        add('show_type', showType, showTypeLabel(showType));
-      }
-      {
-        const y = getYearFromDate(e.date);
-        if (y) add('year', y);
-      }
-      {
-        const dateVal = eventDateFilterValue(e.date);
-        if (dateVal) add('date', dateVal, formatEventDateDisplay(e.date));
-      }
-      if (e.custom_tags && typeof e.custom_tags === 'object') {
-        Object.entries(e.custom_tags).forEach(([slug, vals]) => {
-          if (isSpecialGuestsSlug(slug)) return;
-          const tt = `custom:${slug}` as const;
-          (vals || []).forEach((v) => {
-            const entry = map?.get(tagResolutionKey(tt, v));
-            const filterPart = entry?.identityId ?? v;
-            const label = entry?.display ?? v;
-            const filterVal = `${slug}\x00${filterPart}`;
-            add('custom_performer', filterVal, label);
-            entry?.searchable.forEach((s) => {
-              if (normalizeTagName(s) !== normalizeTagName(label)) {
-                add('custom_performer', filterVal, s);
-              }
-            });
-          });
-        });
-      }
-    });
-    return tags.sort((a, b) => a.label.localeCompare(b.label));
-  }, [events, tagResolutionMap]);
+  const searchableTags = useMemo(
+    () => collectSearchableTagsFromEvents(events, tagResolutionMap),
+    [events, tagResolutionMap],
+  );
+
+  const profileBoardSearchableTags = useMemo(() => {
+    if (!profileBoardEvents) return null;
+    return collectSearchableTagsFromEvents(profileBoardEvents, tagResolutionMap);
+  }, [profileBoardEvents, tagResolutionMap]);
 
   useEffect(() => {
     const q = searchQuery.trim();
@@ -642,19 +588,28 @@ function App() {
       setIdentitySearchHits([]);
       return;
     }
+    // Inside a board: suggestions come only from that board's tags (no global identity hits).
+    if (profileBoardEvents) {
+      setIdentitySearchHits([]);
+      return;
+    }
     const timer = window.setTimeout(() => {
       searchTagIdentities(q).then(setIdentitySearchHits).catch(() => setIdentitySearchHits([]));
     }, 200);
     return () => window.clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, profileBoardEvents]);
 
   const tagSuggestions = useMemo(() => {
     const q = normalizeForSearch(searchQuery);
     if (!q || q.length < 2) return [];
-    const fromEvents = searchableTags.filter((t) => {
+    const sourceTags = profileBoardSearchableTags ?? searchableTags;
+    const fromEvents = sourceTags.filter((t) => {
       if (normalizeForSearch(t.label).includes(q)) return true;
       return t.type === 'date' && eventDateMatchesSearch(t.value, q);
     });
+    if (profileBoardSearchableTags) {
+      return fromEvents.slice(0, 8);
+    }
     const suggestionKey = (t: { type: string; value: string; label: string }) =>
       `${t.type}:${t.value}\x00${normalizeTagName(t.label)}`;
     const seen = new Set(fromEvents.map(suggestionKey));
@@ -681,7 +636,13 @@ function App() {
       }
     }
     return out.slice(0, 8);
-  }, [searchQuery, searchableTags, identitySearchHits, identityIdsInUse]);
+  }, [
+    searchQuery,
+    searchableTags,
+    profileBoardSearchableTags,
+    identitySearchHits,
+    identityIdsInUse,
+  ]);
 
   const handleTagClick = (type: string, value: string, explicitLabel?: string) => {
     if (overlayEventId) closeEventOverlay();
@@ -796,6 +757,8 @@ function App() {
       setProfileUserId(null);
       setProfileResolving(false);
       setProfileNotFound(false);
+      setProfileHeaderBack(null);
+      setProfileBoardEvents(null);
       return;
     }
 
@@ -1147,6 +1110,8 @@ function App() {
   };
 
   const goBack = () => {
+    clearFilters();
+    setProfileBoardEvents(null);
     navigate({ pathname: '/', search: '' });
     window.scrollTo(0, 0);
   };
@@ -1315,7 +1280,7 @@ function App() {
         <main
           className={`flex-1 min-h-0 overflow-y-auto ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
         >
-          <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6 lg:px-8">
             <BackIconButton
               type="button"
               onClick={goBackFromSettings}
@@ -1394,7 +1359,7 @@ function App() {
         <main
           className={`flex-1 min-h-0 overflow-y-auto ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
         >
-          <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
+          <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
             <BackIconButton
               onClick={goBackFromStats}
               label={copyT('modals.backToShows', overridesFromSettings(appSettings))}
@@ -1497,7 +1462,7 @@ function App() {
         <main
           className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
         >
-          <div className="max-w-[2400px] mx-auto min-w-0 px-2 py-6 sm:px-6 sm:py-8 lg:px-8 sm:my-8">
+          <div className="max-w-[2400px] mx-auto min-w-0 px-4 py-6 sm:px-6 lg:px-8">
             <BackIconButton
               onClick={goBack}
               label={copyT('modals.backToShows', overridesFromSettings(appSettings))}
@@ -1610,10 +1575,13 @@ function App() {
         <main
           className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
         >
-          <div className="max-w-[2400px] mx-auto min-w-0 px-2 py-6 sm:px-6 sm:py-8 lg:px-8 sm:my-8">
+          <div className="max-w-[2400px] mx-auto min-w-0 px-4 py-6 sm:px-6 lg:px-8">
           <BackIconButton
-            onClick={goBack}
-            label={copyT('modals.backToShows', overridesFromSettings(appSettings))}
+            onClick={profileHeaderBack?.onClick ?? goBack}
+            label={
+              profileHeaderBack?.label ??
+              copyT('modals.backToShows', overridesFromSettings(appSettings))
+            }
             className="mb-6"
           />
           <ProfilePage
@@ -1622,9 +1590,17 @@ function App() {
             onClose={goBack}
             onTagClick={handleTagClick}
             onOpenEvent={(id) => openEventOverlay(id, 'viewRatings')}
+            onClearSearch={clearFilters}
+            onBoardEventsChange={setProfileBoardEvents}
+            onHeaderBackChange={setProfileHeaderBack}
+            searchEvents={
+              selectedTags.length > 0 || searchQuery.trim().length >= 2 ? filteredEvents : []
+            }
+            searchActive={selectedTags.length > 0 || searchQuery.trim().length >= 2}
+            onSearchEventRatingSubmitted={(id) => void refreshEventRating(id)}
+            onSearchEventUpdated={fetchEvents}
             tagColors={appSettings}
             customPerformerTags={[]}
-            visibleEventIds={new Set(filteredEvents.map((e) => e.id))}
             onVisibleReviewCountsChange={setProfileReviewCounts}
           />
           </div>
