@@ -1,16 +1,30 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, X, ChevronRight, Rows3, LayoutGrid, Copy, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { Plus, Trash2, ChevronRight, Copy, RefreshCw, Link2, MoreVertical, Pencil } from 'lucide-react';
 import { supabase, UserList, UserListEvent, Rating, Event } from '../lib/supabase';
 import EventCard from './EventCard';
 import MasonryLaneFeed, { type MasonryLaneItem } from './MasonryLaneFeed';
 import { useAuth } from '../contexts/AuthContext';
 import { USER_LISTS_SETUP_SQL, getSupabaseSqlEditorUrl } from '../lib/userListsSetupSql';
+import {
+  addEventToListAndLiked,
+  createUserPlaylist,
+  ensureLibraryLists,
+  ensureLikedList,
+  ensureRatedList,
+  isSystemLibraryList,
+  sortListsLibraryFirst,
+  VIRTUAL_LIKED_LIST_ID,
+  VIRTUAL_RATINGS_LIST_ID,
+} from '../lib/userLists';
 import { TagDisplayProvider } from '../contexts/TagDisplayContext';
 import { fetchTagResolutionForEvents, type TagResolutionMap } from '../lib/tagDisplayResolution';
 import { normalizeEventTagArrays } from '../lib/eventTagArray';
 import { normalizeForSearch } from '../lib/normalize';
-import ProfileReviewsPlaylist from './ProfileReviewsPlaylist';
+import { fetchEventRatingStats } from '../lib/eventRatingStats';
+import { canonicalListUrl } from '../lib/siteBase';
 import { Button, Input, Label } from './ui';
+import { useT } from '../contexts/CopyContext';
 
 interface ProfilePageProps {
   userId: string;
@@ -60,6 +74,14 @@ interface ListWithCount extends UserList {
   event_count: number;
 }
 
+type BoardRow = {
+  event: Event;
+  listEvent: UserListEvent;
+  averageRating: number;
+  ratingCount: number;
+  userRating?: Rating;
+};
+
 export default function ProfilePage({
   userId,
   pathname,
@@ -74,6 +96,7 @@ export default function ProfilePage({
   onVisibleReviewCountsChange,
 }: ProfilePageProps) {
   const { user: currentUser } = useAuth();
+  const t = useT();
   const isOwnProfile = !!currentUser && currentUser.id === userId;
   const [username, setUsername] = useState<string>('');
   const [userIdPublic, setUserIdPublic] = useState<string>('');
@@ -81,83 +104,71 @@ export default function ProfilePage({
   const [lists, setLists] = useState<ListWithCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [manageListId, setManageListId] = useState<string | null>(null);
-  const [listEvents, setListEvents] = useState<{ event: Event; listEvent: UserListEvent }[]>([]);
+  const [listEvents, setListEvents] = useState<BoardRow[]>([]);
+  const [boardTagMap, setBoardTagMap] = useState<TagResolutionMap | null>(null);
   const [isCreateListOpen, setIsCreateListOpen] = useState(false);
   const [isAddEventOpen, setIsAddEventOpen] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [newListDescription, setNewListDescription] = useState('');
+  const [newListPrivate, setNewListPrivate] = useState(false);
   const [createError, setCreateError] = useState('');
   const [addEventError, setAddEventError] = useState('');
   const [listsError, setListsError] = useState<string | null>(null);
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [addEventSearch, setAddEventSearch] = useState('');
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const [tagDisplayMap, setTagDisplayMap] = useState<TagResolutionMap | null>(null);
-  const [reviewsLayout, setReviewsLayout] = useState<'list' | 'cards'>(() => {
-    try {
-      const saved = window.localStorage.getItem('profile_reviews_layout');
-      return saved === 'list' ? 'list' : 'cards';
-    } catch {
-      return 'cards';
-    }
-  });
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('profile_reviews_layout', reviewsLayout);
-    } catch {
-      // Ignore storage errors.
-    }
-  }, [reviewsLayout]);
-
-  const profileEventsForTags = useMemo(
-    () => reviews.filter((r) => r.event?.id).map((r) => r.event),
-    [reviews]
-  );
-
-  useEffect(() => {
-    if (profileEventsForTags.length === 0) {
-      setTagDisplayMap(new Map());
-      return;
-    }
-    let cancelled = false;
-    fetchTagResolutionForEvents(profileEventsForTags).then((m) => {
-      if (!cancelled) setTagDisplayMap(m);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [profileEventsForTags]);
+  const [listLinkCopied, setListLinkCopied] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
+  const [boardMenuPos, setBoardMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const boardMenuBtnRef = useRef<HTMLButtonElement | null>(null);
+  const [isEditListOpen, setIsEditListOpen] = useState(false);
+  const [editListName, setEditListName] = useState('');
+  const [editListDescription, setEditListDescription] = useState('');
+  const [editListError, setEditListError] = useState('');
+  const [editListBusy, setEditListBusy] = useState(false);
 
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      // Run profile, ratings, and lists in parallel
+      if (currentUser?.id === userId) {
+        try {
+          await ensureLibraryLists(userId);
+        } catch {
+          // Lists may be unset up; fetch below surfaces the SQL banner
+        }
+      }
+
       const [profileRes, ratingsRes, listsRes] = await Promise.all([
         supabase.from('user_profiles').select('username, user_id_public').eq('user_id', userId).maybeSingle(),
         supabase.from('ratings').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
-        supabase.from('user_lists').select('*').eq('user_id', userId).order('sort_order').order('created_at', { ascending: false })
+        supabase.from('user_lists').select('*').eq('user_id', userId).order('sort_order').order('created_at', { ascending: false }),
       ]);
 
       const profile = profileRes.data;
       const ratingsData = ratingsRes.data || [];
-      const listsData = listsRes.data || [];
+      const listsData = sortListsLibraryFirst(listsRes.data || []);
 
       setUsername(profile?.username || 'My profile');
       setUserIdPublic(profile?.user_id_public || '');
 
       const eventIds = [...new Set(ratingsData.map((r) => r.event_id))];
 
-      // Use cached events when available to avoid re-fetch
       const cacheMap = cachedEvents?.length ? new Map(cachedEvents.map((e) => [e.id, e])) : null;
       const useCache = cacheMap && eventIds.length > 0 && eventIds.every((id) => cacheMap.has(id));
 
-      // Run events fetch (or use cache), allRatingsForEvents, and list counts in parallel
       const [eventsRes, allRatingsRes, listCountsRes] = await Promise.all([
-        useCache ? Promise.resolve({ data: eventIds.map((id) => cacheMap!.get(id)!).filter(Boolean) }) : (eventIds.length > 0 ? supabase.from('events').select('*').in('id', eventIds) : Promise.resolve({ data: [] })),
-        eventIds.length > 0 ? supabase.from('ratings').select('event_id, rating').in('event_id', eventIds) : Promise.resolve({ data: [] }),
+        useCache
+          ? Promise.resolve({ data: eventIds.map((id) => cacheMap!.get(id)!).filter(Boolean) })
+          : eventIds.length > 0
+            ? supabase.from('events').select('*').in('id', eventIds)
+            : Promise.resolve({ data: [] }),
+        eventIds.length > 0
+          ? supabase.from('ratings').select('event_id, rating').in('event_id', eventIds)
+          : Promise.resolve({ data: [] }),
         listsData.length > 0
           ? supabase.from('user_list_events').select('list_id').in('list_id', listsData.map((l) => l.id))
-          : Promise.resolve({ data: [] })
+          : Promise.resolve({ data: [] }),
       ]);
 
       const eventsData = (eventsRes.data || []).map((e) => normalizeEventTagArrays(e as Event));
@@ -173,8 +184,8 @@ export default function ProfilePage({
       const ratingStatsMap = new Map(
         Array.from(statsAccumulator.entries()).map(([eventId, s]) => [
           eventId,
-          { averageRating: s.count ? s.sum / s.count : 0, ratingCount: s.count }
-        ])
+          { averageRating: s.count ? s.sum / s.count : 0, ratingCount: s.count },
+        ]),
       );
 
       const reviewsUnsorted = ratingsData.map((r) => {
@@ -186,7 +197,7 @@ export default function ProfilePage({
           eventName: event?.name || 'Unknown',
           eventDate: event?.date || '',
           averageRating: stats?.averageRating || 0,
-          ratingCount: stats?.ratingCount || 0
+          ratingCount: stats?.ratingCount || 0,
         };
       });
       reviewsUnsorted.sort((a, b) => (b.eventDate || '').localeCompare(a.eventDate || ''));
@@ -204,8 +215,8 @@ export default function ProfilePage({
         setLists(
           listsData.map((l) => ({
             ...l,
-            event_count: countByList[l.id] || 0
-          }))
+            event_count: l.is_rated_list ? ratingsData.length : countByList[l.id] || 0,
+          })),
         );
       }
     } catch (e) {
@@ -217,40 +228,110 @@ export default function ProfilePage({
 
   useEffect(() => {
     fetchProfile();
-    // fetchProfile is defined in-component and intentionally keyed to user + refresh only
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, refreshTrigger]);
 
-  const openManageList = async (listId: string) => {
-    setManageListId(listId);
+  const loadListBoard = async (listId: string, target: ListWithCount | undefined) => {
+    const isRatings = listId === VIRTUAL_RATINGS_LIST_ID || !!target?.is_rated_list;
+    if (isRatings) {
+      const rows: BoardRow[] = reviews
+        .filter((r) => r.event?.id)
+        .filter((r, idx, arr) => arr.findIndex((x) => x.event.id === r.event.id) === idx)
+        .map((r, index) => ({
+          event: r.event,
+          averageRating: r.averageRating,
+          ratingCount: r.ratingCount,
+          userRating: r.rating,
+          listEvent: {
+            id: r.rating.id,
+            list_id: listId,
+            event_id: r.event.id,
+            position: index,
+            created_at: r.rating.created_at,
+          },
+        }));
+      rows.sort((a, b) => (b.event.date || '').localeCompare(a.event.date || ''));
+      setListEvents(rows);
+      return;
+    }
+
+    let resolvedListId = listId;
+    if (listId === VIRTUAL_LIKED_LIST_ID && currentUser?.id === userId) {
+      const { data } = await ensureLikedList(userId);
+      if (data?.id) resolvedListId = data.id;
+    }
+
     const { data: listEventsData } = await supabase
       .from('user_list_events')
       .select('*')
-      .eq('list_id', listId)
+      .eq('list_id', resolvedListId)
       .order('position');
     const ids = (listEventsData || []).map((e) => e.event_id);
     const cacheMap = cachedEvents?.length ? new Map(cachedEvents.map((e) => [e.id, e])) : null;
     const useCache = cacheMap && ids.length > 0 && ids.every((id) => cacheMap.has(id));
-    const eventsData = (useCache
-      ? ids.map((id) => cacheMap!.get(id)!).filter(Boolean)
-      : (await supabase.from('events').select('*').in('id', ids)).data || []
+    const eventsData = (
+      useCache
+        ? ids.map((id) => cacheMap!.get(id)!).filter(Boolean)
+        : (await supabase.from('events').select('*').in('id', ids)).data || []
     ).map((e) => normalizeEventTagArrays(e as Event));
     const eventsMap = new Map(eventsData.map((e) => [e.id, e]));
+
+    const [statsRes, userRatingsRes] = await Promise.all([
+      fetchEventRatingStats(ids),
+      currentUser && ids.length > 0
+        ? supabase.from('ratings').select('*').eq('user_id', currentUser.id).in('event_id', ids)
+        : Promise.resolve({ data: [] as Rating[] }),
+    ]);
+    const userRatingByEvent = new Map(
+      ((userRatingsRes.data || []) as Rating[]).map((r) => [r.event_id, r]),
+    );
+
     const eventsList = (listEventsData || [])
-      .map((le) => ({
-        listEvent: le,
-        event: eventsMap.get(le.event_id)!
-      }))
-      .filter((x) => x.event);
+      .map((le) => {
+        const event = eventsMap.get(le.event_id);
+        if (!event) return null;
+        const stats = statsRes.data.get(le.event_id);
+        const row: BoardRow = {
+          listEvent: le,
+          event,
+          averageRating: stats?.average_rating || 0,
+          ratingCount: stats?.rating_count || 0,
+          userRating: userRatingByEvent.get(le.event_id),
+        };
+        return row;
+      })
+      .filter((x): x is BoardRow => x != null);
     eventsList.sort((a, b) => (b.event.date || '').localeCompare(a.event.date || ''));
     setListEvents(eventsList);
   };
 
-  const removeFromList = async (listEventId: string) => {
-    await supabase.from('user_list_events').delete().eq('id', listEventId);
-    if (manageListId) openManageList(manageListId);
-    fetchProfile();
+  const openManageList = async (listId: string) => {
+    setManageListId(listId);
+    setIsAddEventOpen(false);
+    const target =
+      lists.find((l) => l.id === listId) ||
+      (listId === VIRTUAL_RATINGS_LIST_ID
+        ? ({ id: listId, is_rated_list: true } as ListWithCount)
+        : listId === VIRTUAL_LIKED_LIST_ID
+          ? ({ id: listId, is_liked_list: true } as ListWithCount)
+          : undefined);
+    await loadListBoard(listId, target);
   };
+
+  useEffect(() => {
+    const events = listEvents.map((r) => r.event).filter((e) => e?.id);
+    if (events.length === 0) {
+      setBoardTagMap(new Map());
+      return;
+    }
+    let cancelled = false;
+    fetchTagResolutionForEvents(events).then((m) => {
+      if (!cancelled) setBoardTagMap(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [listEvents]);
 
   const createList = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,24 +340,27 @@ export default function ProfilePage({
       setCreateError('Name is required');
       return;
     }
-    const { error } = await supabase.from('user_lists').insert({
-      user_id: userId,
-      name: newListName.trim(),
-      description: newListDescription.trim() || null,
-      sort_order: lists.length
+    const { error } = await createUserPlaylist(userId, newListName, {
+      description: newListDescription,
+      isPublic: !newListPrivate,
+      sortOrder: lists.length,
     });
     if (error) {
-      const msg = error.message || (error as { message?: string })?.message || 'Failed to create list';
-      setCreateError(msg);
+      setCreateError(error.message || 'Failed to create list');
       return;
     }
     setNewListName('');
     setNewListDescription('');
+    setNewListPrivate(false);
     setIsCreateListOpen(false);
     fetchProfile();
   };
 
   const deleteList = async (listId: string) => {
+    const target = lists.find((l) => l.id === listId);
+    if (isSystemLibraryList(target) || listId === VIRTUAL_RATINGS_LIST_ID || listId === VIRTUAL_LIKED_LIST_ID) {
+      return;
+    }
     if (!window.confirm('Delete this list? Events in it are not deleted.')) return;
     await supabase.from('user_lists').delete().eq('id', listId);
     setManageListId(null);
@@ -292,19 +376,25 @@ export default function ProfilePage({
   };
 
   const addEventToList = async (eventId: string) => {
-    if (!manageListId) return;
+    if (!manageListId || !currentUser) return;
+    let listId = manageListId;
+    if (listId === VIRTUAL_LIKED_LIST_ID) {
+      const { data } = await ensureLikedList(currentUser.id);
+      if (!data?.id) {
+        setAddEventError('Could not open Liked list');
+        return;
+      }
+      listId = data.id;
+      setManageListId(listId);
+    }
     const maxPos = listEvents.length ? Math.max(...listEvents.map((e) => e.listEvent.position), 0) : 0;
-    const { error } = await supabase.from('user_list_events').insert({
-      list_id: manageListId,
-      event_id: eventId,
-      position: maxPos + 1
-    });
+    const { error } = await addEventToListAndLiked(currentUser.id, listId, eventId, maxPos + 1);
     if (error) {
       setAddEventError(error.message || 'Failed to add show to list');
       return;
     }
     setAddEventError('');
-    openManageList(manageListId);
+    await openManageList(listId);
     fetchProfile();
     setIsAddEventOpen(false);
   };
@@ -328,15 +418,157 @@ export default function ProfilePage({
       !listEvents.some((le) => le.event.id === e.id) &&
       (!addSearchNorm ||
         normalizeForSearch(e.name || '').includes(addSearchNorm) ||
-        normalizeForSearch(e.city || '').includes(addSearchNorm))
+        normalizeForSearch(e.city || '').includes(addSearchNorm)),
   );
+
   const visibleReviews = useMemo(
     () => (visibleEventIds ? reviews.filter((r) => visibleEventIds.has(r.event?.id)) : reviews),
-    [reviews, visibleEventIds]
+    [reviews, visibleEventIds],
   );
   useEffect(() => {
     onVisibleReviewCountsChange?.({ visible: visibleReviews.length, total: reviews.length });
   }, [onVisibleReviewCountsChange, visibleReviews.length, reviews.length]);
+
+  /** Always surface Ratings + Liked boards on own library; inject if DB rows missing. */
+  const libraryLists = useMemo((): ListWithCount[] => {
+    const items = lists.map((l) =>
+      l.is_rated_list ? { ...l, event_count: reviews.length } : l,
+    );
+    const hasRated = items.some((l) => l.is_rated_list);
+    const hasLiked = items.some((l) => l.is_liked_list);
+
+    if (!hasRated) {
+      items.push({
+        id: VIRTUAL_RATINGS_LIST_ID,
+        user_id: userId,
+        name: 'Your Ratings',
+        description: null,
+        sort_order: -2,
+        is_liked_list: false,
+        is_rated_list: true,
+        is_public: true,
+        created_at: '',
+        event_count: reviews.length,
+      });
+    }
+    if (isOwnProfile && !hasLiked) {
+      items.push({
+        id: VIRTUAL_LIKED_LIST_ID,
+        user_id: userId,
+        name: 'Your Liked Events',
+        description: null,
+        sort_order: -1,
+        is_liked_list: true,
+        is_rated_list: false,
+        is_public: true,
+        created_at: '',
+        event_count: 0,
+      });
+    }
+    return sortListsLibraryFirst(items);
+  }, [lists, reviews.length, userId, isOwnProfile]);
+
+  const resolveRealListId = async (listId: string): Promise<string | null> => {
+    if (listId !== VIRTUAL_LIKED_LIST_ID && listId !== VIRTUAL_RATINGS_LIST_ID) return listId;
+    if (!currentUser || currentUser.id !== userId) return null;
+    if (listId === VIRTUAL_LIKED_LIST_ID) {
+      const { data } = await ensureLikedList(userId);
+      return data?.id ?? null;
+    }
+    const { data } = await ensureRatedList(userId);
+    return data?.id ?? null;
+  };
+
+  const copyBoardLink = async () => {
+    if (!manageListId || shareBusy) return;
+    setShareBusy(true);
+    setBoardMenuOpen(false);
+    try {
+      const realId = await resolveRealListId(manageListId);
+      if (!realId) return;
+      if (manageListId !== realId) {
+        setManageListId(realId);
+        await fetchProfile();
+      }
+      await navigator.clipboard.writeText(canonicalListUrl(realId));
+      setListLinkCopied(true);
+      window.setTimeout(() => setListLinkCopied(false), 2000);
+    } catch {
+      // ignore
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const toggleBoardPublic = async () => {
+    if (!manageListId || !isOwnProfile || shareBusy) return;
+    setShareBusy(true);
+    setBoardMenuOpen(false);
+    try {
+      const realId = await resolveRealListId(manageListId);
+      if (!realId) return;
+      const current =
+        libraryLists.find((l) => l.id === manageListId || l.id === realId) ||
+        lists.find((l) => l.id === realId);
+      const nextPublic = !current?.is_public;
+      const { error } = await supabase
+        .from('user_lists')
+        .update({ is_public: nextPublic })
+        .eq('id', realId);
+      if (error) return;
+      if (manageListId !== realId) setManageListId(realId);
+      await fetchProfile();
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const openEditList = () => {
+    const current =
+      libraryLists.find((l) => l.id === manageListId) || lists.find((l) => l.id === manageListId);
+    if (!current || isSystemLibraryList(current)) return;
+    setEditListName(current.name || '');
+    setEditListDescription(current.description || '');
+    setEditListError('');
+    setBoardMenuOpen(false);
+    setIsEditListOpen(true);
+  };
+
+  const saveEditList = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manageListId || editListBusy) return;
+    const name = editListName.trim();
+    if (!name) {
+      setEditListError('Name is required');
+      return;
+    }
+    setEditListBusy(true);
+    setEditListError('');
+    try {
+      const { error } = await supabase
+        .from('user_lists')
+        .update({
+          name,
+          description: editListDescription.trim() || null,
+        })
+        .eq('id', manageListId);
+      if (error) {
+        setEditListError(error.message || 'Failed to update list');
+        return;
+      }
+      setIsEditListOpen(false);
+      await fetchProfile();
+    } finally {
+      setEditListBusy(false);
+    }
+  };
+
+  const listDisplayName = (list: ListWithCount | undefined) => {
+    if (!list) return '';
+    if (list.is_rated_list) return t('event.ratedListName');
+    if (list.is_liked_list) return t('event.likedListName');
+    return list.name;
+  };
 
   if (loading) {
     return (
@@ -347,71 +579,237 @@ export default function ProfilePage({
   }
 
   if (manageListId) {
-    const currentList = lists.find((l) => l.id === manageListId);
+    const currentList =
+      libraryLists.find((l) => l.id === manageListId) || lists.find((l) => l.id === manageListId);
+    const isRatingsList = manageListId === VIRTUAL_RATINGS_LIST_ID || !!currentList?.is_rated_list;
+    const isLikedList = manageListId === VIRTUAL_LIKED_LIST_ID || !!currentList?.is_liked_list;
+    const canDeleteList =
+      isOwnProfile &&
+      !isSystemLibraryList(currentList) &&
+      manageListId !== VIRTUAL_RATINGS_LIST_ID &&
+      manageListId !== VIRTUAL_LIKED_LIST_ID;
+    const canAddShows = isOwnProfile && !isRatingsList;
+
+    const boardRows = visibleEventIds
+      ? listEvents.filter((row) => visibleEventIds.has(row.event.id))
+      : listEvents;
+
+    const laneItems: MasonryLaneItem[] = boardRows.map(
+      ({ event, listEvent, averageRating, ratingCount, userRating }) => ({
+        id: listEvent.id,
+        children: (
+          <EventCard
+            event={event}
+            averageRating={averageRating}
+            ratingCount={ratingCount}
+            userRating={userRating}
+            onRatingSubmitted={() => {
+              void loadListBoard(manageListId, currentList);
+              fetchProfile();
+            }}
+            onEventUpdated={() => {
+              void loadListBoard(manageListId, currentList);
+              fetchProfile();
+            }}
+            onTagClick={onTagClick || (() => {})}
+            onViewClick={onOpenEvent}
+            tagColors={tagColors}
+            customPerformerTags={customPerformerTags}
+          />
+        ),
+      }),
+    );
+
     return (
       <div className="min-h-screen bg-neutral-50/80">
-        <div className="max-w-2xl mx-auto px-4 pb-16 pt-6">
+        <div className="max-w-[2400px] mx-auto px-4 pb-16 pt-6">
           <button
-            onClick={() => { setManageListId(null); setIsAddEventOpen(false); }}
-            className="text-sm text-neutral-500 hover:text-neutral-900 mb-8 transition-colors"
+            onClick={() => {
+              setManageListId(null);
+              setIsAddEventOpen(false);
+              setBoardMenuOpen(false);
+              setIsEditListOpen(false);
+            }}
+            className="text-sm text-neutral-500 hover:text-neutral-900 mb-6 transition-colors"
           >
-            ← Back to profile
+            ← Back to library
           </button>
-          <div className="rounded-2xl bg-white/90 p-6 shadow-sm">
-            <div className="flex items-start justify-between gap-4 mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-neutral-900 tracking-tight">{currentList?.name}</h2>
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div className="min-w-0">
+              <h2 className="text-xl font-semibold text-neutral-900 tracking-tight">
+                {listDisplayName(currentList)}
+              </h2>
               {currentList?.description && (
                 <p className="text-sm text-neutral-500 mt-1">{currentList.description}</p>
               )}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={openAddEvent}
-                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-neutral-800"
-              >
-                <Plus size={16} />
-                Add show
-              </button>
-              <button
-                onClick={() => deleteList(manageListId)}
-                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
-                title="Delete list"
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-            </div>
-            <ul className="space-y-2">
-            {listEvents.map(({ event, listEvent }) => (
-              <li
-                key={listEvent.id}
-                className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
-              >
-                <div>
-                  <a href={`${pathname}?event=${event.id}`} className="text-gray-900 hover:text-neutral-900 font-medium">
-                    {event.name}
-                  </a>
-                  {event.date && (
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </p>
-                  )}
-                </div>
+            {isOwnProfile && (
+              <div className="relative shrink-0">
                 <button
-                  onClick={() => removeFromList(listEvent.id)}
-                  className="text-gray-400 hover:text-red-600 p-1"
-                  title="Remove from list"
+                  ref={boardMenuBtnRef}
+                  type="button"
+                  onClick={() => {
+                    if (boardMenuOpen) {
+                      setBoardMenuOpen(false);
+                      return;
+                    }
+                    const el = boardMenuBtnRef.current;
+                    if (el) {
+                      const rect = el.getBoundingClientRect();
+                      setBoardMenuPos({
+                        top: rect.bottom + 4,
+                        right: Math.max(8, window.innerWidth - rect.right),
+                      });
+                    }
+                    setBoardMenuOpen(true);
+                  }}
+                  className="p-1.5 text-neutral-400 hover:text-neutral-700 rounded-lg transition-colors"
+                  aria-haspopup="true"
+                  aria-expanded={boardMenuOpen}
+                  aria-label="List actions"
                 >
-                  <X size={16} />
+                  <MoreVertical size={20} />
                 </button>
-              </li>
-            ))}
-            {listEvents.length === 0 && (
-              <li className="text-gray-500 py-4">No shows in this list yet. Click “Add show” to add events.</li>
+                {boardMenuOpen && boardMenuPos && createPortal(
+                  <>
+                    <div
+                      className="fixed inset-0 z-[80]"
+                      onClick={() => setBoardMenuOpen(false)}
+                      aria-hidden="true"
+                    />
+                    <div
+                      className="fixed z-[90] w-52 bg-white rounded-lg shadow-lg border border-neutral-200 py-1"
+                      style={{ top: boardMenuPos.top, right: boardMenuPos.right }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {canDeleteList && (
+                        <button
+                          type="button"
+                          onClick={openEditList}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2"
+                        >
+                          <Pencil size={14} className="text-neutral-500" />
+                          <span>{t('event.editList')}</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => { void toggleBoardPublic(); }}
+                        disabled={shareBusy}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                      >
+                        {currentList?.is_public ? t('event.makeListPrivate') : t('event.makeListPublic')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { void copyBoardLink(); }}
+                        disabled={shareBusy}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center justify-between gap-2 disabled:opacity-50"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <Link2 size={14} className="text-neutral-500" />
+                          {t('event.copyListLink')}
+                        </span>
+                        {listLinkCopied ? (
+                          <span className="text-xs text-neutral-500">{t('event.listLinkCopied')}</span>
+                        ) : null}
+                      </button>
+                      {canAddShows && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBoardMenuOpen(false);
+                            void openAddEvent();
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 border-t border-neutral-100"
+                        >
+                          <Plus size={14} className="text-neutral-500" />
+                          <span>{t('event.addShow')}</span>
+                        </button>
+                      )}
+                      {canDeleteList && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBoardMenuOpen(false);
+                            void deleteList(manageListId);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 text-red-600 border-t border-neutral-100"
+                        >
+                          <Trash2 size={14} />
+                          <span>{t('event.deleteList')}</span>
+                        </button>
+                      )}
+                    </div>
+                  </>,
+                  document.body,
+                )}
+              </div>
             )}
-          </ul>
           </div>
+
+          {isEditListOpen && (
+            <div
+              className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[95]"
+              onClick={(e) => e.target === e.currentTarget && !editListBusy && setIsEditListOpen(false)}
+            >
+              <div
+                className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="mb-4 text-lg font-semibold text-foreground">{t('event.editList')}</h3>
+                <form onSubmit={saveEditList} className="space-y-4">
+                  <div>
+                    <Label htmlFor="edit-list-name">Name</Label>
+                    <Input
+                      id="edit-list-name"
+                      type="text"
+                      value={editListName}
+                      onChange={(e) => setEditListName(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-list-description">Description</Label>
+                    <Input
+                      id="edit-list-description"
+                      type="text"
+                      value={editListDescription}
+                      onChange={(e) => setEditListDescription(e.target.value)}
+                    />
+                  </div>
+                  {editListError && <p className="text-sm text-destructive">{editListError}</p>}
+                  <div className="flex gap-2">
+                    <Button type="submit" disabled={editListBusy}>Save</Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={editListBusy}
+                      onClick={() => setIsEditListOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {boardRows.length === 0 ? (
+            <div className="rounded-2xl bg-white/80 py-16 px-6 text-center">
+              <p className="text-neutral-500 text-sm">
+                {isRatingsList
+                  ? 'No ratings yet.'
+                  : isLikedList
+                    ? 'No saved shows yet.'
+                    : 'No shows in this list yet.'}
+              </p>
+            </div>
+          ) : (
+            <TagDisplayProvider map={boardTagMap}>
+              <MasonryLaneFeed items={laneItems} columnMinWidthPx={220} gapPx={24} />
+            </TagDisplayProvider>
+          )}
         </div>
 
         {isAddEventOpen && (
@@ -421,34 +819,38 @@ export default function ProfilePage({
           >
             <div className="relative max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
               <div className="bg-white rounded-xl w-full max-h-[80vh] flex flex-col">
-              <div className="p-4 border-b">
-                <h3 className="font-semibold">Add show to list</h3>
-              </div>
-              {addEventError && <p className="px-4 py-2 text-sm text-red-600 bg-red-50">{addEventError}</p>}
-              <div className="p-4 border-b">
-                <Input
-                  type="text"
-                  placeholder="Search shows..."
-                  value={addEventSearch}
-                  onChange={(e) => setAddEventSearch(e.target.value)}
-                />
-              </div>
-              <ul className="overflow-y-auto flex-1 p-4 space-y-1">
-                {filteredAddEvents.slice(0, 50).map((event) => (
-                  <li key={event.id}>
-                    <button
-                      onClick={() => addEventToList(event.id)}
-                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 flex items-center justify-between"
-                    >
-                      <span className="font-medium text-gray-900">{event.name}</span>
-                      <ChevronRight size={16} className="text-gray-400" />
-                    </button>
-                  </li>
-                ))}
-                {filteredAddEvents.length === 0 && (
-                  <li className="text-gray-500 py-4 text-sm">No matching shows or all are already in this list.</li>
+                <div className="p-4 border-b">
+                  <h3 className="font-semibold">Add show to list</h3>
+                </div>
+                {addEventError && (
+                  <p className="px-4 py-2 text-sm text-red-600 bg-red-50">{addEventError}</p>
                 )}
-              </ul>
+                <div className="p-4 border-b">
+                  <Input
+                    type="text"
+                    placeholder="Search shows..."
+                    value={addEventSearch}
+                    onChange={(e) => setAddEventSearch(e.target.value)}
+                  />
+                </div>
+                <ul className="overflow-y-auto flex-1 p-4 space-y-1">
+                  {filteredAddEvents.slice(0, 50).map((event) => (
+                    <li key={event.id}>
+                      <button
+                        onClick={() => addEventToList(event.id)}
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 flex items-center justify-between"
+                      >
+                        <span className="font-medium text-gray-900">{event.name}</span>
+                        <ChevronRight size={16} className="text-gray-400" />
+                      </button>
+                    </li>
+                  ))}
+                  {filteredAddEvents.length === 0 && (
+                    <li className="text-gray-500 py-4 text-sm">
+                      No matching shows or all are already in this list.
+                    </li>
+                  )}
+                </ul>
               </div>
             </div>
           </div>
@@ -460,7 +862,6 @@ export default function ProfilePage({
   return (
     <div className="min-h-screen bg-neutral-50/80">
       <div className="max-w-[2400px] mx-auto px-4 pb-16 pt-6">
-
         <header className="mb-10">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -468,151 +869,105 @@ export default function ProfilePage({
                 className="inline-block text-sm font-medium px-3 py-1.5 rounded-md"
                 style={{
                   backgroundColor: tagColors?.optional_tags_bg_color || '#e0e7ff',
-                  color: tagColors?.optional_tags_text_color || '#3730a3'
+                  color: tagColors?.optional_tags_text_color || '#3730a3',
                 }}
               >
-                {username || (currentUser?.user_metadata?.full_name as string) || (currentUser?.email?.split('@')[0]) || 'Profile'}
+                {username ||
+                  (currentUser?.user_metadata?.full_name as string) ||
+                  currentUser?.email?.split('@')[0] ||
+                  'Profile'}
               </span>
               <div className="text-neutral-500 text-sm mt-1 space-y-0.5">
                 {isOwnProfile && currentUser?.email && (
                   <p className="text-neutral-600">{currentUser.email}</p>
                 )}
                 {isOwnProfile && userIdPublic && (
-                  <p className="text-neutral-500">Sign in as: <span className="font-mono text-neutral-600">{userIdPublic}</span></p>
+                  <p className="text-neutral-500">
+                    Sign in as: <span className="font-mono text-neutral-600">{userIdPublic}</span>
+                  </p>
                 )}
-                <p>
-                  {visibleReviews.length} review{visibleReviews.length !== 1 ? 's' : ''}
-                  {lists.length > 0 && ` · ${lists.length} list${lists.length !== 1 ? 's' : ''}`}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="inline-flex rounded-lg border border-neutral-200 bg-white/80 p-1">
-                <button
-                  type="button"
-                  onClick={() => setReviewsLayout('list')}
-                  className={`px-2 py-1 rounded-md transition-colors ${
-                    reviewsLayout === 'list' ? 'bg-neutral-200 text-neutral-800' : 'text-neutral-500 hover:text-neutral-700'
-                  }`}
-                  title="List view"
-                  aria-label="List view"
-                >
-                  <Rows3 size={15} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReviewsLayout('cards')}
-                  className={`px-2 py-1 rounded-md transition-colors ${
-                    reviewsLayout === 'cards' ? 'bg-neutral-200 text-neutral-800' : 'text-neutral-500 hover:text-neutral-700'
-                  }`}
-                  title="Card view"
-                  aria-label="Card view"
-                >
-                  <LayoutGrid size={15} />
-                </button>
               </div>
             </div>
           </div>
         </header>
 
-        <section className="min-w-0 space-y-4">
-          <h2 className="text-lg font-semibold text-neutral-900">My reviews</h2>
-          {visibleReviews.length === 0 ? (
-            <div className="rounded-2xl bg-white/80 py-16 px-6 text-center"><p className="text-neutral-500 text-sm">No reviews yet. Rate a show to see it here.</p></div>
-          ) : reviewsLayout === 'cards' ? (
-            <TagDisplayProvider map={tagDisplayMap}>
-            <MasonryLaneFeed
-              items={
-                visibleReviews
-                  .filter((row, idx, arr) => arr.findIndex((x) => x.event.id === row.event.id) === idx)
-                  .reduce<MasonryLaneItem[]>((acc, { rating, event, averageRating, ratingCount }) => {
-                    if (!event?.id) return acc;
-                    acc.push({
-                      id: rating.id,
-                      children: (
-                        <EventCard
-                          event={event}
-                          averageRating={averageRating}
-                          ratingCount={ratingCount}
-                          userRating={rating}
-                          onRatingSubmitted={fetchProfile}
-                          onEventUpdated={fetchProfile}
-                          onTagClick={onTagClick || (() => {})}
-                          onViewClick={onOpenEvent}
-                          tagColors={tagColors}
-                          customPerformerTags={customPerformerTags}
-                        />
-                      ),
-                    });
-                    return acc;
-                  }, [])
-              }
-              columnMinWidthPx={220}
-              gapPx={24}
-            />
-            </TagDisplayProvider>
-          ) : (
-            <TagDisplayProvider map={tagDisplayMap}>
-              <ProfileReviewsPlaylist rows={visibleReviews} onOpenEvent={onOpenEvent} />
-            </TagDisplayProvider>
-          )}
-        </section>
-
-        <section className="mt-12">
-          <h2 className="text-sm font-medium text-neutral-400 uppercase tracking-wider mb-4">Lists</h2>
+        <section className="mt-2">
+          <h2 className="text-lg font-semibold text-neutral-900 mb-4">{t('profile.yourLibrary')}</h2>
           {listsError ? (
-            <div className="rounded-2xl bg-amber-50/90 border border-amber-200/80 p-6">
-              <p className="text-sm text-amber-800 mb-4">
-                Lists require a one-time database setup. Copy the SQL and run it in your Supabase SQL Editor.
-              </p>
-              <div className="flex flex-wrap gap-2">
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-3">
                 <button
-                  onClick={enableLists}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-xl text-sm hover:bg-amber-700 transition-colors"
+                  onClick={() => openManageList(VIRTUAL_RATINGS_LIST_ID)}
+                  className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/90 hover:bg-white transition-all hover:shadow-md hover:shadow-neutral-200/30 text-left min-w-[200px]"
                 >
-                  <Copy size={16} />
-                  Copy SQL & open Supabase
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-neutral-900 truncate">{t('event.ratedListName')}</p>
+                    <p className="text-xs text-neutral-500">
+                      {reviews.length} show{reviews.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <ChevronRight size={16} className="text-neutral-300 shrink-0" />
                 </button>
-                <button
-                  onClick={fetchProfile}
-                  className="flex items-center gap-2 px-4 py-2.5 border border-amber-300 rounded-xl text-sm text-amber-800 hover:bg-amber-100 transition-colors"
-                >
-                  <RefreshCw size={16} />
-                  I&apos;ve run it — Refresh
-                </button>
-                {copyFeedback && (
-                  <span className="self-center text-sm text-amber-700">{copyFeedback}</span>
-                )}
+              </div>
+              <div className="rounded-2xl bg-amber-50/90 border border-amber-200/80 p-6">
+                <p className="text-sm text-amber-800 mb-4">
+                  Lists require a one-time database setup. Copy the SQL and run it in your Supabase SQL
+                  Editor.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={enableLists}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-xl text-sm hover:bg-amber-700 transition-colors"
+                  >
+                    <Copy size={16} />
+                    Copy SQL & open Supabase
+                  </button>
+                  <button
+                    onClick={fetchProfile}
+                    className="flex items-center gap-2 px-4 py-2.5 border border-amber-300 rounded-xl text-sm text-amber-800 hover:bg-amber-100 transition-colors"
+                  >
+                    <RefreshCw size={16} />
+                    I&apos;ve run it — Refresh
+                  </button>
+                  {copyFeedback && (
+                    <span className="self-center text-sm text-amber-700">{copyFeedback}</span>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
-            <>
-        <p className="text-sm text-neutral-500 mb-4">
-          Create lists like “Greatest shows of all time” or a model resume.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={() => { setIsCreateListOpen(true); setCreateError(''); setNewListName(''); setNewListDescription(''); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-neutral-500 hover:text-neutral-700 hover:bg-white/60 transition-colors border border-neutral-200/60"
-          >
-            <Plus size={18} />
-            New list
-          </button>
-          {lists.map((list) => (
-            <button
-              key={list.id}
-              onClick={() => openManageList(list.id)}
-              className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/90 hover:bg-white transition-all hover:shadow-md hover:shadow-neutral-200/30 text-left"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-neutral-900 truncate">{list.name}</p>
-                <p className="text-xs text-neutral-500">{list.event_count} show{list.event_count !== 1 ? 's' : ''}</p>
-              </div>
-              <ChevronRight size={16} className="text-neutral-300 shrink-0" />
-            </button>
-          ))}
-        </div>
-            </>
+            <div className="flex flex-wrap gap-3">
+              {libraryLists.map((list) => (
+                <button
+                  key={list.id}
+                  onClick={() => openManageList(list.id)}
+                  className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/90 hover:bg-white transition-all hover:shadow-md hover:shadow-neutral-200/30 text-left min-w-[200px]"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-neutral-900 truncate">{listDisplayName(list)}</p>
+                    <p className="text-xs text-neutral-500">
+                      {list.event_count} show{list.event_count !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <ChevronRight size={16} className="text-neutral-300 shrink-0" />
+                </button>
+              ))}
+              {isOwnProfile && (
+                <button
+                  onClick={() => {
+                    setIsCreateListOpen(true);
+                    setCreateError('');
+                    setNewListName('');
+                    setNewListDescription('');
+                    setNewListPrivate(false);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-neutral-500 hover:text-neutral-700 hover:bg-white/60 transition-colors border border-neutral-200/60 min-w-[200px]"
+                >
+                  <Plus size={18} />
+                  New list
+                </button>
+              )}
+            </div>
           )}
         </section>
       </div>
@@ -622,8 +977,11 @@ export default function ProfilePage({
           className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
           onClick={(e) => e.target === e.currentTarget && setIsCreateListOpen(false)}
         >
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 text-lg font-semibold text-foreground">Create list</h3>
+          <div
+            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-4 text-lg font-semibold text-foreground">{t('event.createList')}</h3>
             <form onSubmit={createList} className="space-y-4">
               <div>
                 <Label htmlFor="new-list-name">Name</Label>
@@ -646,9 +1004,29 @@ export default function ProfilePage({
                   placeholder="e.g. My personal top 10"
                 />
               </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={newListPrivate}
+                onClick={() => setNewListPrivate((v) => !v)}
+                className="w-full flex items-center justify-between gap-2 rounded-xl border border-neutral-200 px-3 py-2.5 text-sm text-neutral-800 hover:bg-neutral-50"
+              >
+                <span>{t('event.listPrivate')}</span>
+                <span
+                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${
+                    newListPrivate ? 'bg-neutral-900' : 'bg-neutral-300'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                      newListPrivate ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </span>
+              </button>
               {createError && <p className="text-sm text-destructive">{createError}</p>}
               <div className="flex gap-2">
-                <Button type="submit">Create</Button>
+                <Button type="submit">{t('event.createList')}</Button>
                 <Button type="button" variant="secondary" onClick={() => setIsCreateListOpen(false)}>
                   Cancel
                 </Button>

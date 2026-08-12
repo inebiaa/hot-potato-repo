@@ -1,9 +1,10 @@
 import { Link, useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
-import { Calendar, MapPin, Star, Edit, Trash2, Share2, Mail, MoreVertical } from 'lucide-react';
-import { Event, Rating, supabase } from '../lib/supabase';
+import { createPortal } from 'react-dom';
+import { Calendar, MapPin, Star, Edit, Trash2, Share2, Mail, MoreVertical, Heart, ListPlus, ChevronLeft, Check, Plus } from 'lucide-react';
+import { Event, Rating, supabase, type UserList } from '../lib/supabase';
 import { getIcon } from '../lib/eventCardIcons';
 import { getSeasonFromDate } from '../lib/season';
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef, useLayoutEffect } from 'react';
 import RatingModal from './RatingModal';
 import EditEventModal from './EditEventModal';
 import ViewRatingsModal from './ViewRatingsModal';
@@ -30,6 +31,8 @@ import {
 } from '../lib/specialGuests';
 import { eventCardImageUrl } from '../lib/eventCardImageUrl';
 import { deleteStoredEventImage } from '../lib/eventImageUpload';
+import { addEventToListAndLiked, createUserPlaylist, fetchLikedEventIds, fetchUserPlaylists, toggleLikedEvent } from '../lib/userLists';
+import { formControlClass, formControlPaddingClass, formControlTextClass } from './ui/field';
 
 /** City / season / genre: shared pill shell + hover (same metrics as TagInput chips). */
 const HEADER_ICON_INSIDE_PILL_CLASS = `${tagPillShellClass} transition-colors hover:opacity-80`;
@@ -165,7 +168,199 @@ export default function EventCard({
   const [isDeleting, setIsDeleting] = useState(false);
   const [shareCopied, setShareCopied] = useState<'link' | 'embed' | 'embedcode' | 'email' | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [actionsView, setActionsView] = useState<'main' | 'add-to-list' | 'create-list'>('main');
+  const [playlists, setPlaylists] = useState<UserList[]>([]);
+  const [playlistsLoading, setPlaylistsLoading] = useState(false);
+  const [playlistsError, setPlaylistsError] = useState('');
+  const [addingToListId, setAddingToListId] = useState<string | null>(null);
+  const [addedToListId, setAddedToListId] = useState<string | null>(null);
+  const [newListName, setNewListName] = useState('');
+  const [newListPrivate, setNewListPrivate] = useState(false);
+  const [createListBusy, setCreateListBusy] = useState(false);
+  const [createListError, setCreateListError] = useState('');
   const [expandedTagSections, setExpandedTagSections] = useState<Record<string, boolean>>({});
+  const [isLiked, setIsLiked] = useState(false);
+  const [likeBusy, setLikeBusy] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const actionsMenuBtnRef = useRef<HTMLButtonElement | null>(null);
+  const playlistsFetchGen = useRef(0);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setIsLiked(false);
+      return;
+    }
+    let cancelled = false;
+    void fetchLikedEventIds(user.id)
+      .then((ids) => {
+        if (!cancelled) setIsLiked(ids.has(event.id));
+      })
+      .catch(() => {
+        if (!cancelled) setIsLiked(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, event.id]);
+
+  useEffect(() => {
+    if (!showActionsMenu) {
+      setActionsView('main');
+      setPlaylists([]);
+      setPlaylistsError('');
+      setAddingToListId(null);
+      setAddedToListId(null);
+      setNewListName('');
+      setNewListPrivate(false);
+      setCreateListBusy(false);
+      setCreateListError('');
+      setMenuPos(null);
+    }
+  }, [showActionsMenu]);
+
+  useLayoutEffect(() => {
+    if (!showActionsMenu) return;
+    const update = () => {
+      const el = actionsMenuBtnRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setMenuPos({
+        top: rect.bottom + 4,
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [showActionsMenu, actionsView]);
+
+  const loadPlaylists = async () => {
+    if (!user) return;
+    const gen = ++playlistsFetchGen.current;
+    setPlaylistsLoading(true);
+    setPlaylistsError('');
+    try {
+      const { data, error } = await fetchUserPlaylists(user.id);
+      if (gen !== playlistsFetchGen.current) return;
+      if (error) {
+        setPlaylists([]);
+        setPlaylistsError(error.message || 'Failed to load lists');
+        return;
+      }
+      setPlaylists(data);
+    } catch (err) {
+      if (gen !== playlistsFetchGen.current) return;
+      setPlaylists([]);
+      setPlaylistsError(err instanceof Error ? err.message : 'Failed to load lists');
+    } finally {
+      if (gen === playlistsFetchGen.current) setPlaylistsLoading(false);
+    }
+  };
+
+  const openAddToList = async () => {
+    if (!user) {
+      setShowActionsMenu(false);
+      navigate({
+        pathname: location.pathname,
+        search: setAppModalParams(searchParams, 'auth', {
+          authMode: 'signin',
+          authPrompt: t('auth.prompt.addToList'),
+        }),
+      });
+      return;
+    }
+    setActionsView('add-to-list');
+    await loadPlaylists();
+  };
+
+  const openCreateList = () => {
+    setCreateListError('');
+    setNewListName('');
+    setNewListPrivate(false);
+    setActionsView('create-list');
+  };
+
+  const handleCreateListAndAdd = async () => {
+    if (!user || createListBusy) return;
+    const name = newListName.trim();
+    if (!name) {
+      setCreateListError('Name is required');
+      return;
+    }
+    setCreateListBusy(true);
+    setCreateListError('');
+    try {
+      const { data: list, error } = await createUserPlaylist(user.id, name, {
+        isPublic: !newListPrivate,
+        sortOrder: playlists.length,
+      });
+      if (error || !list) {
+        setCreateListError(error?.message || 'Failed to create list');
+        return;
+      }
+      const addRes = await addEventToListAndLiked(user.id, list.id, event.id);
+      if (addRes.error) {
+        setCreateListError(addRes.error.message || 'Failed to add show');
+        return;
+      }
+      setIsLiked(true);
+      setAddedToListId(list.id);
+      setPlaylists((prev) => [list, ...prev]);
+      window.setTimeout(() => {
+        setShowActionsMenu(false);
+      }, 600);
+    } finally {
+      setCreateListBusy(false);
+    }
+  };
+
+  const handleAddToPlaylist = async (listId: string) => {
+    if (!user || addingToListId) return;
+    setAddingToListId(listId);
+    try {
+      const { error } = await addEventToListAndLiked(user.id, listId, event.id);
+      if (!error) {
+        setAddedToListId(listId);
+        setIsLiked(true);
+        window.setTimeout(() => {
+          setShowActionsMenu(false);
+        }, 600);
+      }
+    } finally {
+      setAddingToListId(null);
+    }
+  };
+
+  const handleToggleLiked = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) {
+      navigate({
+        pathname: location.pathname,
+        search: setAppModalParams(searchParams, 'auth', {
+          authMode: 'signin',
+          authPrompt: t('auth.prompt.saveShow'),
+        }),
+      });
+      return;
+    }
+    if (likeBusy) return;
+    setLikeBusy(true);
+    const prev = isLiked;
+    setIsLiked(!prev);
+    try {
+      const { liked, error } = await toggleLikedEvent(user.id, event.id, prev);
+      if (error) setIsLiked(prev);
+      else setIsLiked(liked);
+    } catch {
+      setIsLiked(prev);
+    } finally {
+      setLikeBusy(false);
+    }
+  };
 
   const tagsBySection = useMemo(() => ({
     producers: coalesceTagList(event.producers),
@@ -383,9 +578,41 @@ export default function EventCard({
                 </h3>
               )}
             </div>
-            <div className="relative shrink-0" data-event-actions>
+            <div className="relative shrink-0 flex items-center gap-0.5" data-event-actions>
               <button
-                onClick={(e) => { e.stopPropagation(); setShowActionsMenu(!showActionsMenu); }}
+                type="button"
+                onClick={(e) => { void handleToggleLiked(e); }}
+                disabled={likeBusy}
+                className={`p-1.5 rounded transition-colors ${
+                  isLiked
+                    ? 'text-neutral-900 hover:text-neutral-700'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+                title={isLiked ? t('event.removeFromLiked') : t('event.saveToLiked')}
+                aria-label={isLiked ? t('event.removeFromLiked') : t('event.saveToLiked')}
+                aria-pressed={isLiked}
+              >
+                <Heart size={18} fill={isLiked ? 'currentColor' : 'none'} />
+              </button>
+              <button
+                ref={actionsMenuBtnRef}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (showActionsMenu) {
+                    setShowActionsMenu(false);
+                    return;
+                  }
+                  const el = actionsMenuBtnRef.current;
+                  if (el) {
+                    const rect = el.getBoundingClientRect();
+                    setMenuPos({
+                      top: rect.bottom + 4,
+                      right: Math.max(8, window.innerWidth - rect.right),
+                    });
+                  }
+                  setShowActionsMenu(true);
+                }}
                 className="p-1.5 text-gray-400 hover:text-gray-600 rounded transition-colors"
                 title="Actions"
                 aria-haspopup="true"
@@ -393,17 +620,154 @@ export default function EventCard({
               >
                 <MoreVertical size={18} />
               </button>
-              {showActionsMenu && (
+              {showActionsMenu && menuPos && createPortal(
                 <>
                   <div
-                    className="fixed inset-0 z-40"
+                    className="fixed inset-0 z-[80]"
                     onClick={() => setShowActionsMenu(false)}
                     aria-hidden="true"
                   />
-                  <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                  <div
+                    className="fixed z-[90] w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1"
+                    style={{ top: menuPos.top, right: menuPos.right }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {actionsView === 'create-list' ? (
+                      <div className="px-3 py-2 space-y-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActionsView('add-to-list');
+                            setCreateListError('');
+                            void loadPlaylists();
+                          }}
+                          className="w-full text-left text-sm hover:bg-gray-50 flex items-center gap-2 -mx-1 px-1 py-1 rounded"
+                        >
+                          <ChevronLeft size={14} className="text-gray-500" />
+                          <span>{t('event.createList')}</span>
+                        </button>
+                        <input
+                          type="text"
+                          value={newListName}
+                          onChange={(e) => setNewListName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              void handleCreateListAndAdd();
+                            }
+                          }}
+                          autoFocus
+                          className={`${formControlClass} ${formControlPaddingClass} ${formControlTextClass}`}
+                          aria-label={t('event.createList')}
+                        />
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={newListPrivate}
+                          onClick={() => setNewListPrivate((v) => !v)}
+                          className="w-full flex items-center justify-between gap-2 rounded-md border border-neutral-200 px-2 py-1.5 text-sm text-neutral-800 hover:bg-neutral-50"
+                        >
+                          <span>{t('event.listPrivate')}</span>
+                          <span
+                            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${
+                              newListPrivate ? 'bg-neutral-900' : 'bg-neutral-300'
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                                newListPrivate ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </span>
+                        </button>
+                        {createListError ? (
+                          <p className="text-xs text-red-600">{createListError}</p>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={createListBusy}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleCreateListAndAdd();
+                          }}
+                          className="w-full rounded-md bg-neutral-900 px-2 py-1.5 text-sm text-white hover:bg-neutral-800 disabled:opacity-50"
+                        >
+                          {addedToListId ? t('event.addedToList') : t('event.createList')}
+                        </button>
+                      </div>
+                    ) : actionsView === 'add-to-list' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActionsView('main');
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100"
+                        >
+                          <ChevronLeft size={14} className="text-gray-500" />
+                          <span>{t('event.addToList')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openCreateList();
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100"
+                        >
+                          <Plus size={14} className="text-gray-500" />
+                          <span>{t('event.newList')}</span>
+                        </button>
+                        {playlistsLoading ? (
+                          <div className="px-3 py-3 text-sm text-gray-400">…</div>
+                        ) : playlistsError ? (
+                          <div className="px-3 py-3 text-sm text-red-600">{playlistsError}</div>
+                        ) : playlists.length === 0 ? (
+                          <div className="px-3 py-3 text-sm text-gray-500">{t('event.noLists')}</div>
+                        ) : (
+                          <div className="max-h-56 overflow-y-auto">
+                            {playlists.map((list) => {
+                              const justAdded = addedToListId === list.id;
+                              const busy = addingToListId === list.id;
+                              return (
+                                <button
+                                  key={list.id}
+                                  type="button"
+                                  disabled={busy || justAdded}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleAddToPlaylist(list.id);
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between gap-2 disabled:opacity-60"
+                                >
+                                  <span className="truncate">{list.name}</span>
+                                  {justAdded ? (
+                                    <Check size={14} className="text-green-600 shrink-0" />
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void openAddToList();
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <ListPlus size={14} className="text-gray-500" />
+                      <span>{t('event.addToList')}</span>
+                    </button>
                     <button
                       onClick={() => { copyToClipboard(shareLink, 'link'); setShowActionsMenu(false); }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between gap-2"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between gap-2 border-t border-gray-100"
                     >
                       <Share2 size={14} className="text-gray-500" />
                       <span>Copy link</span>
@@ -454,8 +818,11 @@ export default function EventCard({
                         </button>
                       </>
                     )}
+                      </>
+                    )}
                   </div>
-                </>
+                </>,
+                document.body,
               )}
             </div>
           </div>

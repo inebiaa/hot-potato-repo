@@ -1,11 +1,16 @@
 import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Event } from '../lib/supabase';
 import { parseCommentToSegments } from '../lib/commentTagParsing';
+import { splitCanonicalCityLabel } from '../lib/cityPlaces';
 
 function escapeHtml(s: string): string {
   const div = document.createElement('div');
   div.textContent = s;
   return div.innerHTML;
+}
+
+function tagInnerHtml(bg: string, text: string, label: string): string {
+  return `<span class="inline-flex max-w-full whitespace-normal break-words rounded-md px-2 py-1 text-xs text-left" style="background-color:${escapeHtml(bg)};color:${escapeHtml(text)}">${escapeHtml(label)}</span>`;
 }
 
 interface CommentEditorProps {
@@ -64,7 +69,13 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
       const html = segments
         .map((seg) => {
           if (seg.type === 'tag' && seg.tag) {
-            const inner = `<span class="inline-flex max-w-full whitespace-normal break-words rounded-md px-2 py-1 text-xs text-left" style="background-color:${escapeHtml(seg.tag.bg)};color:${escapeHtml(seg.tag.text)}">${escapeHtml(seg.value)}</span>`;
+            const cityParts =
+              seg.tag.type === 'city'
+                ? splitCanonicalCityLabel(event.city || '') || splitCanonicalCityLabel(seg.tag.value)
+                : null;
+            const inner = cityParts
+              ? `${tagInnerHtml(seg.tag.bg, seg.tag.text, cityParts.cityName)}${tagInnerHtml(seg.tag.bg, seg.tag.text, cityParts.regionDisplayName)}`
+              : tagInnerHtml(seg.tag.bg, seg.tag.text, seg.value);
             return `<span contenteditable="false" data-tag-pill class="inline-flex max-w-full min-w-0 flex-wrap items-center gap-1 p-0 text-left text-xs not-italic font-normal mx-0.5 select-none transition-colors hover:opacity-80">${inner}</span>`;
           }
           return escapeHtml(seg.value);

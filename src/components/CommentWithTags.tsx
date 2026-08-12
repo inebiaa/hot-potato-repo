@@ -4,6 +4,7 @@ import { Event } from '../lib/supabase';
 import { getSeasonFromDate } from '../lib/season';
 import { effectiveHeaderTags } from '../lib/eventHeaderTags';
 import { getSpecialGuests, isSpecialGuestsSlug } from '../lib/specialGuests';
+import { cityTagSpelledLabel, splitCanonicalCityLabel } from '../lib/cityPlaces';
 import type { CommentTagColors } from '../lib/commentTagParsing';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 
@@ -85,7 +86,11 @@ export default function CommentWithTags({
   (event.hair_makeup || []).forEach((v) => add(v, 'hair_makeup'));
   effectiveHeaderTags(event).forEach((v) => add(v, 'header_tags'));
   (event.footer_tags || []).forEach((v) => add(v, 'footer_tags'));
-  if (event.city) add(event.city, 'city');
+  if (event.city) {
+    add(event.city, 'city');
+    const spelled = cityTagSpelledLabel(event.city);
+    if (spelled) add(spelled, 'city');
+  }
   if (event.date) add(getSeasonFromDate(event.date), 'season');
   if (event.custom_tags && typeof event.custom_tags === 'object') {
     Object.entries(event.custom_tags).forEach(([slug, vals]) => {
@@ -131,22 +136,70 @@ export default function CommentWithTags({
 
   return (
     <span className={className}>
-      {segments.map((seg, i) =>
-        seg.type === 'tag' && seg.tag ? (
+      {segments.map((seg, i) => {
+        if (seg.type !== 'tag' || !seg.tag) {
+          return <React.Fragment key={i}>{seg.value}</React.Fragment>;
+        }
+
+        const onClick = (e: React.MouseEvent) => {
+          e.stopPropagation();
+          if (!onTagClick) return;
+          if (seg.tag!.type === 'custom' && seg.tag!.slug) {
+            onTagClick('custom_performer', `${seg.tag!.slug}\x00${seg.tag!.value}`, seg.value);
+            return;
+          }
+          // City filter always uses the stored canonical event.city value.
+          if (seg.tag!.type === 'city' && event.city) {
+            onTagClick('city', event.city, event.city);
+            return;
+          }
+          onTagClick(seg.tag!.type, seg.tag!.value, seg.value);
+        };
+
+        const cityParts =
+          seg.tag.type === 'city'
+            ? splitCanonicalCityLabel(event.city || '') || splitCanonicalCityLabel(seg.tag.value)
+            : null;
+
+        if (cityParts) {
+          const colors = { backgroundColor: seg.tag.bg, color: seg.tag.text };
+          return (
+            <span key={i} className={`${tagPillSplitSegmentGroupClass} mx-0.5`}>
+              <button
+                type="button"
+                data-tag-pill
+                className={`${tagPillSplitSegmentGroupClass} p-0 text-xs not-italic font-normal transition-colors hover:opacity-80 ${onTagClick ? 'cursor-pointer' : ''}`}
+                onClick={onClick}
+              >
+                <TagPillSplitLabel
+                  fitToContainer={fitTagPillsToContainer}
+                  text={cityParts.cityName}
+                  segmentColors={colors}
+                />
+              </button>
+              <button
+                type="button"
+                data-tag-pill
+                className={`${tagPillSplitSegmentGroupClass} p-0 text-xs not-italic font-normal transition-colors hover:opacity-80 ${onTagClick ? 'cursor-pointer' : ''}`}
+                onClick={onClick}
+              >
+                <TagPillSplitLabel
+                  fitToContainer={fitTagPillsToContainer}
+                  text={cityParts.regionDisplayName}
+                  segmentColors={colors}
+                />
+              </button>
+            </span>
+          );
+        }
+
+        return (
           <button
             type="button"
             key={i}
             data-tag-pill
             className={`${tagPillSplitSegmentGroupClass} p-0 text-xs not-italic font-normal mx-0.5 transition-colors hover:opacity-80 ${onTagClick ? 'cursor-pointer' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!onTagClick) return;
-              if (seg.tag.type === 'custom' && seg.tag.slug) {
-                onTagClick('custom_performer', `${seg.tag.slug}\x00${seg.tag.value}`, seg.value);
-                return;
-              }
-              onTagClick(seg.tag.type, seg.tag.value, seg.value);
-            }}
+            onClick={onClick}
           >
             <TagPillSplitLabel
               fitToContainer={fitTagPillsToContainer}
@@ -154,10 +207,8 @@ export default function CommentWithTags({
               segmentColors={{ backgroundColor: seg.tag.bg, color: seg.tag.text }}
             />
           </button>
-        ) : (
-          <React.Fragment key={i}>{seg.value}</React.Fragment>
-        )
-      )}
+        );
+      })}
     </span>
   );
 }

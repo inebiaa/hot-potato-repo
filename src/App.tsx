@@ -19,6 +19,7 @@ import SettingsPage from './components/SettingsPage';
 import TagRatingsModal from './components/TagRatingsModal';
 import StatisticsPage from './components/StatisticsPage';
 import ProfilePage from './components/ProfilePage';
+import SharedLibraryListPage from './components/SharedLibraryListPage';
 import type { AppSettings } from './types/appSettings';
 import { TagDisplayProvider } from './contexts/TagDisplayContext';
 import { CopyProvider } from './contexts/CopyContext';
@@ -726,6 +727,8 @@ function App() {
   const eventIdFromPath = params.eventId ?? null;
   const eventIdFromUrl = eventIdFromPath ?? eventIdFromQuery;
   const showProfile = searchParams.get('profile') === '1';
+  const sharedListId = searchParams.get('list');
+  const showSharedList = !!sharedListId;
   const showStats = searchParams.get('stats') === '1';
   const showSettings = searchParams.get('settings') === '1';
   const pathname = location.pathname;
@@ -1386,6 +1389,59 @@ function App() {
           initialMode={modalRoute.authMode}
           promptMessage={modalRoute.authPrompt}
         />
+      </div>
+      </CopyProvider>
+      </TagDisplayProvider>
+    );
+  }
+
+  if (showSharedList && sharedListId) {
+    if (!appSettings) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
+        </div>
+      );
+    }
+    return (
+      <TagDisplayProvider map={tagResolutionMap}>
+      <CopyProvider settings={appSettings}>
+      <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
+        <AppHeader
+          pathname={pathname}
+          activeView="home"
+          desktopLikePointer={desktopLikePointer}
+          appSettings={appSettings}
+          user={user}
+          isAdmin={!!isAdmin}
+          onGoHome={goBack}
+          onOpenStats={openStats}
+          onOpenProfile={openProfile}
+          onOpenSettings={openSettings}
+          onAddEvent={openAddEventModal}
+          onSignIn={() => openAuthModal('signin')}
+          onSignOut={() => signOut()}
+          searchBar={null}
+        />
+        <main
+          className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
+        >
+          <div className="max-w-[2400px] mx-auto min-w-0 px-2 py-6 sm:px-6 sm:py-8 lg:px-8 sm:my-8">
+            <button
+              onClick={goBack}
+              className="text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
+            >
+              ← {copyT('modals.backToShows', overridesFromSettings(appSettings))}
+            </button>
+            <SharedLibraryListPage
+              listId={sharedListId}
+              onTagClick={handleTagClick}
+              onOpenEvent={(id) => openEventOverlay(id)}
+              tagColors={appSettings}
+              customPerformerTags={[]}
+            />
+          </div>
+        </main>
       </div>
       </CopyProvider>
       </TagDisplayProvider>

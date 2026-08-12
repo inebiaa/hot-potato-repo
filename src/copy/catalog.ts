@@ -23,6 +23,26 @@ export type CopyKey =
   | 'event.hairMakeup'
   | 'event.genre'
   | 'event.collection'
+  | 'event.likedListName'
+  | 'event.ratedListName'
+  | 'event.saveToLiked'
+  | 'event.removeFromLiked'
+  | 'event.addToList'
+  | 'event.addedToList'
+  | 'event.noLists'
+  | 'event.newList'
+  | 'event.createList'
+  | 'event.listPrivate'
+  | 'event.copyListLink'
+  | 'event.listLinkCopied'
+  | 'event.makeListPublic'
+  | 'event.makeListPrivate'
+  | 'event.editList'
+  | 'event.addShow'
+  | 'event.deleteList'
+  | 'profile.yourLibrary'
+  | 'auth.prompt.saveShow'
+  | 'auth.prompt.addToList'
   | 'form.createTitle'
   | 'form.editTitle'
   | 'form.showName'
@@ -135,6 +155,106 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     default: 'Genre',
     label: 'Card/form: Genre',
     group: 'event',
+  },
+  'event.likedListName': {
+    default: 'Your Liked Events',
+    label: 'Liked list name',
+    group: 'event',
+  },
+  'event.ratedListName': {
+    default: 'Your Ratings',
+    label: 'Ratings list name',
+    group: 'event',
+  },
+  'profile.yourLibrary': {
+    default: 'Your Library',
+    label: 'Profile library heading',
+    group: 'nav',
+  },
+  'event.saveToLiked': {
+    default: 'Save',
+    label: 'Save to Liked',
+    group: 'event',
+  },
+  'event.removeFromLiked': {
+    default: 'Saved',
+    label: 'Remove from Liked (saved state)',
+    group: 'event',
+  },
+  'event.addToList': {
+    default: 'Add to list',
+    label: 'Add to list',
+    group: 'event',
+  },
+  'event.addedToList': {
+    default: 'Added',
+    label: 'Added to list confirmation',
+    group: 'event',
+  },
+  'event.noLists': {
+    default: 'No lists yet',
+    label: 'No lists empty state',
+    group: 'event',
+  },
+  'event.newList': {
+    default: 'New list',
+    label: 'New list',
+    group: 'event',
+  },
+  'event.createList': {
+    default: 'Create list',
+    label: 'Create list',
+    group: 'event',
+  },
+  'event.listPrivate': {
+    default: 'Private',
+    label: 'List private toggle',
+    group: 'event',
+  },
+  'event.copyListLink': {
+    default: 'Copy link',
+    label: 'Copy shared list link',
+    group: 'event',
+  },
+  'event.listLinkCopied': {
+    default: 'Copied',
+    label: 'List link copied',
+    group: 'event',
+  },
+  'event.makeListPublic': {
+    default: 'Make public',
+    label: 'Make list public',
+    group: 'event',
+  },
+  'event.makeListPrivate': {
+    default: 'Make private',
+    label: 'Make list private',
+    group: 'event',
+  },
+  'event.editList': {
+    default: 'Edit list',
+    label: 'Edit list name and description',
+    group: 'event',
+  },
+  'event.addShow': {
+    default: 'Add show',
+    label: 'Add show to list',
+    group: 'event',
+  },
+  'event.deleteList': {
+    default: 'Delete list',
+    label: 'Delete list',
+    group: 'event',
+  },
+  'auth.prompt.saveShow': {
+    default: 'Sign in to save shows',
+    label: 'Auth prompt: save show',
+    group: 'auth',
+  },
+  'auth.prompt.addToList': {
+    default: 'Sign in to add shows to a list',
+    label: 'Auth prompt: add to list',
+    group: 'auth',
   },
   'event.collection': {
     default: 'Collection',
