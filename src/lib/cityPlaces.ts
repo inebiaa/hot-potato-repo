@@ -172,3 +172,109 @@ export async function canonicalizeCity(raw: string): Promise<string | null> {
 export function isCanonicalCityLabel(value: string): boolean {
   return /^[^,]+,\s*[A-Za-z]{2,3}$/.test(value.trim());
 }
+
+function titleCaseRegionName(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+function invertAbbrevToDisplay(map: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, code] of Object.entries(map)) {
+    const n = normalizeKey(name);
+    // Prefer ASCII spellings (quebec over québec).
+    if (out[code] && /[^a-z0-9 ]/i.test(name)) continue;
+    if (!out[code] || n.length >= normalizeKey(out[code]).length) {
+      out[code] = titleCaseRegionName(n);
+    }
+  }
+  return out;
+}
+
+const US_STATE_DISPLAY = invertAbbrevToDisplay(US_STATE_ABBREV);
+const CA_PROVINCE_DISPLAY = invertAbbrevToDisplay(CA_PROVINCE_ABBREV);
+
+/** Common ISO / tour-market country codes → English display names for comment pills. */
+const COUNTRY_DISPLAY: Record<string, string> = {
+  UK: 'United Kingdom',
+  GB: 'United Kingdom',
+  US: 'United States',
+  CA: 'Canada',
+  FR: 'France',
+  IT: 'Italy',
+  DE: 'Germany',
+  ES: 'Spain',
+  PT: 'Portugal',
+  NL: 'Netherlands',
+  BE: 'Belgium',
+  CH: 'Switzerland',
+  AT: 'Austria',
+  IE: 'Ireland',
+  SE: 'Sweden',
+  NO: 'Norway',
+  DK: 'Denmark',
+  FI: 'Finland',
+  PL: 'Poland',
+  CZ: 'Czechia',
+  AU: 'Australia',
+  NZ: 'New Zealand',
+  JP: 'Japan',
+  KR: 'South Korea',
+  CN: 'China',
+  HK: 'Hong Kong',
+  TW: 'Taiwan',
+  SG: 'Singapore',
+  IN: 'India',
+  BR: 'Brazil',
+  MX: 'Mexico',
+  AR: 'Argentina',
+  CL: 'Chile',
+  AE: 'United Arab Emirates',
+  IL: 'Israel',
+  ZA: 'South Africa',
+};
+
+/** Spelled-out region/country for a 2–3 letter code (falls back to the code). */
+export function regionDisplayNameFromCode(code: string): string {
+  const c = code.trim().toUpperCase();
+  if (!c) return code.trim();
+  return (
+    US_STATE_DISPLAY[c] ||
+    CA_PROVINCE_DISPLAY[c] ||
+    COUNTRY_DISPLAY[c] ||
+    c
+  );
+}
+
+export type CityTagParts = {
+  cityName: string;
+  regionCode: string;
+  /** Spelled-out state/province/country for display pills. */
+  regionDisplayName: string;
+};
+
+/** Split canonical `City, XX` into city + spelled-out region parts for comment pills. */
+export function splitCanonicalCityLabel(label: string): CityTagParts | null {
+  const t = label.trim();
+  if (!isCanonicalCityLabel(t)) return null;
+  const i = t.lastIndexOf(',');
+  const cityName = t.slice(0, i).trim();
+  const regionCode = t.slice(i + 1).trim().toUpperCase();
+  if (!cityName || !regionCode) return null;
+  return {
+    cityName,
+    regionCode,
+    regionDisplayName: regionDisplayNameFromCode(regionCode),
+  };
+}
+
+/** Alternate comment match string using spelled-out region (`Denver, Colorado`). */
+export function cityTagSpelledLabel(label: string): string | null {
+  const parts = splitCanonicalCityLabel(label);
+  if (!parts) return null;
+  if (parts.regionDisplayName.toUpperCase() === parts.regionCode) return null;
+  return `${parts.cityName}, ${parts.regionDisplayName}`;
+}

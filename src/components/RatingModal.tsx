@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import CommentEditor from './CommentEditor';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 import { getEventTagStyles } from '../lib/commentTagParsing';
+import { splitCanonicalCityLabel } from '../lib/cityPlaces';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
 
@@ -60,7 +61,7 @@ export default function RatingModal({
   const { user } = useAuth();
 
   const eventTags = useMemo(
-    () => getEventTagStyles(event, tagColors, customPerformerTags).map((tag) => tag.value),
+    () => getEventTagStyles(event, tagColors, customPerformerTags),
     [event, tagColors, customPerformerTags]
   );
 
@@ -182,19 +183,34 @@ export default function RatingModal({
             {eventTags.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-1.5 items-center">
                 <span className="text-xs text-gray-500 self-center mr-1">Insert tag:</span>
-                {eventTags.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => insertTag(tag)}
-                    className={`min-h-[44px] max-sm:min-h-[40px] ${tagPillSplitSegmentGroupClass} p-0 text-xs hover:opacity-90 sm:min-h-0 sm:py-1`}
-                  >
-                    <TagPillSplitLabel
-                      text={tag}
-                      segmentColors={{ backgroundColor: '#f3f4f6', color: '#374151' }}
-                    />
-                  </button>
-                ))}
+                {eventTags.map((tag) => {
+                  const cityParts =
+                    tag.type === 'city' ? splitCanonicalCityLabel(tag.value) : null;
+                  const colors = {
+                    backgroundColor: tag.bg || '#f3f4f6',
+                    color: tag.text || '#374151',
+                  };
+                  return (
+                    <button
+                      key={tag.value}
+                      type="button"
+                      onClick={() => insertTag(tag.value)}
+                      className={`min-h-[44px] max-sm:min-h-[40px] ${tagPillSplitSegmentGroupClass} p-0 text-xs hover:opacity-90 sm:min-h-0 sm:py-1`}
+                    >
+                      {cityParts ? (
+                        <>
+                          <TagPillSplitLabel text={cityParts.cityName} segmentColors={colors} />
+                          <TagPillSplitLabel
+                            text={cityParts.regionDisplayName}
+                            segmentColors={colors}
+                          />
+                        </>
+                      ) : (
+                        <TagPillSplitLabel text={tag.value} segmentColors={colors} />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
             <CommentEditor

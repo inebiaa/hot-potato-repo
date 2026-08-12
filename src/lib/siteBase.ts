@@ -35,6 +35,16 @@ export function canonicalEventUrl(eventId: string): string {
   return `${publicSiteOrigin()}${eventPagePath(eventId)}`;
 }
 
+/** Path to a shared library list (`/?list=…`), with Vite base prefix. */
+export function listPagePath(listId: string): string {
+  return `${viteBasePath()}?list=${encodeURIComponent(listId)}`;
+}
+
+/** Full canonical URL for a shared library list. */
+export function canonicalListUrl(listId: string): string {
+  return `${publicSiteOrigin()}${listPagePath(listId)}`;
+}
+
 /**
  * Canonical event URL when `import.meta.env` is not available (e.g. Node prerender).
  * `viteBase` is `process.env.VITE_BASE` (e.g. `/` or `/repo/`).

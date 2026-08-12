@@ -3,6 +3,7 @@ import type { Event } from './supabase';
 import { effectiveHeaderTags } from './eventHeaderTags';
 import { getSeasonFromDate } from './season';
 import { getSpecialGuests, isSpecialGuestsSlug } from './specialGuests';
+import { cityTagSpelledLabel } from './cityPlaces';
 
 /** Tag pill colors aligned with CommentWithTags / EventCard */
 export interface CommentTagColors {
@@ -30,6 +31,8 @@ export interface TagStyleResult {
   value: string;
   bg: string;
   text: string;
+  /** Optional classifier for special rendering (e.g. city → split pills). */
+  type?: string;
 }
 
 /** Get styled tag list for an event (for use in RatingModal insert buttons, etc.) */
@@ -74,7 +77,7 @@ export function getEventTagStyles(
       bg = (cp?.bg_color && cp.bg_color) ? cp.bg_color : fallbackBg;
       text = (cp?.text_color && cp.text_color) ? cp.text_color : fallbackText;
     }
-    tags.push({ value, bg, text });
+    tags.push({ value, bg, text, type });
   };
   (event.producers || []).forEach((v) => add(v, 'producer'));
   (event.featured_designers || []).forEach((v) => add(v, 'designer'));
@@ -151,8 +154,20 @@ export function parseCommentToSegments(
   customPerformerTags: { slug: string; bg_color: string; text_color: string }[] = []
 ): ParsedSegment[] {
   const tagStyles = getEventTagStyles(event, tagColors, customPerformerTags);
-  if (tagStyles.length === 0) return comment ? [{ type: 'text', value: comment }] : [];
-  const tags = tagStyles;
+  const tags = [...tagStyles];
+  if (event.city) {
+    const spelled = cityTagSpelledLabel(event.city);
+    if (spelled && !tags.some((t) => normalizeTagNameKey(t.value) === normalizeTagNameKey(spelled))) {
+      const cityStyle = tags.find((t) => t.type === 'city');
+      tags.push({
+        value: spelled,
+        bg: cityStyle?.bg || tagColors?.city_bg_color || '#dbeafe',
+        text: cityStyle?.text || tagColors?.city_text_color || '#1e40af',
+        type: 'city',
+      });
+    }
+  }
+  if (tags.length === 0) return comment ? [{ type: 'text', value: comment }] : [];
   tags.sort((a, b) => b.value.length - a.value.length);
   const segments: ParsedSegment[] = [];
   let remaining = comment;
