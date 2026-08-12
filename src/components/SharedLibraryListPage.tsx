@@ -8,6 +8,7 @@ import { normalizeEventTagArrays } from '../lib/eventTagArray';
 import { fetchEventRatingStats } from '../lib/eventRatingStats';
 import { useAuth } from '../contexts/AuthContext';
 import { useT } from '../contexts/CopyContext';
+import { ListCover, pickListCollageUrls } from './ListCoverCollage';
 
 type BoardRow = {
   event: Event;
@@ -55,6 +56,7 @@ export default function SharedLibraryListPage({
   const { user } = useAuth();
   const t = useT();
   const [list, setList] = useState<UserList | null>(null);
+  const [ownerUsername, setOwnerUsername] = useState('');
   const [rows, setRows] = useState<BoardRow[]>([]);
   const [tagMap, setTagMap] = useState<TagResolutionMap | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,6 +67,7 @@ export default function SharedLibraryListPage({
     (async () => {
       setLoading(true);
       setError(null);
+      setOwnerUsername('');
       const listRes = await supabase.from('user_lists').select('*').eq('id', listId).maybeSingle();
       if (cancelled) return;
       if (listRes.error || !listRes.data) {
@@ -76,6 +79,13 @@ export default function SharedLibraryListPage({
       }
       const listRow = listRes.data as UserList;
       const isOwner = !!user && user.id === listRow.user_id;
+      if (listRow.is_liked_list && !isOwner) {
+        setError('This list is private');
+        setList(listRow);
+        setRows([]);
+        setLoading(false);
+        return;
+      }
       if (!listRow.is_public && !isOwner) {
         setError('This list is private');
         setList(listRow);
@@ -84,6 +94,15 @@ export default function SharedLibraryListPage({
         return;
       }
       setList(listRow);
+
+      if (listRow.is_rated_list && !isOwner) {
+        const profileRes = await supabase
+          .from('user_profiles')
+          .select('username')
+          .eq('user_id', listRow.user_id)
+          .maybeSingle();
+        if (!cancelled) setOwnerUsername((profileRes.data?.username || '').trim());
+      }
 
       if (listRow.is_rated_list) {
         const ratingsRes = await supabase
@@ -179,10 +198,15 @@ export default function SharedLibraryListPage({
 
   const title = useMemo(() => {
     if (!list) return '';
-    if (list.is_rated_list) return t('event.ratedListName');
+    if (list.is_rated_list) {
+      const isOwner = !!user && user.id === list.user_id;
+      if (isOwner) return t('event.ratedListName');
+      const name = ownerUsername || t('nav.profile');
+      return t('event.ratedListNameForUser').replace('{name}', name);
+    }
     if (list.is_liked_list) return t('event.likedListName');
     return list.name;
-  }, [list, t]);
+  }, [list, t, user, ownerUsername]);
 
   if (loading) {
     return (
@@ -220,6 +244,11 @@ export default function SharedLibraryListPage({
 
   return (
     <div className="min-w-0">
+      <ListCover
+        coverUrl={list?.cover_image_url}
+        collageUrls={pickListCollageUrls(rows.map((r) => r.event?.image_url))}
+        className="mb-6 h-40 w-full rounded-xl sm:h-52"
+      />
       <h1 className="text-xl font-semibold text-neutral-900 tracking-tight mb-6">{title}</h1>
       {rows.length === 0 ? (
         <div className="rounded-2xl bg-white/80 py-16 px-6 text-center">

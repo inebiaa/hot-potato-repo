@@ -1,0 +1,40 @@
+---
+description: Option / overflow menus (⋮) — row layout, dividers, typography
+alwaysApply: true
+---
+
+# Option menus
+
+For three-dot / overflow / actions menus (e.g. event card, library board):
+
+## Rows
+- Each option: icon + label with `flex items-center gap-2`, **left-aligned**.
+- Do **not** use `justify-between` just for icon + label — that pushes text to the right.
+- Trailing status only when real (e.g. “Copied!”): keep label left (`flex-1` / `min-w-0`), status `shrink-0` on the right.
+- Icons: same size and muted color treatment on every row (`size={14}`, `text-gray-500` / neutral equivalent).
+
+## Typography
+- One label style for all options: `text-sm` (no mixed weights or sizes for peer items).
+
+## Dividers
+- Dividers only **between groups** (e.g. share actions vs edit/delete), never on random individual rows.
+- Prefer a single `border-t` separator element (or one bordered group start), not scattered `border-t` on some buttons.
+
+## Placement
+- Anchor the panel to the trigger; don’t invent one-off left/right alignment schemes per menu.
+
+## Example
+
+```tsx
+// ❌ BAD — label shoved right
+<button className="… flex items-center justify-between">
+  <Share2 size={14} />
+  <span>Copy link</span>
+</button>
+
+// ✅ GOOD
+<button className="… flex items-center gap-2">
+  <Share2 size={14} className="shrink-0 text-gray-500" />
+  <span>Copy link</span>
+</button>
+```

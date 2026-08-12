@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS user_lists (
   is_liked_list boolean NOT NULL DEFAULT false,
   is_rated_list boolean NOT NULL DEFAULT false,
   is_public boolean NOT NULL DEFAULT true,
+  cover_image_url text,
   created_at timestamptz DEFAULT now()
 );
 
@@ -24,6 +25,9 @@ ALTER TABLE user_lists
 
 ALTER TABLE user_lists
   ADD COLUMN IF NOT EXISTS is_public boolean NOT NULL DEFAULT true;
+
+ALTER TABLE user_lists
+  ADD COLUMN IF NOT EXISTS cover_image_url text;
 
 CREATE UNIQUE INDEX IF NOT EXISTS user_lists_one_liked_per_user
   ON user_lists (user_id)

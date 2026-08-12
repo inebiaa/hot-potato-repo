@@ -563,7 +563,7 @@ export default function EventCard({
         <div className={`p-6 min-w-0 ${imageOpacity !== undefined ? 'bg-white' : ''}`}>
           <div className="mb-2 min-w-0 after:block after:clear-both after:content-['']">
             <div
-              className="float-right ml-1 flex h-[1.375em] shrink-0 items-center gap-0.5 text-lg sm:text-xl [shape-outside:margin-box]"
+              className="float-right -mr-0.5 flex h-[1.375em] shrink-0 items-center gap-0.5 text-lg sm:text-xl [shape-outside:margin-box]"
               data-event-actions
             >
               <button
@@ -752,33 +752,33 @@ export default function EventCard({
                     </button>
                     <button
                       onClick={() => { copyToClipboard(shareLink, 'link'); setShowActionsMenu(false); }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between gap-2 border-t border-gray-100"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
                     >
-                      <Share2 size={14} className="text-gray-500" />
-                      <span>Copy link</span>
-                      {shareCopied === 'link' && <span className="text-green-600 text-xs">Copied!</span>}
+                      <Share2 size={14} className="shrink-0 text-gray-500" />
+                      <span className="min-w-0 flex-1">Copy link</span>
+                      {shareCopied === 'link' && <span className="shrink-0 text-green-600 text-xs">Copied!</span>}
                     </button>
                     <button
                       onClick={() => { copyToClipboard(embedLink, 'embed'); setShowActionsMenu(false); }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
                     >
-                      <Share2 size={14} className="text-gray-500" />
+                      <Share2 size={14} className="shrink-0 text-gray-500" />
                       <span>Copy embed URL</span>
                     </button>
                     <button
                       onClick={() => { copyToClipboard(embedCode, 'embedcode'); setShowActionsMenu(false); }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between border-t border-gray-100"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
                     >
-                      <Share2 size={14} className="text-gray-500" />
+                      <Share2 size={14} className="shrink-0 text-gray-500" />
                       <span>Copy embed code</span>
                     </button>
                     <button
                       onClick={() => { void copyEventEmailCard(); setShowActionsMenu(false); }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between border-t border-gray-100"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
                     >
-                      <Mail size={14} className="text-gray-500" />
-                      <span>Copy for email</span>
-                      {shareCopied === 'email' && <span className="text-green-600 text-xs">Copied!</span>}
+                      <Mail size={14} className="shrink-0 text-gray-500" />
+                      <span className="min-w-0 flex-1">Copy for email</span>
+                      {shareCopied === 'email' && <span className="shrink-0 text-green-600 text-xs">Copied!</span>}
                     </button>
                     {canEdit && (
                       <>

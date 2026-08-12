@@ -60,6 +60,8 @@ export interface UserList {
   is_rated_list?: boolean;
   /** When true, anyone with the link can view this list. */
   is_public?: boolean;
+  /** Optional board cover image URL. */
+  cover_image_url?: string | null;
   created_at: string;
 }
 
