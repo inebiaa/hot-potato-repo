@@ -1,10 +1,9 @@
 import type { Dispatch, FormEvent, KeyboardEvent, RefObject, SetStateAction } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
-import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from '../TagPillSplitLabel';
-import { normalizeTagName, type TagType } from '../../lib/tagIdentity';
+import { Trash2 } from 'lucide-react';
+import TagPillSplitLabel from '../TagPillSplitLabel';
+import type { TagType } from '../../lib/tagIdentity';
 import { Button, Input, Label } from '../ui';
 import {
-  ALIAS_NEUTRAL_PILL_COLORS,
   CONNECT_CREATE_TYPE_PILLS,
   connectSearchTypePrefix,
   creditPillClass,
@@ -15,11 +14,8 @@ import {
 export type CreditRow = {
   id: string;
   identity_id: string;
-  preferred_alias_id: string | null;
-  public_display_alias_id: string | null;
   tag_type: string;
   canonical_name: string;
-  aliases: { id: string; alias: string }[];
 };
 
 export type CreditSearchResult = {
@@ -50,21 +46,11 @@ export type AccountTabProps = {
   creditConnectSuccess: string;
   creditsError: string | null;
   credits: CreditRow[];
-  aliasDeleteModeIdentityId: string | null;
-  setAliasDeleteModeIdentityId: (v: string | null) => void;
-  addingAliasForIdentityId: string | null;
-  setAddingAliasForIdentityId: (v: string | null) => void;
-  newAliasByIdentity: Record<string, string>;
-  setNewAliasByIdentity: Dispatch<SetStateAction<Record<string, string>>>;
   connectSearchInputRef: RefObject<HTMLInputElement | null>;
   handleConnectSearchKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   selectCreditSearchResult: (item: CreditSearchResult) => void | Promise<void>;
   connectOrCreateCredit: (createIfMissing: boolean) => void | Promise<void>;
   removeCredit: (creditId: string) => void | Promise<void>;
-  setPublicDisplayAlias: (identityId: string, aliasId: string | null) => void | Promise<void>;
-  removeAliasForCredit: (credit: CreditRow, aliasId: string) => void | Promise<void>;
-  addAliasForCredit: (credit: CreditRow) => void | Promise<void>;
-  addProfileNameAsAlias: (credit: CreditRow) => void | Promise<void>;
 };
 
 export default function AccountTab(p: AccountTabProps) {
@@ -72,17 +58,15 @@ export default function AccountTab(p: AccountTabProps) {
     editName, setEditName, editUsername, setEditUsername, profileSaveError, profileSaving, saveAccountProfile,
     connectName, setConnectName, connectType, setConnectType, creditSearchResults, creditSearching,
     connectListActiveIdx, setConnectListActiveIdx, showCreateTagForm, setShowCreateTagForm,
-    creditConnectSuccess, creditsError, credits, aliasDeleteModeIdentityId, setAliasDeleteModeIdentityId,
-    addingAliasForIdentityId, setAddingAliasForIdentityId, newAliasByIdentity, setNewAliasByIdentity,
+    creditConnectSuccess, creditsError, credits,
     connectSearchInputRef, handleConnectSearchKeyDown, selectCreditSearchResult, connectOrCreateCredit,
-    removeCredit, setPublicDisplayAlias, removeAliasForCredit, addAliasForCredit, addProfileNameAsAlias,
+    removeCredit,
   } = p;
 
   return (
               <div className="space-y-6">
                 <section>
                   <h3 className="mb-2 text-sm font-semibold text-foreground">Profile</h3>
-                  <p className="mb-3 text-xs text-muted-foreground">Display name and username.</p>
                   <form onSubmit={saveAccountProfile} className="space-y-4">
                     <div>
                       <Label htmlFor="editName">Your Name</Label>
@@ -94,7 +78,6 @@ export default function AccountTab(p: AccountTabProps) {
                         maxLength={80}
                         placeholder="Jane Doe"
                       />
-                      <p className="mt-0.5 text-xs text-muted-foreground">Shown on your profile.</p>
                     </div>
                     <div>
                       <Label htmlFor="editUsername">Username</Label>
@@ -108,7 +91,6 @@ export default function AccountTab(p: AccountTabProps) {
                         pattern="[a-zA-Z0-9_-]+"
                         placeholder="janedoe2024"
                       />
-                      <p className="mt-0.5 text-xs text-muted-foreground">Letters, numbers, underscore, hyphen.</p>
                     </div>
                     {profileSaveError && <p className="text-sm text-destructive">{profileSaveError}</p>}
                     <Button type="submit" disabled={profileSaving}>
@@ -119,7 +101,6 @@ export default function AccountTab(p: AccountTabProps) {
 
                 <section>
                   <h3 className="text-sm font-semibold text-neutral-800 mb-1">Tags linked to your profile</h3>
-                  <p className="text-xs text-neutral-500 mb-3">Link credits from shows. Pick the name shown on cards.</p>
                   <div className="space-y-3">
                     <div className="relative">
                       <input
@@ -191,15 +172,15 @@ export default function AccountTab(p: AccountTabProps) {
                       {showCreateTagForm && (
                         <div className="mt-3 p-3 rounded-lg border border-neutral-200 bg-white space-y-2">
                           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tag type">
-                            {CONNECT_CREATE_TYPE_PILLS.map((p) => (
+                            {CONNECT_CREATE_TYPE_PILLS.map((pill) => (
                               <button
-                                key={p.value}
+                                key={pill.value}
                                 type="button"
                                 data-tag-pill
-                                onClick={() => setConnectType(p.value)}
-                                className={creditPillClass(connectType === p.value)}
+                                onClick={() => setConnectType(pill.value)}
+                                className={creditPillClass(connectType === pill.value)}
                               >
-                                <TagPillSplitLabel text={p.label} segmentColors={creditPillSegmentColors(connectType === p.value)} />
+                                <TagPillSplitLabel text={pill.label} segmentColors={creditPillSegmentColors(connectType === pill.value)} />
                               </button>
                             ))}
                           </div>
@@ -231,161 +212,28 @@ export default function AccountTab(p: AccountTabProps) {
                   {credits.length === 0 && (
                     <div className="mt-4 rounded-lg border border-dashed border-neutral-200 bg-neutral-50/50 p-4 text-sm text-neutral-600">
                       <p className="font-medium text-neutral-800 mb-1">No tags yet</p>
-                      <p className="text-xs text-neutral-500">Search for how you are credited on a show. Add aliases after linking.</p>
                     </div>
                   )}
                   {credits.length > 0 && (
                     <div className="space-y-3 mt-4">
-                      {credits.map((credit) => {
-                        const publicLabel =
-                          credit.aliases.find((a) => a.id === credit.public_display_alias_id)?.alias ?? credit.canonical_name;
-                        const aliasRemovable = (alias: { alias: string }) =>
-                          normalizeTagName(alias.alias) !== normalizeTagName(credit.canonical_name);
-                        const inDeleteMode = aliasDeleteModeIdentityId === credit.identity_id;
-                        return (
-                          <div key={credit.id} className="rounded-xl border border-neutral-100 p-3 bg-neutral-50/70 space-y-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="inline-flex items-center text-xs px-2 py-1 rounded-md bg-gray-300 text-gray-600">
-                                {formatTagTypeLabel(credit.tag_type)}
-                              </span>
-                              <span className="text-sm font-medium text-neutral-900">{publicLabel}</span>
-                              <button
-                                type="button"
-                                onClick={() => { if (window.confirm('Remove this credit from your profile?')) removeCredit(credit.id); }}
-                                className="ml-auto text-[11px] text-neutral-400 hover:text-red-600"
-                                title="Remove credit"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                            <div>
-                              <label className="block text-[11px] font-medium text-neutral-600 mb-1">Name on event cards</label>
-                              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Name on event cards">
-                                <button
-                                  type="button"
-                                  data-tag-pill
-                                  onClick={() => setPublicDisplayAlias(credit.identity_id, null)}
-                                  className={creditPillClass(!credit.public_display_alias_id)}
-                                  title={`Default · ${credit.canonical_name}`}
-                                >
-                                  <TagPillSplitLabel
-                                    text={`Default · ${credit.canonical_name}`}
-                                    segmentColors={creditPillSegmentColors(!credit.public_display_alias_id)}
-                                  />
-                                </button>
-                                {credit.aliases.map((a) => (
-                                  <button
-                                    key={a.id}
-                                    type="button"
-                                    data-tag-pill
-                                    onClick={() => setPublicDisplayAlias(credit.identity_id, a.id)}
-                                    className={creditPillClass(credit.public_display_alias_id === a.id)}
-                                  >
-                                    <TagPillSplitLabel
-                                      text={a.alias}
-                                      segmentColors={creditPillSegmentColors(credit.public_display_alias_id === a.id)}
-                                    />
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                                <span className="text-[11px] font-medium text-neutral-600">Also credited as</span>
-                                {inDeleteMode ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setAliasDeleteModeIdentityId(null)}
-                                    className="text-[11px] text-neutral-600 hover:text-neutral-900"
-                                  >
-                                    Done
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setAliasDeleteModeIdentityId(credit.identity_id)}
-                                    className="text-[11px] text-neutral-500 hover:text-neutral-800"
-                                  >
-                                    Remove aliases
-                                  </button>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap gap-1.5 items-center">
-                                {credit.aliases.map((alias) => {
-                                  const removable = aliasRemovable(alias);
-                                  return (
-                                    <span
-                                      key={alias.id}
-                                      data-tag-pill
-                                      className={`relative ${tagPillSplitSegmentGroupClass} p-0 text-xs`}
-                                    >
-                                      <TagPillSplitLabel text={alias.alias} segmentColors={ALIAS_NEUTRAL_PILL_COLORS} />
-                                      {inDeleteMode && removable && (
-                                        <button
-                                          type="button"
-                                          className="absolute -top-2 -right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white border border-neutral-300 text-neutral-600 shadow-sm hover:bg-neutral-50"
-                                          title="Remove alias"
-                                          onMouseDown={(e) => e.stopPropagation()}
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            if (!window.confirm('Remove this alias?')) return;
-                                            void removeAliasForCredit(credit, alias.id);
-                                          }}
-                                          aria-label={`Remove alias ${alias.alias}`}
-                                        >
-                                          <X size={16} strokeWidth={2} />
-                                        </button>
-                                      )}
-                                    </span>
-                                  );
-                                })}
-                                {addingAliasForIdentityId === credit.identity_id ? (
-                                  <div className="inline-flex flex-wrap items-center gap-1.5">
-                                    <input
-                                      value={newAliasByIdentity[credit.identity_id] || ''}
-                                      onChange={(e) => setNewAliasByIdentity((prev) => ({ ...prev, [credit.identity_id]: e.target.value }))}
-                                      placeholder="New alias"
-                                      className="text-xs px-2 py-1.5 rounded-md border border-neutral-200 bg-white min-w-[140px]"
-                                      autoFocus
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => addAliasForCredit(credit)}
-                                      className="text-xs px-2.5 py-1.5 rounded-md border border-neutral-200 text-neutral-700 hover:bg-neutral-50"
-                                    >
-                                      Add
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setAddingAliasForIdentityId(null)}
-                                      className="text-xs text-neutral-500 hover:text-neutral-800"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setAddingAliasForIdentityId(credit.identity_id)}
-                                    className="inline-flex items-center justify-center text-xs px-2 py-1 rounded-md border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50"
-                                    title="Add alias"
-                                  >
-                                    <Plus size={14} />
-                                  </button>
-                                )}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => addProfileNameAsAlias(credit)}
-                                className="mt-2 text-xs text-neutral-600 hover:text-neutral-900 underline-offset-2 hover:underline"
-                              >
-                                Use profile name as alias
-                              </button>
-                            </div>
+                      {credits.map((credit) => (
+                        <div key={credit.id} className="rounded-xl border border-neutral-100 p-3 bg-neutral-50/70">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center text-xs px-2 py-1 rounded-md bg-gray-300 text-gray-600">
+                              {formatTagTypeLabel(credit.tag_type)}
+                            </span>
+                            <span className="text-sm font-medium text-neutral-900">{credit.canonical_name}</span>
+                            <button
+                              type="button"
+                              onClick={() => { if (window.confirm('Remove this credit from your profile?')) removeCredit(credit.id); }}
+                              className="ml-auto text-[11px] text-neutral-400 hover:text-red-600"
+                              title="Remove credit"
+                            >
+                              <Trash2 size={12} />
+                            </button>
                           </div>
-                        );
-                      })}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </section>

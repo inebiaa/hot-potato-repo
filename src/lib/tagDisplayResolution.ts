@@ -7,13 +7,10 @@ import { isSpecialGuestsSlug } from './specialGuests';
 import { normalizeTagName, tagArrayContainsNormalized, type TagType } from './tagIdentity';
 
 /**
- * Tag model (for contributor-facing behavior):
- * - **Event fields** (producers, designers, etc.) store the exact credits line as entered (trim + dedupe only).
- *   Pills and edit forms use these strings; they are not replaced by a global “canonical” name.
- * - **Tag identities + aliases** link spellings to profiles, stats, and search. They do not override the text on an
- *   event once saved. Optional `public_display_alias` applies in Settings/credit UI, not on event cards.
- * - **Cluster** (`cluster_id`): linked names share a cluster; filters and search use `cluster_id` (no single "main" row).
- * - **Filters** use that cluster id as `identityId` in the map when known; legacy string filters still work via normalized compare.
+ * Tag model:
+ * - Event fields store exact credits as entered (pills / edit forms).
+ * - Each spelling has at most one `tag_identities` row (one main name — no aliases / no links).
+ * - Filters use that identity id when known; otherwise normalized string compare.
  */
 /** Key: `${tagType}\0${normalized raw string from event}` */
 export function tagResolutionKey(tagType: string, rawFromEvent: string): string {
@@ -23,7 +20,7 @@ export function tagResolutionKey(tagType: string, rawFromEvent: string): string 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
- * Human-readable text for the search bar / filter chip. Filter `value` is often a tag `identity` uuid;
+ * Human-readable text for the search bar / filter chip. Filter `value` is often a tag identity uuid;
  * the map (or an explicit label from a pill) supplies the name to show.
  */
 export function displayLabelForTagFilter(
@@ -68,13 +65,13 @@ export function displayLabelForTagFilter(
 }
 
 export interface TagDisplayEntry {
-  /** `tag_identities.cluster_id` for filters; otherwise null */
+  /** `tag_identities.id` for filters; otherwise null */
   identityId: string | null;
   /** On event cards, this is always the string stored on the event (per-show spelling) */
   display: string;
-  /** Identity’s primary name; used for search/credits, not to overwrite event text */
+  /** Identity’s canonical name; used for search/credits, not to overwrite event text */
   canonical: string;
-  /** Strings that match search: canonical, raw values on events for this identity, and display when it differs */
+  /** Strings that match search: canonical + this event raw when different */
   searchable: string[];
 }
 
@@ -84,9 +81,7 @@ interface IdentityRow {
   id: string;
   tag_type: string;
   canonical_name: string;
-  public_display_alias_id: string | null;
   normalized_name: string;
-  cluster_id: string;
 }
 
 function collectTagPairs(events: Event[]): Map<string, { type: string; raw: string }> {
@@ -118,7 +113,7 @@ function collectTagPairs(events: Event[]): Map<string, { type: string; raw: stri
 }
 
 /**
- * Match venue tags robustly using canonical identity values when available.
+ * Match venue tags robustly using identity when available.
  * Falls back to normalized direct compare when resolution data is missing.
  */
 export function eventMatchesVenueTag(
@@ -173,8 +168,8 @@ export function eventArrayMatchesFilter(
 }
 
 /**
- * Batch-load identity + aliases for all tag strings on the given events.
- * Used for display labels, filter canonical keys, and search expansion.
+ * Batch-load identity resolution for all tag strings on the given events.
+ * Used for display labels, filter keys, and search expansion.
  */
 export async function fetchTagResolutionForEvents(events: Event[]): Promise<TagResolutionMap> {
   const pairKeys = collectTagPairs(events);
@@ -189,7 +184,6 @@ export async function fetchTagResolutionForEvents(events: Event[]): Promise<TagR
     byType.set(type, arr);
   }
 
-  /** pairKey -> identity id */
   const pairToIdentity = new Map<string, string>();
   const identityRows = new Map<string, IdentityRow>();
 
@@ -199,7 +193,7 @@ export async function fetchTagResolutionForEvents(events: Event[]): Promise<TagR
 
     const { data: canonRows } = await supabase
       .from('tag_identities')
-      .select('id, tag_type, canonical_name, public_display_alias_id, normalized_name, cluster_id')
+      .select('id, tag_type, canonical_name, normalized_name')
       .eq('tag_type', tagType)
       .in('normalized_name', norms);
 
@@ -216,139 +210,6 @@ export async function fetchTagResolutionForEvents(events: Event[]): Promise<TagR
     }
   }
 
-  const unmatchedKeys = [...pairKeys.keys()].filter((k) => !pairToIdentity.has(k));
-  if (unmatchedKeys.length > 0) {
-    const unmatchedNorms = [
-      ...new Set(unmatchedKeys.map((k) => normalizeTagName(pairKeys.get(k)!.raw))),
-    ].filter(Boolean);
-
-    const { data: aliasHits } = await supabase
-      .from('tag_aliases')
-      .select(
-        `
-        identity_id,
-        normalized_alias,
-        tag_identities ( id, tag_type, canonical_name, public_display_alias_id, normalized_name, cluster_id )
-      `
-      )
-      .in('normalized_alias', unmatchedNorms);
-
-    type Hit = {
-      identity_id: string;
-      normalized_alias: string;
-      tag_identities: IdentityRow | IdentityRow[] | null;
-    };
-
-    for (const k of unmatchedKeys) {
-      const { type, raw } = pairKeys.get(k)!;
-      const norm = normalizeTagName(raw);
-      const candidates: IdentityRow[] = [];
-      for (const hit of (aliasHits || []) as Hit[]) {
-        const ti = hit.tag_identities;
-        const identity = Array.isArray(ti) ? ti[0] : ti;
-        if (!identity || identity.tag_type !== type) continue;
-        if (hit.normalized_alias !== norm) continue;
-        candidates.push(identity);
-      }
-      if (candidates.length === 0) continue;
-      const preferred =
-        candidates.find((id) => id.normalized_name === norm) ??
-        [...candidates].sort((a, b) => a.id.localeCompare(b.id))[0];
-      pairToIdentity.set(k, preferred.id);
-      identityRows.set(preferred.id, preferred);
-    }
-  }
-
-  const pairToCluster = new Map<string, string>();
-  for (const [k, rowId] of pairToIdentity) {
-    const row = identityRows.get(rowId);
-    if (row) pairToCluster.set(k, row.cluster_id);
-  }
-
-  const clusters = new Set(pairToCluster.values());
-  const clusterToRep = new Map<string, IdentityRow>();
-  let allClusterMembers: IdentityRow[] = [];
-  if (clusters.size > 0) {
-    const { data: inClusters } = await supabase
-      .from('tag_identities')
-      .select('id, tag_type, canonical_name, public_display_alias_id, normalized_name, cluster_id')
-      .in('cluster_id', [...clusters]);
-    allClusterMembers = (inClusters || []) as IdentityRow[];
-    for (const row of allClusterMembers) {
-      const c = row.cluster_id;
-      const cur = clusterToRep.get(c);
-      if (!cur || row.id < cur.id) {
-        clusterToRep.set(c, row);
-      }
-      identityRows.set(row.id, row);
-    }
-  }
-
-  const rawsByCluster = new Map<string, Set<string>>();
-  for (const [k, rowId] of pairToIdentity) {
-    const p = pairKeys.get(k);
-    if (!p) continue;
-    const r = identityRows.get(rowId);
-    if (!r) continue;
-    const c = r.cluster_id;
-    let set = rawsByCluster.get(c);
-    if (!set) {
-      set = new Set<string>();
-      rawsByCluster.set(c, set);
-    }
-    set.add(p.raw);
-  }
-
-  const memberIdsForAliases = allClusterMembers.length
-    ? allClusterMembers.map((r) => r.id)
-    : [...new Set(pairToIdentity.values())];
-
-  const aliasesByRow = new Map<string, { id: string; alias: string }[]>();
-  const aliasTextById = new Map<string, string>();
-  if (memberIdsForAliases.length > 0) {
-    const { data: aliasRows } = await supabase
-      .from('tag_aliases')
-      .select('id, identity_id, alias')
-      .in('identity_id', memberIdsForAliases);
-    for (const a of aliasRows || []) {
-      const list = aliasesByRow.get(a.identity_id) || [];
-      list.push({ id: a.id, alias: a.alias });
-      aliasesByRow.set(a.identity_id, list);
-      aliasTextById.set(a.id, a.alias);
-    }
-  }
-
-  const buildEntry = (clusterId: string): TagDisplayEntry => {
-    const row = clusterToRep.get(clusterId);
-    if (!row) {
-      return { identityId: null, display: '', canonical: '', searchable: [] };
-    }
-    const canonical = row.canonical_name;
-    let display = canonical;
-    if (row.public_display_alias_id) {
-      const t = aliasTextById.get(row.public_display_alias_id);
-      if (t) display = t;
-    }
-    const raws = rawsByCluster.get(clusterId);
-    const searchable = new Set<string>([canonical, ...(raws ?? [])]);
-    for (const m of allClusterMembers) {
-      if (m.cluster_id !== clusterId) continue;
-      if (m.canonical_name) searchable.add(m.canonical_name);
-      for (const a of aliasesByRow.get(m.id) || []) {
-        if (a.alias) searchable.add(a.alias);
-      }
-    }
-    if (display && normalizeTagName(display) !== normalizeTagName(canonical)) {
-      searchable.add(display);
-    }
-    return {
-      identityId: clusterId,
-      display,
-      canonical,
-      searchable: [...searchable],
-    };
-  };
-
   for (const [k, { raw }] of pairKeys) {
     const rowId = pairToIdentity.get(k);
     if (!rowId) {
@@ -361,20 +222,13 @@ export async function fetchTagResolutionForEvents(events: Event[]): Promise<TagR
       continue;
     }
     const row = identityRows.get(rowId);
-    const clusterId = row?.cluster_id;
-    if (!clusterId) {
-      result.set(k, {
-        identityId: null,
-        display: raw,
-        canonical: raw,
-        searchable: [raw],
-      });
-      continue;
-    }
-    const base = buildEntry(clusterId);
+    const canonical = row?.canonical_name ?? raw;
+    const searchable = new Set<string>([canonical, raw]);
     result.set(k, {
-      ...base,
+      identityId: rowId,
       display: raw,
+      canonical,
+      searchable: [...searchable],
     });
   }
 

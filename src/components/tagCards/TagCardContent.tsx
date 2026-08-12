@@ -1,7 +1,6 @@
 import { Star } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { shortenEventNameUsingFooterTags } from '../../lib/collectionTagDisplay';
-import { fetchAliasStringsForTag } from '../../lib/tagIdentity';
 import { getPillColors } from './getPillColors';
 import { getTagSectionIcon } from './tagSectionIcon';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from '../TagPillSplitLabel';
@@ -29,19 +28,6 @@ export default function TagCardContent({
   const TAG_LIMIT = 3;
   const [pillsExpanded, setPillsExpanded] = useState(false);
   const [isListExpanded, setIsListExpanded] = useState(false);
-  const [aliasPills, setAliasPills] = useState<string[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setAliasPills([]);
-    (async () => {
-      const list = await fetchAliasStringsForTag(tagType, tagValue);
-      if (!cancelled) setAliasPills(list);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [tagType, tagValue]);
 
   const pillColors = getPillColors(tagType, tagColors);
   const SectionIcon = getTagSectionIcon(tagType, tagColors);
@@ -66,8 +52,6 @@ export default function TagCardContent({
 
   const pillClass = `${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80`;
 
-  const aliasPillClass = `${tagPillSplitSegmentGroupClass} p-0 text-xs`;
-
   const visiblePills =
     !pillsExpanded && sortedEventRatings.length > TAG_LIMIT
       ? sortedEventRatings.slice(0, TAG_LIMIT)
@@ -81,22 +65,6 @@ export default function TagCardContent({
           <p className="text-sm text-gray-500 mt-0.5">{roleLabel}</p>
         </div>
       </div>
-
-      {aliasPills.length > 0 && (
-        <div className="mb-3">
-          <div className="text-xs font-semibold text-gray-700 mb-1">Also credited as</div>
-          <div className="flex flex-wrap gap-1 items-center">
-            {aliasPills.map((alias) => (
-              <span key={alias} className={aliasPillClass}>
-                <TagPillSplitLabel
-                  text={alias}
-                  segmentColors={{ backgroundColor: pillColors.bg, color: pillColors.text }}
-                />
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       {sortedEventRatings.length > 0 && (
         <div className="mb-3">
