@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Trash2, ChevronRight, Copy, RefreshCw, Link2, MoreVertical, Pencil, Lock, Unlock, User } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, Copy, RefreshCw, Link2, MoreVertical, Pencil, Lock, Unlock, User, Pin } from 'lucide-react';
 import { supabase, UserList, UserListEvent, Rating, Event } from '../lib/supabase';
 import EventCard from './EventCard';
 import MasonryLaneFeed, { type MasonryLaneItem } from './MasonryLaneFeed';
@@ -24,6 +24,11 @@ import { fetchEventRatingStats } from '../lib/eventRatingStats';
 import { canonicalListUrl } from '../lib/siteBase';
 import { BackIconButton, Button, Input, Label } from './ui';
 import { useT } from '../contexts/CopyContext';
+import {
+  deleteStoredListCover,
+  uploadListCoverFile,
+} from '../lib/listCoverUpload';
+import { ListCover, pickListCollageUrls } from './ListCoverCollage';
 
 interface ProfilePageProps {
   userId: string;
@@ -71,6 +76,8 @@ interface ReviewRow {
 
 interface ListWithCount extends UserList {
   event_count: number;
+  /** Temporary cover from event photos when no custom cover is set. */
+  cover_collage_urls?: string[];
 }
 
 type BoardRow = {
@@ -123,8 +130,12 @@ export default function ProfilePage({
   const [isEditListOpen, setIsEditListOpen] = useState(false);
   const [editListName, setEditListName] = useState('');
   const [editListDescription, setEditListDescription] = useState('');
+  const [editListCoverUrl, setEditListCoverUrl] = useState('');
+  const [editListCoverBusy, setEditListCoverBusy] = useState(false);
   const [editListError, setEditListError] = useState('');
   const [editListBusy, setEditListBusy] = useState(false);
+  const editListCoverFileRef = useRef<HTMLInputElement | null>(null);
+  const editListCoverOriginalRef = useRef('');
   const boardMenuRef = useRef<HTMLDivElement | null>(null);
 
   const fetchProfile = async () => {
@@ -157,7 +168,7 @@ export default function ProfilePage({
       const cacheMap = cachedEvents?.length ? new Map(cachedEvents.map((e) => [e.id, e])) : null;
       const useCache = cacheMap && eventIds.length > 0 && eventIds.every((id) => cacheMap.has(id));
 
-      const [eventsRes, allRatingsRes, listCountsRes] = await Promise.all([
+      const [eventsRes, allRatingsRes, listMembershipRes] = await Promise.all([
         useCache
           ? Promise.resolve({ data: eventIds.map((id) => cacheMap!.get(id)!).filter(Boolean) })
           : eventIds.length > 0
@@ -167,12 +178,34 @@ export default function ProfilePage({
           ? supabase.from('ratings').select('event_id, rating').in('event_id', eventIds)
           : Promise.resolve({ data: [] }),
         listsData.length > 0
-          ? supabase.from('user_list_events').select('list_id').in('list_id', listsData.map((l) => l.id))
+          ? supabase
+              .from('user_list_events')
+              .select('list_id, event_id, position')
+              .in(
+                'list_id',
+                listsData.map((l) => l.id),
+              )
+              .order('position')
           : Promise.resolve({ data: [] }),
       ]);
 
+      const membershipRows = (listMembershipRes.data || []) as {
+        list_id: string;
+        event_id: string;
+        position: number;
+      }[];
+      const membershipEventIds = [...new Set(membershipRows.map((r) => r.event_id))];
+      const missingMembershipIds = membershipEventIds.filter((id) => !eventIds.includes(id));
+      const membershipEventsRes =
+        missingMembershipIds.length > 0
+          ? await supabase.from('events').select('id, image_url').in('id', missingMembershipIds)
+          : { data: [] as { id: string; image_url: string | null }[] };
+
       const eventsData = (eventsRes.data || []).map((e) => normalizeEventTagArrays(e as Event));
       const eventsMap = new Map(eventsData.map((e) => [e.id, e]));
+      const imageByEventId = new Map<string, string | null | undefined>();
+      for (const e of eventsData) imageByEventId.set(e.id, e.image_url);
+      for (const e of membershipEventsRes.data || []) imageByEventId.set(e.id, e.image_url);
 
       const statsAccumulator = new Map<string, { sum: number; count: number }>();
       (allRatingsRes.data || []).forEach((r) => {
@@ -203,20 +236,34 @@ export default function ProfilePage({
       reviewsUnsorted.sort((a, b) => (b.eventDate || '').localeCompare(a.eventDate || ''));
       setReviews(reviewsUnsorted);
 
+      const ratedCollage = pickListCollageUrls(reviewsUnsorted.map((r) => r.event?.image_url));
+      const eventIdsByList = new Map<string, string[]>();
+      for (const row of membershipRows) {
+        const arr = eventIdsByList.get(row.list_id) || [];
+        arr.push(row.event_id);
+        eventIdsByList.set(row.list_id, arr);
+      }
+
       if (listsRes.error) {
         setListsError(listsRes.error.message || 'Could not load lists');
         setLists([]);
       } else {
         setListsError(null);
         const countByList: Record<string, number> = {};
-        (listCountsRes.data || []).forEach((row) => {
+        membershipRows.forEach((row) => {
           countByList[row.list_id] = (countByList[row.list_id] || 0) + 1;
         });
         setLists(
-          listsData.map((l) => ({
-            ...l,
-            event_count: l.is_rated_list ? ratingsData.length : countByList[l.id] || 0,
-          })),
+          listsData.map((l) => {
+            const collage = l.is_rated_list
+              ? ratedCollage
+              : pickListCollageUrls((eventIdsByList.get(l.id) || []).map((id) => imageByEventId.get(id)));
+            return {
+              ...l,
+              event_count: l.is_rated_list ? ratingsData.length : countByList[l.id] || 0,
+              cover_collage_urls: collage,
+            };
+          }),
         );
       }
     } catch (e) {
@@ -368,39 +415,100 @@ export default function ProfilePage({
     fetchProfile();
   };
 
-  const openEditList = () => {
-    const current =
-      libraryLists.find((l) => l.id === manageListId) || lists.find((l) => l.id === manageListId);
-    if (!current || isSystemLibraryList(current)) return;
+  const openEditList = async () => {
+    if (!isOwnProfile || !manageListId) return;
+    setShowBoardMenu(false);
+    let listId = manageListId;
+    let current =
+      libraryLists.find((l) => l.id === listId) || lists.find((l) => l.id === listId);
+
+    if (listId === VIRTUAL_LIKED_LIST_ID || listId === VIRTUAL_RATINGS_LIST_ID) {
+      const realId = await resolveRealListId(listId);
+      if (!realId) {
+        setEditListError('Could not open list');
+        setIsEditListOpen(true);
+        return;
+      }
+      listId = realId;
+      setManageListId(realId);
+      const refreshed = await supabase.from('user_lists').select('*').eq('id', realId).maybeSingle();
+      if (refreshed.data) {
+        current = { ...(refreshed.data as UserList), event_count: current?.event_count ?? 0 };
+      }
+    }
+
+    if (!current) return;
     setEditListName(current.name || '');
     setEditListDescription(current.description || '');
+    const cover = current.cover_image_url || '';
+    editListCoverOriginalRef.current = cover;
+    setEditListCoverUrl(cover);
     setEditListError('');
-    setShowBoardMenu(false);
     setIsEditListOpen(true);
+  };
+
+  const onEditListCoverFile = async (file: File | null) => {
+    if (!file || !currentUser?.id) return;
+    setEditListCoverBusy(true);
+    setEditListError('');
+    try {
+      const result = await uploadListCoverFile(file, currentUser.id);
+      if ('error' in result) {
+        setEditListError(result.error);
+        return;
+      }
+      if (editListCoverUrl && editListCoverUrl !== editListCoverOriginalRef.current) {
+        void deleteStoredListCover(editListCoverUrl);
+      }
+      setEditListCoverUrl(result.url);
+    } finally {
+      setEditListCoverBusy(false);
+      if (editListCoverFileRef.current) editListCoverFileRef.current.value = '';
+    }
+  };
+
+  const closeEditList = () => {
+    if (editListCoverUrl && editListCoverUrl !== editListCoverOriginalRef.current) {
+      void deleteStoredListCover(editListCoverUrl);
+    }
+    setIsEditListOpen(false);
   };
 
   const saveEditList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manageListId || editListBusy) return;
+    const current =
+      libraryLists.find((l) => l.id === manageListId) || lists.find((l) => l.id === manageListId);
+    const systemList = isSystemLibraryList(current);
     const name = editListName.trim();
-    if (!name) {
+    if (!systemList && !name) {
       setEditListError('Name is required');
       return;
     }
     setEditListBusy(true);
     setEditListError('');
     try {
-      const { error } = await supabase
-        .from('user_lists')
-        .update({
-          name,
-          description: editListDescription.trim() || null,
-        })
-        .eq('id', manageListId);
+      const nextCover = editListCoverUrl.trim() || null;
+      const previousCover = editListCoverOriginalRef.current || null;
+      const payload = systemList
+        ? {
+            description: editListDescription.trim() || null,
+            cover_image_url: nextCover,
+          }
+        : {
+            name,
+            description: editListDescription.trim() || null,
+            cover_image_url: nextCover,
+          };
+      const { error } = await supabase.from('user_lists').update(payload).eq('id', manageListId);
       if (error) {
         setEditListError(error.message || 'Failed to update list');
         return;
       }
+      if (previousCover && previousCover !== nextCover) {
+        void deleteStoredListCover(previousCover);
+      }
+      editListCoverOriginalRef.current = nextCover || '';
       setIsEditListOpen(false);
       await fetchProfile();
     } finally {
@@ -472,8 +580,11 @@ export default function ProfilePage({
 
   /** Always surface Liked + Reviews boards on own library; inject if DB rows missing. */
   const libraryLists = useMemo((): ListWithCount[] => {
+    const ratedCollage = pickListCollageUrls(reviews.map((r) => r.event?.image_url));
     const items = lists.map((l) =>
-      l.is_rated_list ? { ...l, event_count: reviews.length } : l,
+      l.is_rated_list
+        ? { ...l, event_count: reviews.length, cover_collage_urls: ratedCollage }
+        : l,
     );
     const hasRated = items.some((l) => l.is_rated_list);
     const hasLiked = items.some((l) => l.is_liked_list);
@@ -482,39 +593,41 @@ export default function ProfilePage({
       items.push({
         id: VIRTUAL_LIKED_LIST_ID,
         user_id: userId,
-        name: 'Liked Events',
+        name: 'My Liked Events',
         description: null,
         sort_order: -2,
         is_liked_list: true,
         is_rated_list: false,
-        is_public: true,
+        is_public: false,
+        cover_image_url: null,
+        cover_collage_urls: [],
         created_at: '',
         event_count: 0,
       });
     }
-    if (!hasRated) {
+    if (isOwnProfile && !hasRated) {
       items.push({
         id: VIRTUAL_RATINGS_LIST_ID,
         user_id: userId,
-        name: 'Reviews',
+        name: 'My Reviews',
         description: null,
         sort_order: -1,
         is_liked_list: false,
         is_rated_list: true,
-        is_public: true,
+        is_public: false,
+        cover_image_url: null,
+        cover_collage_urls: ratedCollage,
         created_at: '',
         event_count: reviews.length,
       });
     }
     return sortListsLibraryFirst(items);
-  }, [lists, reviews.length, userId, isOwnProfile]);
+  }, [lists, reviews, userId, isOwnProfile]);
 
-  /** Public visitors see ratings and public custom lists only. */
+  /** Public visitors never see Liked; other lists only when marked public. */
   const visibleLibraryLists = useMemo((): ListWithCount[] => {
     if (isOwnProfile) return libraryLists;
-    return libraryLists.filter(
-      (l) => !l.is_liked_list && (l.is_rated_list || l.is_public !== false),
-    );
+    return libraryLists.filter((l) => !l.is_liked_list && l.is_public === true);
   }, [libraryLists, isOwnProfile]);
 
   const resolveRealListId = async (listId: string): Promise<string | null> => {
@@ -550,6 +663,10 @@ export default function ProfilePage({
 
   const toggleBoardPublic = async () => {
     if (!manageListId || !isOwnProfile || shareBusy) return;
+    const target =
+      libraryLists.find((l) => l.id === manageListId) ||
+      lists.find((l) => l.id === manageListId);
+    if (target?.is_liked_list || manageListId === VIRTUAL_LIKED_LIST_ID) return;
     setShareBusy(true);
     try {
       const realId = await resolveRealListId(manageListId);
@@ -572,7 +689,11 @@ export default function ProfilePage({
 
   const listDisplayName = (list: ListWithCount | undefined) => {
     if (!list) return '';
-    if (list.is_rated_list) return t('event.ratedListName');
+    if (list.is_rated_list) {
+      if (isOwnProfile) return t('event.ratedListName');
+      const name = username.trim() || t('nav.profile');
+      return t('event.ratedListNameForUser').replace('{name}', name);
+    }
     if (list.is_liked_list) return t('event.likedListName');
     return list.name;
   };
@@ -627,6 +748,10 @@ export default function ProfilePage({
       }),
     );
 
+    const liveCollage = pickListCollageUrls(listEvents.map((r) => r.event?.image_url));
+    const boardCollageUrls =
+      liveCollage.length > 0 ? liveCollage : currentList?.cover_collage_urls || [];
+
     return (
       <div className="min-h-screen bg-neutral-50/80">
         <div className="max-w-[2400px] mx-auto px-4 pb-16 pt-6">
@@ -639,6 +764,11 @@ export default function ProfilePage({
             }}
             label={t('nav.backToLibrary')}
             className="mb-6"
+          />
+          <ListCover
+            coverUrl={currentList?.cover_image_url}
+            collageUrls={boardCollageUrls}
+            className="mb-6 h-40 w-full rounded-xl sm:h-52"
           />
           <div className="flex items-start justify-between gap-4 mb-6">
             <div className="min-w-0">
@@ -669,16 +799,16 @@ export default function ProfilePage({
                       aria-hidden="true"
                     />
                     <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50">
-                      {canDeleteList && (
-                        <button
-                          type="button"
-                          onClick={openEditList}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2"
-                        >
-                          <Pencil size={14} className="text-neutral-500" />
-                          <span>{t('event.editList')}</span>
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void openEditList();
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2"
+                      >
+                        <Pencil size={14} className="text-neutral-500" />
+                        <span>{t('event.editList')}</span>
+                      </button>
                       {canAddShows && (
                         <button
                           type="button"
@@ -692,6 +822,7 @@ export default function ProfilePage({
                           <span>{t('event.addShow')}</span>
                         </button>
                       )}
+                      {!isLikedList && (
                       <button
                         type="button"
                         disabled={shareBusy}
@@ -710,6 +841,8 @@ export default function ProfilePage({
                           <span className="text-xs text-neutral-500">{t('event.listLinkCopied')}</span>
                         ) : null}
                       </button>
+                      )}
+                      {!isLikedList && (
                       <button
                         type="button"
                         disabled={shareBusy}
@@ -729,6 +862,7 @@ export default function ProfilePage({
                             : t('event.makeListPublic')}
                         </span>
                       </button>
+                      )}
                       {canDeleteList && (
                         <button
                           type="button"
@@ -811,7 +945,7 @@ export default function ProfilePage({
         {isEditListOpen && (
           <div
             className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-            onClick={(e) => e.target === e.currentTarget && setIsEditListOpen(false)}
+            onClick={(e) => e.target === e.currentTarget && closeEditList()}
           >
             <div
               className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl"
@@ -819,16 +953,23 @@ export default function ProfilePage({
             >
               <h3 className="mb-4 text-lg font-semibold text-foreground">{t('event.editList')}</h3>
               <form onSubmit={saveEditList} className="space-y-4">
-                <div>
-                  <Label htmlFor="edit-list-name">Name</Label>
-                  <Input
-                    id="edit-list-name"
-                    type="text"
-                    value={editListName}
-                    onChange={(e) => setEditListName(e.target.value)}
-                    autoFocus
-                  />
-                </div>
+                {!(
+                  isSystemLibraryList(
+                    libraryLists.find((l) => l.id === manageListId) ||
+                      lists.find((l) => l.id === manageListId),
+                  )
+                ) && (
+                  <div>
+                    <Label htmlFor="edit-list-name">Name</Label>
+                    <Input
+                      id="edit-list-name"
+                      type="text"
+                      value={editListName}
+                      onChange={(e) => setEditListName(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="edit-list-description">Description</Label>
                   <Input
@@ -838,12 +979,59 @@ export default function ProfilePage({
                     onChange={(e) => setEditListDescription(e.target.value)}
                   />
                 </div>
+                <div className="space-y-3">
+                  <Label htmlFor="edit-list-cover">{t('form.listCover')}</Label>
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted">
+                      {editListCoverUrl.trim() ? (
+                        <img
+                          src={editListCoverUrl.trim()}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : null}
+                    </div>
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                      <Input
+                        ref={editListCoverFileRef}
+                        id="edit-list-cover"
+                        type="file"
+                        accept="image/*"
+                        disabled={editListCoverBusy || editListBusy || !currentUser}
+                        className="max-w-full"
+                        onChange={(e) => void onEditListCoverFile(e.target.files?.[0] ?? null)}
+                      />
+                      {editListCoverUrl.trim() ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={editListCoverBusy || editListBusy}
+                          onClick={() => {
+                            if (
+                              editListCoverUrl &&
+                              editListCoverUrl !== editListCoverOriginalRef.current
+                            ) {
+                              void deleteStoredListCover(editListCoverUrl);
+                            }
+                            setEditListCoverUrl('');
+                          }}
+                        >
+                          {t('form.listCoverRemove')}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                  {editListCoverBusy ? (
+                    <p className="text-xs text-muted-foreground">{t('form.imageUploading')}</p>
+                  ) : null}
+                </div>
                 {editListError && <p className="text-sm text-destructive">{editListError}</p>}
                 <div className="flex gap-2">
-                  <Button type="submit" disabled={editListBusy}>
+                  <Button type="submit" disabled={editListBusy || editListCoverBusy}>
                     Save
                   </Button>
-                  <Button type="button" variant="secondary" onClick={() => setIsEditListOpen(false)}>
+                  <Button type="button" variant="secondary" onClick={closeEditList}>
                     Cancel
                   </Button>
                 </div>
@@ -938,21 +1126,41 @@ export default function ProfilePage({
             </div>
           ) : (
             <div className="flex flex-wrap gap-3">
-              {visibleLibraryLists.map((list) => (
+              {visibleLibraryLists.map((list) => {
+                const isPinned = !!list.is_liked_list || !!list.is_rated_list;
+                return (
                 <button
                   key={list.id}
                   onClick={() => openManageList(list.id)}
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/90 hover:bg-white transition-all hover:shadow-md hover:shadow-neutral-200/30 text-left min-w-[200px]"
+                  className="flex w-[200px] flex-col overflow-hidden rounded-xl bg-white/90 text-left transition-all hover:bg-white hover:shadow-md hover:shadow-neutral-200/30"
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-neutral-900 truncate">{listDisplayName(list)}</p>
-                    <p className="text-xs text-neutral-500">
-                      {list.event_count} show{list.event_count !== 1 ? 's' : ''}
-                    </p>
+                  <ListCover
+                    coverUrl={list.cover_image_url}
+                    collageUrls={list.cover_collage_urls}
+                    className="h-[200px] w-full bg-neutral-100"
+                  />
+                  <div className="flex min-w-0 items-center gap-2 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="flex min-w-0 items-center gap-1.5 font-medium text-neutral-900">
+                        <span className="truncate">{listDisplayName(list)}</span>
+                        {isPinned && (
+                          <Pin
+                            size={12}
+                            strokeWidth={2}
+                            className="relative top-0.5 shrink-0 rotate-45 text-neutral-400"
+                            aria-hidden
+                          />
+                        )}
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        {list.event_count} show{list.event_count !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <ChevronRight size={16} className="shrink-0 text-neutral-300" />
                   </div>
-                  <ChevronRight size={16} className="text-neutral-300 shrink-0" />
                 </button>
-              ))}
+                );
+              })}
               {isOwnProfile && (
                 <button
                   onClick={() => {
@@ -962,7 +1170,7 @@ export default function ProfilePage({
                     setNewListDescription('');
                     setNewListPrivate(false);
                   }}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-neutral-500 hover:text-neutral-700 hover:bg-white/60 transition-colors border border-neutral-200/60 min-w-[200px]"
+                  className="flex h-[calc(200px+3.75rem)] w-[200px] flex-col items-center justify-center gap-2 rounded-xl border border-neutral-200/60 text-neutral-500 transition-colors hover:bg-white/60 hover:text-neutral-700"
                 >
                   <Plus size={18} />
                   New list

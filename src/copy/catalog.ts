@@ -30,6 +30,7 @@ export type CopyKey =
   | 'event.collection'
   | 'event.likedListName'
   | 'event.ratedListName'
+  | 'event.ratedListNameForUser'
   | 'event.saveToLiked'
   | 'event.removeFromLiked'
   | 'event.addToList'
@@ -78,6 +79,8 @@ export type CopyKey =
   | 'form.showPhoto'
   | 'form.profilePicture'
   | 'form.profilePictureRemove'
+  | 'form.listCover'
+  | 'form.listCoverRemove'
   | 'form.imageUrl'
   | 'form.imageUrl.placeholder'
   | 'form.imageUploading'
@@ -184,13 +187,18 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     group: 'event',
   },
   'event.likedListName': {
-    default: 'Liked Events',
+    default: 'My Liked Events',
     label: 'Liked list name',
     group: 'event',
   },
   'event.ratedListName': {
-    default: 'Reviews',
+    default: 'My Reviews',
     label: 'Ratings list name',
+    group: 'event',
+  },
+  'event.ratedListNameForUser': {
+    default: "{name}'s Reviews",
+    label: 'Public ratings list name',
     group: 'event',
   },
   'profile.yourLibrary': {
@@ -390,6 +398,8 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
   'form.showPhoto': { default: 'Show photo', label: 'Form: Show photo', group: 'form' },
   'form.profilePicture': { default: 'Profile picture', label: 'Form: Profile picture', group: 'form' },
   'form.profilePictureRemove': { default: 'Remove', label: 'Form: Remove profile picture', group: 'form' },
+  'form.listCover': { default: 'Cover image', label: 'Form: List cover image', group: 'form' },
+  'form.listCoverRemove': { default: 'Remove', label: 'Form: Remove list cover', group: 'form' },
   'form.imageUrl': { default: 'Or image URL', label: 'Form: Image URL', group: 'form' },
   'form.imageUrl.placeholder': {
     default: 'https://…',
