@@ -13,8 +13,6 @@ export function getTagSectionIcon(tagType: string, tagColors?: TagColorsForPills
       return getIcon(c?.designer_icon, 'designer_icon');
     case 'artist':
       return getIcon(c?.designer_icon, 'designer_icon');
-    case 'model':
-      return getIcon(c?.model_icon, 'model_icon');
     case 'hair_makeup':
       return getIcon(c?.hair_makeup_icon, 'hair_makeup_icon');
     case 'city':

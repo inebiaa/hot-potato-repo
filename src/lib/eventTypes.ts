@@ -19,7 +19,6 @@ export interface Event {
   featured_designers: string[] | null;
   /** Music-show starring artists (separate from fashion designers). */
   featured_artists?: string[] | null;
-  models: string[] | null;
   hair_makeup: string[] | null;
   header_tags?: string[] | null;
   footer_tags: string[] | null;

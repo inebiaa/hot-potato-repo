@@ -107,7 +107,6 @@ export default function TagRatingsModal({
     producers?: string[] | null;
     featured_designers?: string[] | null;
     featured_artists?: string[] | null;
-    models?: string[] | null;
     hair_makeup?: string[] | null;
     city?: string;
     location?: string | null;
@@ -126,8 +125,6 @@ export default function TagRatingsModal({
           eventArrayMatchesFilter(tagResolutionMap, 'artist', e.featured_artists, tagValue) ||
           eventArrayMatchesFilter(tagResolutionMap, 'artist', getSpecialGuests(e.custom_tags), tagValue)
         );
-      case 'model':
-        return eventArrayMatchesFilter(tagResolutionMap, 'model', e.models, tagValue);
       case 'hair_makeup':
         return eventArrayMatchesFilter(tagResolutionMap, 'hair_makeup', e.hair_makeup, tagValue);
       case 'city':
@@ -170,7 +167,7 @@ export default function TagRatingsModal({
       } else {
         const { data: allEvents, error: eventsError } = await supabase
           .from('events')
-          .select('id, name, date, producers, featured_designers, featured_artists, models, hair_makeup, city, location, header_tags, footer_tags, custom_tags, custom_tag_meta')
+          .select('id, name, date, producers, featured_designers, featured_artists, hair_makeup, city, location, header_tags, footer_tags, custom_tags, custom_tag_meta')
           .order('date', { ascending: false });
 
         if (eventsError) throw eventsError;

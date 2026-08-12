@@ -28,19 +28,22 @@ export type TagPillSegmentColors = {
 const FONT_PROBE_CLASS =
   `sr-only ${TAG_PILL_SIZE_CLASS} whitespace-nowrap font-normal tabular-nums`;
 
-/** Nearest wrapping flex row width, or a sensible fallback (px). */
+/** Prefer the card content column or widest wrapping flex row (px). */
 function findTagRowBudgetWidth(wrapEl: HTMLElement): number {
+  let best = 0;
   let p: HTMLElement | null = wrapEl.parentElement;
-  for (let i = 0; i < 10 && p; i++) {
+  for (let i = 0; i < 12 && p; i++) {
+    const w = p.getBoundingClientRect().width;
     const style = getComputedStyle(p);
     const isFlexWrap =
       (style.display === 'flex' || style.display === 'inline-flex') &&
       (style.flexWrap === 'wrap' || style.flexWrap === 'wrap-reverse');
-    if (isFlexWrap) {
-      return Math.max(1, p.getBoundingClientRect().width);
-    }
+    if (isFlexWrap) best = Math.max(best, w);
+    // Event card body — avoid splitting short names using a narrow pill self-width.
+    if (p.classList.contains('p-6')) best = Math.max(best, w);
     p = p.parentElement;
   }
+  if (best >= 1) return best;
   const fb = wrapEl.parentElement?.getBoundingClientRect().width ?? wrapEl.getBoundingClientRect().width;
   return Math.max(1, fb);
 }
@@ -129,18 +132,15 @@ export default function TagPillSplitLabel({
     compute();
     let observed: Element | null = layoutWidthRef?.current ?? null;
     if (!observed) {
-      const row = wrap.parentElement;
+      let outermostWrap: Element | null = null;
       for (let p: HTMLElement | null = wrap.parentElement, i = 0; p && i < 10; p = p.parentElement, i++) {
         const style = getComputedStyle(p);
         const isFlexWrap =
           (style.display === 'flex' || style.display === 'inline-flex') &&
           (style.flexWrap === 'wrap' || style.flexWrap === 'wrap-reverse');
-        if (isFlexWrap) {
-          observed = p;
-          break;
-        }
+        if (isFlexWrap) outermostWrap = p;
       }
-      if (!observed && row) observed = row;
+      observed = outermostWrap ?? wrap.parentElement;
     }
 
     const ro = new ResizeObserver(() => {

@@ -147,6 +147,7 @@ function injectEventSeoShell(
 function staticSitePlugin(): Plugin {
   return {
     name: 'secret-blogger-static-site',
+    apply: 'build',
     async closeBundle() {
       const env = loadEnv('production', process.cwd(), '')
       const url = env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL

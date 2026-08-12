@@ -20,6 +20,9 @@ import TagRatingsModal from './components/TagRatingsModal';
 import StatisticsPage from './components/StatisticsPage';
 import ProfilePage from './components/ProfilePage';
 import SharedLibraryListPage from './components/SharedLibraryListPage';
+import { BackIconButton } from './components/ui';
+import { profilePagePath } from './lib/siteBase';
+import { isProfileHandlePathSegment, resolveProfileByHandle } from './lib/userProfile';
 import type { AppSettings } from './types/appSettings';
 import { TagDisplayProvider } from './contexts/TagDisplayContext';
 import { CopyProvider } from './contexts/CopyContext';
@@ -111,6 +114,9 @@ function App() {
   const [searchDragOver, setSearchDragOver] = useState(false);
   const [tagResolutionMap, setTagResolutionMap] = useState<TagResolutionMap | null>(null);
   const [profileReviewCounts, setProfileReviewCounts] = useState<{ visible: number; total: number } | null>(null);
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  const [profileResolving, setProfileResolving] = useState(false);
+  const [profileNotFound, setProfileNotFound] = useState(false);
 
   const modalRoute = useMemo(() => parseAppModal(searchParams), [searchParams]);
 
@@ -590,7 +596,6 @@ function App() {
       (e.featured_designers || []).forEach((v) => expandIdentity('designer', v));
       (e.featured_artists || []).forEach((v) => expandIdentity('artist', v));
       getSpecialGuests(e.custom_tags).forEach((v) => expandIdentity('artist', v));
-      (e.models || []).forEach((v) => expandIdentity('model', v));
       (e.hair_makeup || []).forEach((v) => expandIdentity('hair_makeup', v));
       effectiveHeaderTags(e).forEach((v) => expandIdentity('header_tags', v));
       (e.footer_tags || []).forEach((v) => expandIdentity('footer_tags', v));
@@ -727,6 +732,9 @@ function App() {
   const eventIdFromPath = params.eventId ?? null;
   const eventIdFromUrl = eventIdFromPath ?? eventIdFromQuery;
   const showProfile = searchParams.get('profile') === '1';
+  const profileHandle =
+    params.handle && isProfileHandlePathSegment(params.handle) ? params.handle : null;
+  const showProfileView = showProfile || !!profileHandle;
   const sharedListId = searchParams.get('list');
   const showSharedList = !!sharedListId;
   const showStats = searchParams.get('stats') === '1';
@@ -782,6 +790,47 @@ function App() {
     void fetchSettings();
   };
 
+  // Resolve /handle to a user id (readable without sign-in)
+  useEffect(() => {
+    if (!showProfileView) {
+      setProfileUserId(null);
+      setProfileResolving(false);
+      setProfileNotFound(false);
+      return;
+    }
+
+    if (profileHandle) {
+      let cancelled = false;
+      setProfileResolving(true);
+      setProfileNotFound(false);
+      void resolveProfileByHandle(profileHandle).then((row) => {
+        if (cancelled) return;
+        setProfileResolving(false);
+        if (!row) {
+          setProfileNotFound(true);
+          setProfileUserId(null);
+          return;
+        }
+        setProfileUserId(row.user_id);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (authLoading) {
+      setProfileResolving(true);
+      return;
+    }
+    setProfileResolving(false);
+    if (user) {
+      setProfileUserId(user.id);
+      setProfileNotFound(false);
+    } else {
+      setProfileUserId(null);
+    }
+  }, [showProfileView, profileHandle, user?.id, authLoading]);
+
   // Legacy ?modal=settings → ?settings=1 page
   useEffect(() => {
     if (searchParams.get('modal') !== 'settings') return;
@@ -827,7 +876,7 @@ function App() {
   const anyPopupOpen = !!(
     overlayEventId ||
     showStats ||
-    showProfile ||
+    showProfileView ||
     showSettings ||
     isTagRatingsModalOpen ||
     isAddEventModalOpen ||
@@ -879,7 +928,6 @@ function App() {
             event.featured_artists?.some((a) => tagLineMatch('artist', a)) ||
             getSpecialGuests(event.custom_tags).some((a) => tagLineMatch('artist', a)) ||
             false;
-          const modelsMatch = event.models?.some((m) => tagLineMatch('model', m)) || false;
           const producersMatch = event.producers?.some((p) => tagLineMatch('producer', p)) || false;
           const headerTagsMatch = effectiveHeaderTags(event).some((t) => tagLineMatch('header_tags', t)) || false;
           const footerTagsMatch = event.footer_tags?.some((t) => tagLineMatch('footer_tags', t)) || false;
@@ -902,7 +950,6 @@ function App() {
             venueMatch ||
             designersMatch ||
             artistsMatch ||
-            modelsMatch ||
             producersMatch ||
             headerTagsMatch ||
             footerTagsMatch ||
@@ -942,8 +989,6 @@ function App() {
               eventArrayMatchesFilter(tagResolutionMap, 'artist', event.featured_artists, tag.value) ||
               eventArrayMatchesFilter(tagResolutionMap, 'artist', getSpecialGuests(event.custom_tags), tag.value)
             );
-          case 'model':
-            return eventArrayMatchesFilter(tagResolutionMap, 'model', event.models, tag.value);
           case 'hair_makeup':
             return eventArrayMatchesFilter(tagResolutionMap, 'hair_makeup', event.hair_makeup, tag.value);
           case 'header_tags':
@@ -1067,11 +1112,16 @@ function App() {
     setOverlayEventId(eventId);
     setOverlaySource(source ?? null);
     // Stay on profile when opening a review from My reviews (don’t navigate to /event/:id).
-    if (showProfile) {
+    if (showProfileView) {
       const next = new URLSearchParams(searchParams);
-      next.set('profile', '1');
+      next.delete('profile');
       next.set('event', eventId);
-      navigate({ pathname: '/', search: next.toString() });
+      if (profileHandle) {
+        navigate({ pathname: profilePagePath(profileHandle), search: next.toString() });
+      } else {
+        next.set('profile', '1');
+        navigate({ pathname: '/', search: next.toString() });
+      }
     } else {
       navigate(`/event/${eventId}`);
     }
@@ -1081,10 +1131,16 @@ function App() {
     setOverlayEventId(null);
     setOverlaySource(null);
     setTagModalRefreshTrigger((t) => t + 1);
-    if (searchParams.get('profile') === '1') {
+    if (showProfileView) {
       const next = new URLSearchParams(searchParams);
       next.delete('event');
-      navigate({ pathname: '/', search: next.toString() });
+      if (profileHandle) {
+        const qs = next.toString();
+        navigate(qs ? { pathname: profilePagePath(profileHandle), search: qs } : profilePagePath(profileHandle));
+      } else {
+        next.set('profile', '1');
+        navigate({ pathname: '/', search: next.toString() });
+      }
     } else {
       navigate('/');
     }
@@ -1096,8 +1152,22 @@ function App() {
   };
 
   const openProfile = () => {
-    navigate({ pathname: '/', search: '?profile=1' });
-    window.scrollTo(0, 0);
+    void (async () => {
+      if (user) {
+        const { data } = await supabase
+          .from('user_profiles')
+          .select('user_id_public')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (data?.user_id_public) {
+          navigate(profilePagePath(data.user_id_public));
+          window.scrollTo(0, 0);
+          return;
+        }
+      }
+      navigate({ pathname: '/', search: '?profile=1' });
+      window.scrollTo(0, 0);
+    })();
   };
 
   // Embed mode: show only the single event card, minimal layout
@@ -1189,7 +1259,10 @@ function App() {
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50 p-4">
           <div className="text-center">
             <p className="text-gray-700 mb-4">Sign in to open settings.</p>
-            <a href={pathname} className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-neutral-800">{copyT('modals.backToShows', overridesFromSettings(appSettings))}</a>
+            <BackIconButton
+              href={pathname}
+              label={copyT('modals.backToShows', overridesFromSettings(appSettings))}
+            />
           </div>
         </div>
       );
@@ -1243,13 +1316,12 @@ function App() {
           className={`flex-1 min-h-0 overflow-y-auto ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
         >
           <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
-            <button
+            <BackIconButton
               type="button"
               onClick={goBackFromSettings}
-              className="mb-6 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              ← {copyT('modals.backToShows', overridesFromSettings(appSettings))}
-            </button>
+              label={copyT('modals.backToShows', overridesFromSettings(appSettings))}
+              className="mb-6"
+            />
             <h1 className="mb-6 text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
             <SettingsPage
               onSettingsUpdated={() => {
@@ -1323,12 +1395,11 @@ function App() {
           className={`flex-1 min-h-0 overflow-y-auto ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
         >
           <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
-            <button
+            <BackIconButton
               onClick={goBackFromStats}
-              className="text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
-            >
-              ← {copyT('modals.backToShows', overridesFromSettings(appSettings))}
-            </button>
+              label={copyT('modals.backToShows', overridesFromSettings(appSettings))}
+              className="mb-6"
+            />
             <StatisticsPage
               isOpen={true}
               onClose={goBackFromStats}
@@ -1427,12 +1498,11 @@ function App() {
           className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
         >
           <div className="max-w-[2400px] mx-auto min-w-0 px-2 py-6 sm:px-6 sm:py-8 lg:px-8 sm:my-8">
-            <button
+            <BackIconButton
               onClick={goBack}
-              className="text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
-            >
-              ← {copyT('modals.backToShows', overridesFromSettings(appSettings))}
-            </button>
+              label={copyT('modals.backToShows', overridesFromSettings(appSettings))}
+              className="mb-6"
+            />
             <SharedLibraryListPage
               listId={sharedListId}
               onTagClick={handleTagClick}
@@ -1448,21 +1518,45 @@ function App() {
     );
   }
 
-  if (showProfile) {
-    if (authLoading) {
+  if (showProfileView) {
+    if (profileResolving || (showProfile && authLoading && !profileHandle)) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
         </div>
       );
     }
-    if (!user) {
+    if (profileNotFound) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50 p-4">
-          <div className="text-center">
-            <p className="text-gray-700 mb-4">Sign in to view your profile.</p>
-            <a href={pathname} className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-neutral-800">{copyT('modals.backToShows', overridesFromSettings(appSettings))}</a>
+        <CopyProvider settings={appSettings ?? undefined}>
+          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50 p-4">
+            <div className="text-center">
+              <p className="text-gray-700 mb-4">{copyT('profile.notFound', overridesFromSettings(appSettings))}</p>
+              <BackIconButton href="/" label={copyT('modals.backToShows', overridesFromSettings(appSettings))} />
+            </div>
           </div>
+        </CopyProvider>
+      );
+    }
+    if (showProfile && !user && !profileHandle) {
+      return (
+        <CopyProvider settings={appSettings ?? undefined}>
+          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50 p-4">
+            <div className="text-center">
+              <p className="text-gray-700 mb-4">{copyT('profile.signInToView', overridesFromSettings(appSettings))}</p>
+              <BackIconButton
+                href={pathname}
+                label={copyT('modals.backToShows', overridesFromSettings(appSettings))}
+              />
+            </div>
+          </div>
+        </CopyProvider>
+      );
+    }
+    if (!profileUserId) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
         </div>
       );
     }
@@ -1517,14 +1611,13 @@ function App() {
           className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
         >
           <div className="max-w-[2400px] mx-auto min-w-0 px-2 py-6 sm:px-6 sm:py-8 lg:px-8 sm:my-8">
-          <button
+          <BackIconButton
             onClick={goBack}
-            className="text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
-          >
-            ← {copyT('modals.backToShows', overridesFromSettings(appSettings))}
-          </button>
+            label={copyT('modals.backToShows', overridesFromSettings(appSettings))}
+            className="mb-6"
+          />
           <ProfilePage
-            userId={user.id}
+            userId={profileUserId}
             pathname={pathname}
             onClose={goBack}
             onTagClick={handleTagClick}

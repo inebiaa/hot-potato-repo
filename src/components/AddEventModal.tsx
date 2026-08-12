@@ -45,7 +45,6 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
   const [designers, setDesigners] = useState<string[]>([]);
   const [artists, setArtists] = useState<string[]>([]);
   const [specialGuests, setSpecialGuests] = useState<string[]>([]);
-  const [models, setModels] = useState<string[]>([]);
   const [hairMakeup, setHairMakeup] = useState<string[]>([]);
   const [headerTags, setHeaderTags] = useState<string[]>([]);
   const [footerTags, setFooterTags] = useState<string[]>([]);
@@ -106,7 +105,6 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       const resolvedProducers = cleanP(producers);
       const resolvedDesigners = showType === 'fashion' ? cleanP(designers) : [];
       const resolvedArtists = showType === 'music' ? cleanP(artists) : [];
-      const resolvedModels = showType === 'fashion' ? cleanP(models) : [];
       const resolvedHairMakeup = showType === 'fashion' ? cleanP(hairMakeup) : [];
       const resolvedHeaderTags = cleanP(headerTags);
       const resolvedFooterTags = cleanP(footerTags);
@@ -148,7 +146,6 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
         producers: resolvedProducers.length ? resolvedProducers : null,
         featured_designers: resolvedDesigners.length ? resolvedDesigners : null,
         featured_artists: resolvedArtists.length ? resolvedArtists : null,
-        models: resolvedModels.length ? resolvedModels : null,
         hair_makeup: resolvedHairMakeup.length ? resolvedHairMakeup : null,
         header_tags: resolvedHeaderTags.length ? resolvedHeaderTags : null,
         footer_tags: resolvedFooterTags.length ? resolvedFooterTags : null,
@@ -165,7 +162,6 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
           producers: resolvedProducers,
           featured_designers: resolvedDesigners,
           featured_artists: resolvedArtists,
-          models: resolvedModels,
           hair_makeup: resolvedHairMakeup,
           header_tags: resolvedHeaderTags,
           footer_tags: resolvedFooterTags,
@@ -188,7 +184,6 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
       setDesigners([]);
       setArtists([]);
       setSpecialGuests([]);
-      setModels([]);
       setHairMakeup([]);
       setHeaderTags([]);
       setFooterTags([]);
@@ -332,27 +327,15 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
           />
 
           {showType === 'fashion' && (
-            <>
-              <TagInput
-                id="models"
-                label={t('form.featuredModels')}
-                value={models}
-                onChange={setModels}
-                tagColumn="models"
-                placeholder={t('form.featuredModels.placeholder')}
-                expandable
-              />
-
-              <TagInput
-                id="hairMakeup"
-                label={t('form.hairMakeup')}
-                value={hairMakeup}
-                onChange={setHairMakeup}
-                tagColumn="hair_makeup"
-                placeholder={t('form.hairMakeup.placeholder')}
-                expandable
-              />
-            </>
+            <TagInput
+              id="hairMakeup"
+              label={t('form.hairMakeup')}
+              value={hairMakeup}
+              onChange={setHairMakeup}
+              tagColumn="hair_makeup"
+              placeholder={t('form.hairMakeup.placeholder')}
+              expandable
+            />
           )}
 
           <TagInput

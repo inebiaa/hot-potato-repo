@@ -25,7 +25,6 @@ export type CopyKey =
   | 'event.specialGuests'
   | 'event.specialGuest'
   | 'event.producedBy'
-  | 'event.featuredModels'
   | 'event.hairMakeup'
   | 'event.genre'
   | 'event.collection'
@@ -47,6 +46,9 @@ export type CopyKey =
   | 'event.deleteList'
   | 'event.addShow'
   | 'profile.yourLibrary'
+  | 'profile.library'
+  | 'profile.notFound'
+  | 'profile.signInToView'
   | 'auth.prompt.saveShow'
   | 'auth.prompt.addToList'
   | 'form.createTitle'
@@ -65,8 +67,6 @@ export type CopyKey =
   | 'form.producedBy'
   | 'form.producedBy.placeholder.fashion'
   | 'form.producedBy.placeholder.music'
-  | 'form.featuredModels'
-  | 'form.featuredModels.placeholder'
   | 'form.hairMakeup'
   | 'form.hairMakeup.placeholder'
   | 'form.genre'
@@ -76,6 +76,8 @@ export type CopyKey =
   | 'form.collection.placeholder.fashion'
   | 'form.collection.placeholder.music'
   | 'form.showPhoto'
+  | 'form.profilePicture'
+  | 'form.profilePictureRemove'
   | 'form.imageUrl'
   | 'form.imageUrl.placeholder'
   | 'form.imageUploading'
@@ -86,7 +88,9 @@ export type CopyKey =
   | 'empty.noMatch.title'
   | 'empty.noMatch.body'
   | 'empty.noMatch.cta'
-  | 'modals.backToShows';
+  | 'modals.backToShows'
+  | 'nav.back'
+  | 'nav.backToLibrary';
 
 export type CopyEntry = {
   default: string;
@@ -117,7 +121,7 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     group: 'auth',
   },
   'search.placeholder': {
-    default: 'Search shows, designers, artists, models...',
+    default: 'Search shows, designers, artists...',
     label: 'Search placeholder',
     group: 'search',
 
@@ -169,11 +173,6 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     label: 'Card: Produced By',
     group: 'event',
   },
-  'event.featuredModels': {
-    default: 'Featured Models',
-    label: 'Card: Featured Models',
-    group: 'event',
-  },
   'event.hairMakeup': {
     default: 'Hair & Makeup',
     label: 'Card: Hair & Makeup',
@@ -185,18 +184,33 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     group: 'event',
   },
   'event.likedListName': {
-    default: 'Your Liked Events',
+    default: 'Liked Events',
     label: 'Liked list name',
     group: 'event',
   },
   'event.ratedListName': {
-    default: 'Your Ratings',
+    default: 'Reviews',
     label: 'Ratings list name',
     group: 'event',
   },
   'profile.yourLibrary': {
     default: 'Your Library',
     label: 'Profile library heading',
+    group: 'nav',
+  },
+  'profile.library': {
+    default: 'Library',
+    label: 'Public profile library heading',
+    group: 'nav',
+  },
+  'profile.notFound': {
+    default: 'Profile not found',
+    label: 'Public profile not found',
+    group: 'nav',
+  },
+  'profile.signInToView': {
+    default: 'Sign in to view your profile.',
+    label: 'Profile sign-in required',
     group: 'nav',
   },
   'event.saveToLiked': {
@@ -345,16 +359,6 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     label: 'Form: Produced By placeholder (music)',
     group: 'form',
   },
-  'form.featuredModels': {
-    default: 'Featured Models',
-    label: 'Form: Featured Models',
-    group: 'form',
-  },
-  'form.featuredModels.placeholder': {
-    default: 'e.g., Gigi Hadid, Bella Hadid, Karlie Kloss',
-    label: 'Form: Featured Models placeholder',
-    group: 'form',
-  },
   'form.hairMakeup': { default: 'Hair & Makeup', label: 'Form: Hair & Makeup', group: 'form' },
   'form.hairMakeup.placeholder': {
     default: 'e.g., James Boehmer, Pat McGrath',
@@ -384,6 +388,8 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     group: 'form',
   },
   'form.showPhoto': { default: 'Show photo', label: 'Form: Show photo', group: 'form' },
+  'form.profilePicture': { default: 'Profile picture', label: 'Form: Profile picture', group: 'form' },
+  'form.profilePictureRemove': { default: 'Remove', label: 'Form: Remove profile picture', group: 'form' },
   'form.imageUrl': { default: 'Or image URL', label: 'Form: Image URL', group: 'form' },
   'form.imageUrl.placeholder': {
     default: 'https://…',
@@ -435,6 +441,16 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     label: 'Back to shows link',
     group: 'modals',
   },
+  'nav.back': {
+    default: 'Back',
+    label: 'Back button',
+    group: 'nav',
+  },
+  'nav.backToLibrary': {
+    default: 'Back to library',
+    label: 'Back to library button',
+    group: 'nav',
+  },
 };
 
 export const COPY_GROUP_LABELS: Record<CopyGroup, string> = {
@@ -463,7 +479,6 @@ export const COPY_SETTINGS_KEYS: CopyKey[] = [
   'form.specialGuests.placeholder',
   'form.producedBy.placeholder.fashion',
   'form.producedBy.placeholder.music',
-  'form.featuredModels.placeholder',
   'form.hairMakeup.placeholder',
   'form.genre.placeholder.fashion',
   'form.genre.placeholder.music',

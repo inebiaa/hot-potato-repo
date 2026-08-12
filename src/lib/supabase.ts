@@ -54,9 +54,9 @@ export interface UserList {
   name: string;
   description: string | null;
   sort_order: number;
-  /** System “Your Liked Events” list — one per user; not user-deletable. */
+  /** System “Liked Events” list — one per user; not user-deletable. */
   is_liked_list?: boolean;
-  /** System “Your Ratings” list — one per user; content from ratings; not deletable. */
+  /** System “Reviews” list — one per user; content from ratings; not deletable. */
   is_rated_list?: boolean;
   /** When true, anyone with the link can view this list. */
   is_public?: boolean;

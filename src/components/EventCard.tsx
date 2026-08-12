@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Calendar, MapPin, Star, Edit, Trash2, Share2, Mail, MoreVertical, Heart, ListPlus, ChevronLeft, Check, Plus } from 'lucide-react';
+import { Calendar, MapPin, Star, Edit, Trash2, Share2, Mail, MoreVertical, Heart, ListPlus, Check, Plus } from 'lucide-react';
 import { Event, Rating, supabase, type UserList } from '../lib/supabase';
 import { getIcon } from '../lib/eventCardIcons';
 import { getSeasonFromDate } from '../lib/season';
@@ -32,6 +32,7 @@ import {
 import { eventCardImageUrl } from '../lib/eventCardImageUrl';
 import { deleteStoredEventImage } from '../lib/eventImageUpload';
 import { addEventToListAndLiked, createUserPlaylist, fetchLikedEventIds, fetchUserPlaylists, toggleLikedEvent } from '../lib/userLists';
+import { BackIconButton } from './ui';
 import { formControlClass, formControlPaddingClass, formControlTextClass } from './ui/field';
 
 /** City / season / genre: shared pill shell + hover (same metrics as TagInput chips). */
@@ -50,6 +51,9 @@ function getCustomCategorySortRank(slug: string, hasPresentedBy: boolean): numbe
   if (key === 'presentedby') return 1000;
   return 2;
 }
+
+const EVENT_TITLE_CLASS =
+  'inline min-w-0 text-lg sm:text-xl font-bold leading-snug text-gray-900';
 
 interface EventCardProps {
   event: Event;
@@ -366,7 +370,6 @@ export default function EventCard({
     producers: coalesceTagList(event.producers),
     featured_designers: coalesceTagList(event.featured_designers),
     featured_artists: coalesceTagList(event.featured_artists),
-    models: coalesceTagList(event.models),
     hair_makeup: coalesceTagList(event.hair_makeup),
     header_tags: effectiveHeaderTags(event),
     footer_tags: coalesceTagList(event.footer_tags),
@@ -374,7 +377,6 @@ export default function EventCard({
     event.producers,
     event.featured_designers,
     event.featured_artists,
-    event.models,
     event.hair_makeup,
     event.header_tags,
     event.footer_tags,
@@ -419,7 +421,6 @@ export default function EventCard({
 
   const ProducerIcon = getIcon(tagColors?.producer_icon, 'producer_icon');
   const DesignerIcon = getIcon(tagColors?.designer_icon, 'designer_icon');
-  const ModelIcon = getIcon(tagColors?.model_icon, 'model_icon');
   const HairMakeupIcon = getIcon(tagColors?.hair_makeup_icon, 'hair_makeup_icon');
   const CityIcon = getIcon(tagColors?.city_icon, 'city_icon');
   const SeasonIcon = getIcon(tagColors?.season_icon, 'season_icon');
@@ -560,30 +561,16 @@ export default function EventCard({
           </div>
         )}
         <div className={`p-6 min-w-0 ${imageOpacity !== undefined ? 'bg-white' : ''}`}>
-          <div className="flex items-start justify-between gap-2 mb-2">
-            <div className="flex-1 min-w-0">
-              {viewHref && !onViewClick ? (
-                viewHref.startsWith('http://') || viewHref.startsWith('https://') ? (
-                  <a href={viewHref} className="text-xl font-bold text-gray-900 block min-w-0">
-                    {event.name}
-                  </a>
-                ) : (
-                  <Link to={viewHref} className="text-xl font-bold text-gray-900 block min-w-0">
-                    {event.name}
-                  </Link>
-                )
-              ) : (
-                <h3 className="text-xl font-bold text-gray-900 min-w-0">
-                  {event.name}
-                </h3>
-              )}
-            </div>
-            <div className="relative -mr-2 shrink-0 flex items-center gap-0" data-event-actions>
+          <div className="mb-2 min-w-0 after:block after:clear-both after:content-['']">
+            <div
+              className="float-right ml-1 flex h-[1.375em] shrink-0 items-center gap-0.5 text-lg sm:text-xl [shape-outside:margin-box]"
+              data-event-actions
+            >
               <button
                 type="button"
                 onClick={(e) => { void handleToggleLiked(e); }}
                 disabled={likeBusy}
-                className={`p-1 rounded transition-colors ${
+                className={`p-0.5 rounded transition-colors ${
                   isLiked
                     ? 'text-neutral-900 hover:text-neutral-700'
                     : 'text-gray-400 hover:text-gray-600'
@@ -592,7 +579,7 @@ export default function EventCard({
                 aria-label={isLiked ? t('event.removeFromLiked') : t('event.saveToLiked')}
                 aria-pressed={isLiked}
               >
-                <Heart size={18} fill={isLiked ? 'currentColor' : 'none'} />
+                <Heart size={16} fill={isLiked ? 'currentColor' : 'none'} />
               </button>
               <button
                 ref={actionsMenuBtnRef}
@@ -613,12 +600,12 @@ export default function EventCard({
                   }
                   setShowActionsMenu(true);
                 }}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors"
+                className="p-0.5 text-gray-400 hover:text-gray-600 rounded transition-colors"
                 title="Actions"
                 aria-haspopup="true"
                 aria-expanded={showActionsMenu}
               >
-                <MoreVertical size={18} />
+                <MoreVertical size={16} />
               </button>
               {showActionsMenu && menuPos && createPortal(
                 <>
@@ -634,19 +621,17 @@ export default function EventCard({
                   >
                     {actionsView === 'create-list' ? (
                       <div className="px-3 py-2 space-y-2">
-                        <button
-                          type="button"
+                        <BackIconButton
+                          size="sm"
+                          label={t('nav.back')}
+                          className="-ml-1 mb-1"
                           onClick={(e) => {
                             e.stopPropagation();
                             setActionsView('add-to-list');
                             setCreateListError('');
                             void loadPlaylists();
                           }}
-                          className="w-full text-left text-sm hover:bg-gray-50 flex items-center gap-2 -mx-1 px-1 py-1 rounded"
-                        >
-                          <ChevronLeft size={14} className="text-gray-500" />
-                          <span>{t('event.createList')}</span>
-                        </button>
+                        />
                         <input
                           type="text"
                           value={newListName}
@@ -698,17 +683,17 @@ export default function EventCard({
                       </div>
                     ) : actionsView === 'add-to-list' ? (
                       <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActionsView('main');
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100"
-                        >
-                          <ChevronLeft size={14} className="text-gray-500" />
-                          <span>{t('event.addToList')}</span>
-                        </button>
+                        <div className="border-b border-gray-100 px-2 py-1.5">
+                          <BackIconButton
+                            size="sm"
+                            label={t('nav.back')}
+                            className="-ml-0.5"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActionsView('main');
+                            }}
+                          />
+                        </div>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -825,6 +810,21 @@ export default function EventCard({
                 document.body,
               )}
             </div>
+            {viewHref && !onViewClick ? (
+              viewHref.startsWith('http://') || viewHref.startsWith('https://') ? (
+                <a href={viewHref} className={EVENT_TITLE_CLASS}>
+                  {event.name}
+                </a>
+              ) : (
+                <Link to={viewHref} className={EVENT_TITLE_CLASS}>
+                  {event.name}
+                </Link>
+              )
+            ) : (
+              <h3 className={EVENT_TITLE_CLASS}>
+                {event.name}
+              </h3>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -1065,46 +1065,6 @@ export default function EventCard({
                     {tags.length > TAG_LIMIT && (
                       <button type="button" onClick={() => toggleTagSection('producers')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center rounded-md" title={expandedTagSections['producers'] ? 'Show less' : 'View more tags'}>
                         {expandedTagSections['producers'] ? '−' : `+${tags.length - TAG_LIMIT}`}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {normalizeShowType(event.show_type) === 'fashion' && (tagsBySection.models?.length > 0) && (() => {
-              const tags = tagsBySection.models;
-              const showMore = tags.length > TAG_LIMIT && !expandedTagSections['models'];
-              const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
-              return (
-                <div>
-                  <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
-                    <div className="flex items-center">
-                      <ModelIcon size={14} className="mr-1" />
-                      {t('event.featuredModels')}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1 items-center">
-                    {visible.map((model, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => onTagClick('model', resolveTag('model', model).identityId || model, model)}
-                        data-tag-pill
-                        className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80`}
-                        {...tagFilterDragProps('model', model)}
-                      >
-                        <TagPillSplitLabel fitToContainer
-                          text={resolveTag('model', model).display}
-                          segmentColors={{
-                            backgroundColor: tagColors?.model_bg_color || '#fce7f3',
-                            color: tagColors?.model_text_color || '#be185d',
-                          }}
-                        />
-                      </button>
-                    ))}
-                    {tags.length > TAG_LIMIT && (
-                      <button type="button" onClick={() => toggleTagSection('models')} className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center rounded-md" title={expandedTagSections['models'] ? 'Show less' : 'View more tags'}>
-                        {expandedTagSections['models'] ? '−' : `+${tags.length - TAG_LIMIT}`}
                       </button>
                     )}
                   </div>

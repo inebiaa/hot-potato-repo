@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Trash2, ChevronRight, Copy, RefreshCw, Link2, MoreVertical, Pencil, Lock, Unlock } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, Copy, RefreshCw, Link2, MoreVertical, Pencil, Lock, Unlock, User } from 'lucide-react';
 import { supabase, UserList, UserListEvent, Rating, Event } from '../lib/supabase';
 import EventCard from './EventCard';
 import MasonryLaneFeed, { type MasonryLaneItem } from './MasonryLaneFeed';
@@ -22,7 +22,7 @@ import { normalizeEventTagArrays } from '../lib/eventTagArray';
 import { normalizeForSearch } from '../lib/normalize';
 import { fetchEventRatingStats } from '../lib/eventRatingStats';
 import { canonicalListUrl } from '../lib/siteBase';
-import { Button, Input, Label } from './ui';
+import { BackIconButton, Button, Input, Label } from './ui';
 import { useT } from '../contexts/CopyContext';
 
 interface ProfilePageProps {
@@ -99,6 +99,7 @@ export default function ProfilePage({
   const isOwnProfile = !!currentUser && currentUser.id === userId;
   const [username, setUsername] = useState<string>('');
   const [userIdPublic, setUserIdPublic] = useState<string>('');
+  const [avatarUrl, setAvatarUrl] = useState<string>('');
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [lists, setLists] = useState<ListWithCount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,7 +139,7 @@ export default function ProfilePage({
       }
 
       const [profileRes, ratingsRes, listsRes] = await Promise.all([
-        supabase.from('user_profiles').select('username, user_id_public').eq('user_id', userId).maybeSingle(),
+        supabase.from('user_profiles').select('username, user_id_public, avatar_url').eq('user_id', userId).maybeSingle(),
         supabase.from('ratings').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
         supabase.from('user_lists').select('*').eq('user_id', userId).order('sort_order').order('created_at', { ascending: false }),
       ]);
@@ -149,6 +150,7 @@ export default function ProfilePage({
 
       setUsername(profile?.username || 'My profile');
       setUserIdPublic(profile?.user_id_public || '');
+      setAvatarUrl(profile?.avatar_url || '');
 
       const eventIds = [...new Set(ratingsData.map((r) => r.event_id))];
 
@@ -468,7 +470,7 @@ export default function ProfilePage({
     onVisibleReviewCountsChange?.({ visible: visibleReviews.length, total: reviews.length });
   }, [onVisibleReviewCountsChange, visibleReviews.length, reviews.length]);
 
-  /** Always surface Ratings + Liked boards on own library; inject if DB rows missing. */
+  /** Always surface Liked + Reviews boards on own library; inject if DB rows missing. */
   const libraryLists = useMemo((): ListWithCount[] => {
     const items = lists.map((l) =>
       l.is_rated_list ? { ...l, event_count: reviews.length } : l,
@@ -476,27 +478,13 @@ export default function ProfilePage({
     const hasRated = items.some((l) => l.is_rated_list);
     const hasLiked = items.some((l) => l.is_liked_list);
 
-    if (!hasRated) {
-      items.push({
-        id: VIRTUAL_RATINGS_LIST_ID,
-        user_id: userId,
-        name: 'Your Ratings',
-        description: null,
-        sort_order: -2,
-        is_liked_list: false,
-        is_rated_list: true,
-        is_public: true,
-        created_at: '',
-        event_count: reviews.length,
-      });
-    }
     if (isOwnProfile && !hasLiked) {
       items.push({
         id: VIRTUAL_LIKED_LIST_ID,
         user_id: userId,
-        name: 'Your Liked Events',
+        name: 'Liked Events',
         description: null,
-        sort_order: -1,
+        sort_order: -2,
         is_liked_list: true,
         is_rated_list: false,
         is_public: true,
@@ -504,8 +492,30 @@ export default function ProfilePage({
         event_count: 0,
       });
     }
+    if (!hasRated) {
+      items.push({
+        id: VIRTUAL_RATINGS_LIST_ID,
+        user_id: userId,
+        name: 'Reviews',
+        description: null,
+        sort_order: -1,
+        is_liked_list: false,
+        is_rated_list: true,
+        is_public: true,
+        created_at: '',
+        event_count: reviews.length,
+      });
+    }
     return sortListsLibraryFirst(items);
   }, [lists, reviews.length, userId, isOwnProfile]);
+
+  /** Public visitors see ratings and public custom lists only. */
+  const visibleLibraryLists = useMemo((): ListWithCount[] => {
+    if (isOwnProfile) return libraryLists;
+    return libraryLists.filter(
+      (l) => !l.is_liked_list && (l.is_rated_list || l.is_public !== false),
+    );
+  }, [libraryLists, isOwnProfile]);
 
   const resolveRealListId = async (listId: string): Promise<string | null> => {
     if (listId !== VIRTUAL_LIKED_LIST_ID && listId !== VIRTUAL_RATINGS_LIST_ID) return listId;
@@ -577,7 +587,7 @@ export default function ProfilePage({
 
   if (manageListId) {
     const currentList =
-      libraryLists.find((l) => l.id === manageListId) || lists.find((l) => l.id === manageListId);
+      visibleLibraryLists.find((l) => l.id === manageListId) || lists.find((l) => l.id === manageListId);
     const isRatingsList = manageListId === VIRTUAL_RATINGS_LIST_ID || !!currentList?.is_rated_list;
     const isLikedList = manageListId === VIRTUAL_LIKED_LIST_ID || !!currentList?.is_liked_list;
     const canDeleteList =
@@ -620,17 +630,16 @@ export default function ProfilePage({
     return (
       <div className="min-h-screen bg-neutral-50/80">
         <div className="max-w-[2400px] mx-auto px-4 pb-16 pt-6">
-          <button
+          <BackIconButton
             onClick={() => {
               setManageListId(null);
               setIsAddEventOpen(false);
               setShowBoardMenu(false);
               setIsEditListOpen(false);
             }}
-            className="text-sm text-neutral-500 hover:text-neutral-900 mb-6 transition-colors"
-          >
-            ← Back to library
-          </button>
+            label={t('nav.backToLibrary')}
+            className="mb-6"
+          />
           <div className="flex items-start justify-between gap-4 mb-6">
             <div className="min-w-0">
               <h2 className="text-xl font-semibold text-neutral-900 tracking-tight">
@@ -850,28 +859,31 @@ export default function ProfilePage({
     <div className="min-h-screen bg-neutral-50/80">
       <div className="max-w-[2400px] mx-auto px-4 pb-16 pt-6">
         <header className="mb-10">
-          <div className="flex items-start justify-between gap-3">
-            <div>
+          <div className="flex items-start gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-neutral-200 bg-neutral-100">
+              {avatarUrl.trim() ? (
+                <img src={avatarUrl.trim()} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <User size={28} className="text-neutral-400" strokeWidth={1.5} aria-hidden />
+              )}
+            </div>
+            <div className="min-w-0">
               <span
-                className="inline-block text-sm font-medium px-3 py-1.5 rounded-md"
+                className="inline-block max-w-full truncate text-sm font-medium px-3 py-1.5 rounded-md"
                 style={{
                   backgroundColor: tagColors?.optional_tags_bg_color || '#e0e7ff',
                   color: tagColors?.optional_tags_text_color || '#3730a3',
                 }}
               >
                 {username ||
-                  (currentUser?.user_metadata?.full_name as string) ||
-                  currentUser?.email?.split('@')[0] ||
-                  'Profile'}
+                  (isOwnProfile && (currentUser?.user_metadata?.full_name as string)) ||
+                  (isOwnProfile && currentUser?.email?.split('@')[0]) ||
+                  t('nav.profile')}
               </span>
               <div className="text-neutral-500 text-sm mt-1 space-y-0.5">
+                {userIdPublic && <p className="text-neutral-600">@{userIdPublic}</p>}
                 {isOwnProfile && currentUser?.email && (
                   <p className="text-neutral-600">{currentUser.email}</p>
-                )}
-                {isOwnProfile && userIdPublic && (
-                  <p className="text-neutral-500">
-                    Sign in as: <span className="font-mono text-neutral-600">{userIdPublic}</span>
-                  </p>
                 )}
               </div>
             </div>
@@ -879,8 +891,10 @@ export default function ProfilePage({
         </header>
 
         <section className="mt-2">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-4">{t('profile.yourLibrary')}</h2>
-          {listsError ? (
+          <h2 className="text-lg font-semibold text-neutral-900 mb-4">
+            {isOwnProfile ? t('profile.yourLibrary') : t('profile.library')}
+          </h2>
+          {listsError && isOwnProfile ? (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-3">
                 <button
@@ -924,7 +938,7 @@ export default function ProfilePage({
             </div>
           ) : (
             <div className="flex flex-wrap gap-3">
-              {libraryLists.map((list) => (
+              {visibleLibraryLists.map((list) => (
                 <button
                   key={list.id}
                   onClick={() => openManageList(list.id)}

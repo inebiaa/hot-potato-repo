@@ -96,6 +96,7 @@ export default function MasonryLaneFeed({
 }: MasonryLaneFeedProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [laneCount, setLaneCount] = useState(1);
+  const [layoutGapPx, setLayoutGapPx] = useState(gapPx);
   const heightsRef = useRef<Map<string, number>>(new Map());
   const [lanes, setLanes] = useState<string[][]>([]);
 
@@ -113,10 +114,16 @@ export default function MasonryLaneFeed({
     if (!root) return;
 
     const laneRafRef = { current: null as number | null };
+    const mq = window.matchMedia('(max-width: 639px)');
 
     const updateLanes = () => {
       const w = root.clientWidth;
-      const next = Math.max(1, Math.floor((w + gapPx) / (columnMinWidthPx + gapPx)));
+      // Mobile only: shrink the floor so two cards fit; desktop keeps props as-is.
+      const mobile = mq.matches;
+      const minW = mobile ? Math.min(columnMinWidthPx, 140) : columnMinWidthPx;
+      const gap = mobile ? Math.min(gapPx, 12) : gapPx;
+      const next = Math.max(1, Math.floor((w + gap) / (minW + gap)));
+      setLayoutGapPx((prev) => (prev !== gap ? gap : prev));
       setLaneCount((prev) => (prev !== next ? next : prev));
     };
 
@@ -131,8 +138,10 @@ export default function MasonryLaneFeed({
     updateLanes();
     const ro = new ResizeObserver(scheduleLaneUpdate);
     ro.observe(root);
+    mq.addEventListener('change', scheduleLaneUpdate);
     return () => {
       ro.disconnect();
+      mq.removeEventListener('change', scheduleLaneUpdate);
       if (laneRafRef.current !== null) {
         cancelAnimationFrame(laneRafRef.current);
         laneRafRef.current = null;
@@ -153,11 +162,11 @@ export default function MasonryLaneFeed({
         orderedIds,
         n,
         heightsRef.current,
-        gapPx,
+        layoutGapPx,
         defaultItemHeightPx,
       ),
     );
-  }, [orderedIds, laneCount, gapPx, defaultItemHeightPx]);
+  }, [orderedIds, laneCount, layoutGapPx, defaultItemHeightPx]);
 
   const onHeight = useCallback((id: string, height: number) => {
     const prev = heightsRef.current.get(id);
@@ -175,7 +184,7 @@ export default function MasonryLaneFeed({
     <div
       ref={containerRef}
       className={`flex w-full min-w-0 flex-row items-start justify-center ${className}`}
-      style={{ gap: gapPx }}
+      style={{ gap: layoutGapPx }}
     >
       {lanes
         .filter((laneIds) => laneIds.length > 0)
@@ -184,7 +193,7 @@ export default function MasonryLaneFeed({
             key={`masonry-col-${colIndex}`}
             className="flex min-w-0 flex-1 flex-col"
             style={{
-              gap: gapPx,
+              gap: layoutGapPx,
               maxWidth: columnMaxWidthPx > 0 ? `${columnMaxWidthPx}px` : undefined,
             }}
           >
