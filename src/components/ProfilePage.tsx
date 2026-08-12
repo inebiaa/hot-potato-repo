@@ -22,12 +22,13 @@ import { normalizeEventTagArrays } from '../lib/eventTagArray';
 import { normalizeForSearch } from '../lib/normalize';
 import { fetchEventRatingStats } from '../lib/eventRatingStats';
 import { canonicalListUrl } from '../lib/siteBase';
-import { BackIconButton, Button, Input, Label } from './ui';
+import { Button, Input, Label } from './ui';
 import { useT } from '../contexts/CopyContext';
 import {
   deleteStoredListCover,
   uploadListCoverFile,
 } from '../lib/listCoverUpload';
+import { compareEventsForFeed, type EventWithStats } from '../lib/eventsFeed';
 import { ListCover, pickListCollageUrls } from './ListCoverCollage';
 
 interface ProfilePageProps {
@@ -36,6 +37,16 @@ interface ProfilePageProps {
   onClose: () => void;
   onTagClick?: (type: string, value: string, displayLabel?: string) => void;
   onOpenEvent?: (eventId: string) => void;
+  onClearSearch?: () => void;
+  /** When viewing a board, report its events so search suggestions stay board-scoped. */
+  onBoardEventsChange?: (events: Event[] | null) => void;
+  /** Register board back for the shared AppHeader slot (cleared when leaving the board). */
+  onHeaderBackChange?: (back: { label: string; onClick: () => void } | null) => void;
+  /** Active home-style search results to show under the library boards. */
+  searchEvents?: EventWithStats[];
+  searchActive?: boolean;
+  onSearchEventRatingSubmitted?: (eventId: string) => void;
+  onSearchEventUpdated?: () => void;
   tagColors?: {
     producer_bg_color?: string;
     producer_text_color?: string;
@@ -60,8 +71,6 @@ interface ProfilePageProps {
   refreshTrigger?: number;
   /** Optional cached events from App - avoids re-fetching when navigating */
   cachedEvents?: Event[];
-  /** Optional app-wide filtered event ids from primary search bar. */
-  visibleEventIds?: Set<string>;
   onVisibleReviewCountsChange?: (counts: { visible: number; total: number }) => void;
 }
 
@@ -78,6 +87,8 @@ interface ListWithCount extends UserList {
   event_count: number;
   /** Temporary cover from event photos when no custom cover is set. */
   cover_collage_urls?: string[];
+  /** Event ids on this board (for search matching). */
+  event_ids?: string[];
 }
 
 type BoardRow = {
@@ -94,11 +105,17 @@ export default function ProfilePage({
   onClose: _onClose,
   onTagClick,
   onOpenEvent,
+  onClearSearch,
+  onBoardEventsChange,
+  onHeaderBackChange,
+  searchEvents = [],
+  searchActive = false,
+  onSearchEventRatingSubmitted,
+  onSearchEventUpdated,
   tagColors,
   customPerformerTags = [],
   refreshTrigger = 0,
   cachedEvents,
-  visibleEventIds,
   onVisibleReviewCountsChange,
 }: ProfilePageProps) {
   const { user: currentUser } = useAuth();
@@ -107,6 +124,7 @@ export default function ProfilePage({
   const [username, setUsername] = useState<string>('');
   const [userIdPublic, setUserIdPublic] = useState<string>('');
   const [avatarUrl, setAvatarUrl] = useState<string>('');
+  const [coverUrl, setCoverUrl] = useState<string>('');
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [lists, setLists] = useState<ListWithCount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,7 +168,7 @@ export default function ProfilePage({
       }
 
       const [profileRes, ratingsRes, listsRes] = await Promise.all([
-        supabase.from('user_profiles').select('username, user_id_public, avatar_url').eq('user_id', userId).maybeSingle(),
+        supabase.from('user_profiles').select('username, user_id_public, avatar_url, cover_image_url').eq('user_id', userId).maybeSingle(),
         supabase.from('ratings').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
         supabase.from('user_lists').select('*').eq('user_id', userId).order('sort_order').order('created_at', { ascending: false }),
       ]);
@@ -162,6 +180,7 @@ export default function ProfilePage({
       setUsername(profile?.username || 'My profile');
       setUserIdPublic(profile?.user_id_public || '');
       setAvatarUrl(profile?.avatar_url || '');
+      setCoverUrl(profile?.cover_image_url || '');
 
       const eventIds = [...new Set(ratingsData.map((r) => r.event_id))];
 
@@ -255,13 +274,17 @@ export default function ProfilePage({
         });
         setLists(
           listsData.map((l) => {
+            const ids = l.is_rated_list
+              ? ratingsData.map((r) => r.event_id)
+              : eventIdsByList.get(l.id) || [];
             const collage = l.is_rated_list
               ? ratedCollage
-              : pickListCollageUrls((eventIdsByList.get(l.id) || []).map((id) => imageByEventId.get(id)));
+              : pickListCollageUrls(ids.map((id) => imageByEventId.get(id)));
             return {
               ...l,
               event_count: l.is_rated_list ? ratingsData.length : countByList[l.id] || 0,
               cover_collage_urls: collage,
+              event_ids: ids,
             };
           }),
         );
@@ -277,6 +300,41 @@ export default function ProfilePage({
     fetchProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, refreshTrigger]);
+
+  useEffect(() => {
+    if (!manageListId) {
+      onBoardEventsChange?.(null);
+      return;
+    }
+    onBoardEventsChange?.(listEvents.map((r) => r.event).filter((e) => e?.id));
+  }, [manageListId, listEvents, onBoardEventsChange]);
+
+  useEffect(() => {
+    return () => {
+      onBoardEventsChange?.(null);
+    };
+  }, [onBoardEventsChange]);
+
+  useEffect(() => {
+    if (!onHeaderBackChange) return;
+    if (!manageListId) {
+      onHeaderBackChange(null);
+      return;
+    }
+    onHeaderBackChange({
+      label: t('nav.backToLibrary'),
+      onClick: () => {
+        setManageListId(null);
+        setIsAddEventOpen(false);
+        setShowBoardMenu(false);
+        setIsEditListOpen(false);
+        onClearSearch?.();
+      },
+    });
+    return () => onHeaderBackChange(null);
+    // Re-register only when entering/leaving a board; click handler reads latest clearSearch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manageListId, onHeaderBackChange]);
 
   const loadListBoard = async (listId: string, target: ListWithCount | undefined) => {
     const isRatings = listId === VIRTUAL_RATINGS_LIST_ID || !!target?.is_rated_list;
@@ -570,20 +628,22 @@ export default function ProfilePage({
         normalizeForSearch(e.city || '').includes(addSearchNorm)),
   );
 
-  const visibleReviews = useMemo(
-    () => (visibleEventIds ? reviews.filter((r) => visibleEventIds.has(r.event?.id)) : reviews),
-    [reviews, visibleEventIds],
-  );
   useEffect(() => {
-    onVisibleReviewCountsChange?.({ visible: visibleReviews.length, total: reviews.length });
-  }, [onVisibleReviewCountsChange, visibleReviews.length, reviews.length]);
+    onVisibleReviewCountsChange?.({ visible: reviews.length, total: reviews.length });
+  }, [onVisibleReviewCountsChange, reviews.length]);
 
   /** Always surface Liked + Reviews boards on own library; inject if DB rows missing. */
   const libraryLists = useMemo((): ListWithCount[] => {
+    const ratedIds = reviews.map((r) => r.event?.id).filter(Boolean) as string[];
     const ratedCollage = pickListCollageUrls(reviews.map((r) => r.event?.image_url));
     const items = lists.map((l) =>
       l.is_rated_list
-        ? { ...l, event_count: reviews.length, cover_collage_urls: ratedCollage }
+        ? {
+            ...l,
+            event_count: reviews.length,
+            cover_collage_urls: ratedCollage,
+            event_ids: ratedIds,
+          }
         : l,
     );
     const hasRated = items.some((l) => l.is_rated_list);
@@ -601,6 +661,7 @@ export default function ProfilePage({
         is_public: false,
         cover_image_url: null,
         cover_collage_urls: [],
+        event_ids: [],
         created_at: '',
         event_count: 0,
       });
@@ -617,6 +678,7 @@ export default function ProfilePage({
         is_public: false,
         cover_image_url: null,
         cover_collage_urls: ratedCollage,
+        event_ids: ratedIds,
         created_at: '',
         event_count: reviews.length,
       });
@@ -624,11 +686,28 @@ export default function ProfilePage({
     return sortListsLibraryFirst(items);
   }, [lists, reviews, userId, isOwnProfile]);
 
-  /** Public visitors never see Liked; other lists only when marked public. */
+  /** Public visitors never see Liked; other lists only when marked public.
+   *  With an active search, keep boards that have at least one matching show. */
   const visibleLibraryLists = useMemo((): ListWithCount[] => {
-    if (isOwnProfile) return libraryLists;
-    return libraryLists.filter((l) => !l.is_liked_list && l.is_public === true);
-  }, [libraryLists, isOwnProfile]);
+    const base = isOwnProfile
+      ? libraryLists
+      : libraryLists.filter((l) => !l.is_liked_list && l.is_public === true);
+    if (!searchActive) return base;
+    const matchIds = new Set(searchEvents.map((e) => e.id));
+    return base.filter((l) => (l.event_ids || []).some((id) => matchIds.has(id)));
+  }, [libraryLists, isOwnProfile, searchActive, searchEvents]);
+
+  /** Search hits that are actually saved on one of this profile's boards. */
+  const boardSavedSearchEvents = useMemo(() => {
+    if (!searchActive) return [];
+    const savedIds = new Set<string>();
+    for (const l of libraryLists) {
+      for (const id of l.event_ids || []) savedIds.add(id);
+    }
+    return [...searchEvents]
+      .filter((e) => savedIds.has(e.id))
+      .sort((a, b) => compareEventsForFeed(a, b));
+  }, [searchActive, searchEvents, libraryLists]);
 
   const resolveRealListId = async (listId: string): Promise<string | null> => {
     if (listId !== VIRTUAL_LIKED_LIST_ID && listId !== VIRTUAL_RATINGS_LIST_ID) return listId;
@@ -718,11 +797,17 @@ export default function ProfilePage({
       manageListId !== VIRTUAL_LIKED_LIST_ID;
     const canAddShows = isOwnProfile && !isRatingsList;
 
-    const boardRows = visibleEventIds
-      ? listEvents.filter((row) => visibleEventIds.has(row.event.id))
-      : listEvents;
+    const boardRows = listEvents;
+    const searchEventIds = searchActive ? new Set(searchEvents.map((e) => e.id)) : null;
+    const orderedBoardRows = (searchEventIds
+      ? boardRows.filter((r) => r.event?.id && searchEventIds.has(r.event.id))
+      : boardRows
+    ).slice();
+    if (searchActive) {
+      orderedBoardRows.sort((a, b) => compareEventsForFeed(a.event, b.event));
+    }
 
-    const laneItems: MasonryLaneItem[] = boardRows.map(
+    const laneItems: MasonryLaneItem[] = orderedBoardRows.map(
       ({ event, listEvent, averageRating, ratingCount, userRating }) => ({
         id: listEvent.id,
         children: (
@@ -748,23 +833,12 @@ export default function ProfilePage({
       }),
     );
 
-    const liveCollage = pickListCollageUrls(listEvents.map((r) => r.event?.image_url));
+    const liveCollage = pickListCollageUrls(boardRows.map((r) => r.event?.image_url));
     const boardCollageUrls =
       liveCollage.length > 0 ? liveCollage : currentList?.cover_collage_urls || [];
 
     return (
-      <div className="min-h-screen bg-neutral-50/80">
-        <div className="max-w-[2400px] mx-auto px-4 pb-16 pt-6">
-          <BackIconButton
-            onClick={() => {
-              setManageListId(null);
-              setIsAddEventOpen(false);
-              setShowBoardMenu(false);
-              setIsEditListOpen(false);
-            }}
-            label={t('nav.backToLibrary')}
-            className="mb-6"
-          />
+      <div className="pb-16">
           <ListCover
             coverUrl={currentList?.cover_image_url}
             collageUrls={boardCollageUrls}
@@ -880,14 +954,16 @@ export default function ProfilePage({
             )}
           </div>
 
-          {boardRows.length === 0 ? (
+          {orderedBoardRows.length === 0 ? (
             <div className="rounded-2xl bg-white/80 py-16 px-6 text-center">
               <p className="text-neutral-500 text-sm">
-                {isRatingsList
-                  ? 'No ratings yet.'
-                  : isLikedList
-                    ? 'No saved shows yet.'
-                    : 'No shows in this list yet.'}
+                {searchActive
+                  ? 'No matching shows in this list.'
+                  : isRatingsList
+                    ? 'No ratings yet.'
+                    : isLikedList
+                      ? 'No saved shows yet.'
+                      : 'No shows in this list yet.'}
               </p>
             </div>
           ) : (
@@ -895,7 +971,6 @@ export default function ProfilePage({
               <MasonryLaneFeed items={laneItems} columnMinWidthPx={220} gapPx={24} />
             </TagDisplayProvider>
           )}
-        </div>
 
         {isAddEventOpen && (
           <div
@@ -1044,9 +1119,14 @@ export default function ProfilePage({
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50/80">
-      <div className="max-w-[2400px] mx-auto px-4 pb-16 pt-6">
+    <div className="pb-16">
         <header className="mb-10">
+          {coverUrl.trim() ? (
+            <ListCover
+              coverUrl={coverUrl.trim()}
+              className="mb-6 h-40 w-full rounded-xl sm:h-52"
+            />
+          ) : null}
           <div className="flex items-start gap-4">
             <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-neutral-200 bg-neutral-100">
               {avatarUrl.trim() ? (
@@ -1125,61 +1205,112 @@ export default function ProfilePage({
               </div>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-3">
-              {visibleLibraryLists.map((list) => {
+            (() => {
+              const matchIds = searchActive
+                ? new Set(boardSavedSearchEvents.map((e) => e.id))
+                : null;
+              const libraryLaneItems: MasonryLaneItem[] = visibleLibraryLists.map((list) => {
                 const isPinned = !!list.is_liked_list || !!list.is_rated_list;
+                const matchCount = matchIds
+                  ? (list.event_ids || []).filter((id) => matchIds.has(id)).length
+                  : list.event_count;
+                return {
+                  id: `board-${list.id}`,
+                  children: (
+                    <button
+                      type="button"
+                      onClick={() => openManageList(list.id)}
+                      className="flex w-full flex-col overflow-hidden rounded-xl bg-white/90 text-left transition-all hover:bg-white hover:shadow-md hover:shadow-neutral-200/30"
+                    >
+                      <ListCover
+                        coverUrl={list.cover_image_url}
+                        collageUrls={list.cover_collage_urls}
+                        className="aspect-square w-full bg-neutral-100"
+                      />
+                      <div className="flex min-w-0 items-center gap-2 px-3 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="flex min-w-0 items-center gap-1.5 font-medium text-neutral-900">
+                            <span className="truncate">{listDisplayName(list)}</span>
+                            {isPinned && (
+                              <Pin
+                                size={12}
+                                strokeWidth={2}
+                                className="relative top-0.5 shrink-0 rotate-45 text-neutral-400"
+                                aria-hidden
+                              />
+                            )}
+                          </p>
+                          <p className="text-xs text-neutral-500">
+                            {matchCount} show{matchCount !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                        <ChevronRight size={16} className="shrink-0 text-neutral-300" />
+                      </div>
+                    </button>
+                  ),
+                };
+              });
+
+              if (isOwnProfile && !searchActive) {
+                libraryLaneItems.push({
+                  id: 'new-list',
+                  children: (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCreateListOpen(true);
+                        setCreateError('');
+                        setNewListName('');
+                        setNewListDescription('');
+                        setNewListPrivate(false);
+                      }}
+                      className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-xl border border-neutral-200/60 text-neutral-500 transition-colors hover:bg-white/60 hover:text-neutral-700"
+                    >
+                      <Plus size={18} />
+                      New list
+                    </button>
+                  ),
+                });
+              }
+
+              if (searchActive) {
+                for (const event of boardSavedSearchEvents) {
+                  libraryLaneItems.push({
+                    id: event.id,
+                    children: (
+                      <EventCard
+                        event={event}
+                        averageRating={event.average_rating}
+                        ratingCount={event.rating_count}
+                        userRating={event.user_rating}
+                        onRatingSubmitted={() => onSearchEventRatingSubmitted?.(event.id)}
+                        onEventUpdated={() => onSearchEventUpdated?.()}
+                        onTagClick={onTagClick || (() => {})}
+                        onViewClick={onOpenEvent}
+                        tagColors={tagColors}
+                        customPerformerTags={customPerformerTags}
+                      />
+                    ),
+                  });
+                }
+              }
+
+              if (libraryLaneItems.length === 0) {
                 return (
-                <button
-                  key={list.id}
-                  onClick={() => openManageList(list.id)}
-                  className="flex w-[200px] flex-col overflow-hidden rounded-xl bg-white/90 text-left transition-all hover:bg-white hover:shadow-md hover:shadow-neutral-200/30"
-                >
-                  <ListCover
-                    coverUrl={list.cover_image_url}
-                    collageUrls={list.cover_collage_urls}
-                    className="h-[200px] w-full bg-neutral-100"
-                  />
-                  <div className="flex min-w-0 items-center gap-2 px-3 py-2.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="flex min-w-0 items-center gap-1.5 font-medium text-neutral-900">
-                        <span className="truncate">{listDisplayName(list)}</span>
-                        {isPinned && (
-                          <Pin
-                            size={12}
-                            strokeWidth={2}
-                            className="relative top-0.5 shrink-0 rotate-45 text-neutral-400"
-                            aria-hidden
-                          />
-                        )}
-                      </p>
-                      <p className="text-xs text-neutral-500">
-                        {list.event_count} show{list.event_count !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    <ChevronRight size={16} className="shrink-0 text-neutral-300" />
+                  <div className="rounded-2xl bg-white/80 py-12 px-6 text-center">
+                    <p className="text-sm text-neutral-500">
+                      {searchActive ? 'No matching shows.' : 'No lists yet.'}
+                    </p>
                   </div>
-                </button>
                 );
-              })}
-              {isOwnProfile && (
-                <button
-                  onClick={() => {
-                    setIsCreateListOpen(true);
-                    setCreateError('');
-                    setNewListName('');
-                    setNewListDescription('');
-                    setNewListPrivate(false);
-                  }}
-                  className="flex h-[calc(200px+3.75rem)] w-[200px] flex-col items-center justify-center gap-2 rounded-xl border border-neutral-200/60 text-neutral-500 transition-colors hover:bg-white/60 hover:text-neutral-700"
-                >
-                  <Plus size={18} />
-                  New list
-                </button>
-              )}
-            </div>
+              }
+
+              return (
+                <MasonryLaneFeed items={libraryLaneItems} columnMinWidthPx={220} gapPx={24} />
+              );
+            })()
           )}
         </section>
-      </div>
 
       {isCreateListOpen && (
         <div

@@ -1,5 +1,6 @@
 import { User } from 'lucide-react';
 import ProfileAvatarField from '../ProfileAvatarField';
+import ProfileCoverField from '../ProfileCoverField';
 import { Button, Input, Label } from '../ui';
 
 export type AccountTabProps = {
@@ -10,6 +11,8 @@ export type AccountTabProps = {
   setEditUsername: (v: string) => void;
   editAvatarUrl: string;
   setEditAvatarUrl: (v: string) => void;
+  editCoverUrl: string;
+  setEditCoverUrl: (v: string) => void;
   userId: string;
   profileSaveError: string;
   profileSaving: boolean;
@@ -19,7 +22,7 @@ export type AccountTabProps = {
 export default function AccountTab(p: AccountTabProps) {
   const {
     accountEmail, editName, setEditName, editUsername, setEditUsername,
-    editAvatarUrl, setEditAvatarUrl, userId,
+    editAvatarUrl, setEditAvatarUrl, editCoverUrl, setEditCoverUrl, userId,
     profileSaveError, profileSaving, saveAccountProfile,
   } = p;
 
@@ -57,6 +60,11 @@ export default function AccountTab(p: AccountTabProps) {
           <ProfileAvatarField
             avatarUrl={editAvatarUrl}
             onAvatarUrlChange={setEditAvatarUrl}
+            userId={userId}
+          />
+          <ProfileCoverField
+            coverUrl={editCoverUrl}
+            onCoverUrlChange={setEditCoverUrl}
             userId={userId}
           />
           <div>
