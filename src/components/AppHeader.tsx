@@ -3,6 +3,8 @@ import { Plus, LogOut, LogIn, Sparkles, BarChart3, User, Settings, Home, MoreVer
 import type { AppSettings } from '../types/appSettings';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { useT } from '../contexts/CopyContext';
+import ModalShell from './ModalShell';
+import { Button } from './ui';
 
 export type AppHeaderActiveView = 'home' | 'stats' | 'profile' | 'settings';
 
@@ -54,8 +56,19 @@ export default function AppHeader({
   const drawerPanelRef = useRef<HTMLDivElement>(null);
   const drawerWasOpenRef = useRef(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
 
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+
+  const requestSignOut = useCallback(() => {
+    setDrawerOpen(false);
+    setSignOutConfirmOpen(true);
+  }, []);
+
+  const confirmSignOut = useCallback(() => {
+    setSignOutConfirmOpen(false);
+    onSignOut();
+  }, [onSignOut]);
 
   useBodyScrollLock(drawerOpen);
 
@@ -177,7 +190,7 @@ export default function AppHeader({
                     >
                       <Plus size={20} strokeWidth={2.5} />
                     </button>
-                    <button type="button" onClick={onSignOut} className={iconBtn} title="Sign out">
+                    <button type="button" onClick={requestSignOut} className={iconBtn} title={t('nav.signOut')}>
                       <LogOut size={20} strokeWidth={2} />
                     </button>
                   </>
@@ -185,10 +198,11 @@ export default function AppHeader({
                   <button
                     type="button"
                     onClick={onSignIn}
-                    className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition ${ctaGhost}`}
+                    className={iconBtn}
+                    title={t('nav.signIn')}
+                    aria-label={t('nav.signIn')}
                   >
-                    <LogIn size={18} strokeWidth={2.5} />
-                    <span>Sign in</span>
+                    <LogIn size={20} strokeWidth={2.5} />
                   </button>
                 )}
               </div>
@@ -219,7 +233,7 @@ export default function AppHeader({
           ) : (
             <button type="button" className={navItemClass(false)} onClick={onSignIn}>
               <LogIn size={22} />
-              <span>Sign in</span>
+              <span>{t('nav.signIn')}</span>
             </button>
           )}
           <button type="button" className={navItemClass(false)} onClick={onAddEvent}>
@@ -290,7 +304,7 @@ export default function AppHeader({
                     onClick={() => runAndClose(onSignIn)}
                   >
                     <LogIn size={20} className="shrink-0 text-gray-600" />
-                    <span className="text-sm font-medium">Sign in</span>
+                    <span className="text-sm font-medium">{t('nav.signIn')}</span>
                   </button>
                 ) : null}
                 {user ? (
@@ -307,10 +321,10 @@ export default function AppHeader({
                     <button
                       type="button"
                       className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
-                      onClick={() => runAndClose(onSignOut)}
+                      onClick={() => runAndClose(requestSignOut)}
                     >
                       <LogOut size={20} className="shrink-0 text-gray-600" />
-                      <span className="text-sm font-medium">Sign out</span>
+                      <span className="text-sm font-medium">{t('nav.signOut')}</span>
                     </button>
                   </>
                 ) : null}
@@ -331,10 +345,10 @@ export default function AppHeader({
                     <button
                       type="button"
                       className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
-                      onClick={() => runAndClose(onSignOut)}
+                      onClick={() => runAndClose(requestSignOut)}
                     >
                       <LogOut size={20} className="shrink-0 text-gray-600" />
-                      <span className="text-sm font-medium">Sign out</span>
+                      <span className="text-sm font-medium">{t('nav.signOut')}</span>
                     </button>
                   </>
                 ) : (
@@ -344,7 +358,7 @@ export default function AppHeader({
                     onClick={() => runAndClose(onSignIn)}
                   >
                     <LogIn size={20} className="shrink-0 text-gray-600" />
-                    <span className="text-sm font-medium">Sign in</span>
+                    <span className="text-sm font-medium">{t('nav.signIn')}</span>
                   </button>
                 )}
               </div>
@@ -352,6 +366,27 @@ export default function AppHeader({
           </div>
         </div>
       )}
+
+      {signOutConfirmOpen ? (
+        <ModalShell
+          onClose={() => setSignOutConfirmOpen(false)}
+          title={t('nav.signOutConfirmTitle')}
+          panelClassName="max-w-sm sm:rounded-xl"
+          zClass="z-[60]"
+        >
+          <div className="space-y-4 p-4">
+            <p className="text-sm text-neutral-700">{t('nav.signOutConfirmBody')}</p>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="secondary" onClick={() => setSignOutConfirmOpen(false)}>
+                {t('nav.signOutConfirmCancel')}
+              </Button>
+              <Button type="button" onClick={confirmSignOut}>
+                {t('nav.signOutConfirmAction')}
+              </Button>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
     </>
   );
 }

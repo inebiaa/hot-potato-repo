@@ -396,7 +396,7 @@ export default function EventCard({
   const resolveTag = (tagType: string, raw: string) => {
     const entry = tagDisplayMap?.get(tagResolutionKey(tagType, raw));
     return {
-      /** Always the exact string on the event; identities/aliases must not relabel the card. */
+      /** Always the exact string on the event; identities must not relabel the card. */
       display: raw,
       canonical: entry?.canonical ?? raw,
       identityId: entry?.identityId ?? null,
@@ -578,12 +578,12 @@ export default function EventCard({
                 </h3>
               )}
             </div>
-            <div className="relative shrink-0 flex items-center gap-0.5" data-event-actions>
+            <div className="relative -mr-2 shrink-0 flex items-center gap-0" data-event-actions>
               <button
                 type="button"
                 onClick={(e) => { void handleToggleLiked(e); }}
                 disabled={likeBusy}
-                className={`p-1.5 rounded transition-colors ${
+                className={`p-1 rounded transition-colors ${
                   isLiked
                     ? 'text-neutral-900 hover:text-neutral-700'
                     : 'text-gray-400 hover:text-gray-600'
@@ -613,7 +613,7 @@ export default function EventCard({
                   }
                   setShowActionsMenu(true);
                 }}
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded transition-colors"
+                className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors"
                 title="Actions"
                 aria-haspopup="true"
                 aria-expanded={showActionsMenu}

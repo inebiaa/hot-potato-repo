@@ -15,6 +15,12 @@ export type CopyKey =
   | 'nav.stats'
   | 'nav.profile'
   | 'nav.add'
+  | 'nav.signIn'
+  | 'nav.signOut'
+  | 'nav.signOutConfirmTitle'
+  | 'nav.signOutConfirmBody'
+  | 'nav.signOutConfirmCancel'
+  | 'nav.signOutConfirmAction'
   | 'event.starring'
   | 'event.specialGuests'
   | 'event.specialGuest'
@@ -120,6 +126,28 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
   'nav.stats': { default: 'Stats', label: 'Nav: Stats', group: 'nav' },
   'nav.profile': { default: 'Profile', label: 'Nav: Profile', group: 'nav' },
   'nav.add': { default: 'Add', label: 'Nav: Add', group: 'nav' },
+  'nav.signIn': { default: 'Sign in', label: 'Nav: Sign in', group: 'nav' },
+  'nav.signOut': { default: 'Sign out', label: 'Nav: Sign out', group: 'nav' },
+  'nav.signOutConfirmTitle': {
+    default: 'Sign out?',
+    label: 'Nav: Sign out confirm title',
+    group: 'nav',
+  },
+  'nav.signOutConfirmBody': {
+    default: 'Are you sure you want to sign out?',
+    label: 'Nav: Sign out confirm body',
+    group: 'nav',
+  },
+  'nav.signOutConfirmCancel': {
+    default: 'Cancel',
+    label: 'Nav: Sign out confirm cancel',
+    group: 'nav',
+  },
+  'nav.signOutConfirmAction': {
+    default: 'Sign out',
+    label: 'Nav: Sign out confirm action',
+    group: 'nav',
+  },
   'event.starring': {
     default: 'Starring',
     label: 'Card: Starring',

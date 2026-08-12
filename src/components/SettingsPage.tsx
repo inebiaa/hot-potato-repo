@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Save, Image, Users, Tags, User, Type } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,16 +7,11 @@ import { CUSTOM_COLORS_STORAGE_KEY, PRELOADED_HEX } from '../lib/tagColorPickerD
 import {
   ensureIdentity,
   findIdentityByName,
-  isNormalizedAliasTakenByOtherIdentity,
   normalizeTagName,
   searchTagIdentities,
   searchEventTags,
-  adminLinkTagIdentities,
-  adminUnlinkTagIdentity,
-  type TagIdentityRecord,
   type TagType,
 } from '../lib/tagIdentity';
-import { loadAdminTagGroupMembers } from '../lib/adminTagGroupMembers';
 import type { AppSettings } from '../types/appSettings';
 import BrandingTab from './settings/BrandingTab';
 import CopyTab from './settings/CopyTab';
@@ -156,8 +151,6 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
     app_logo_url: '',
     app_favicon_url: '',
   });
-  /** Drop stale in-flight `fetchAdminLinkContext` results (e.g. fast Back + pick another name). */
-  const fetchAdminLinkContextGenRef = useRef(0);
 
   const [editName, setEditName] = useState('');
   const [editUsername, setEditUsername] = useState('');
@@ -169,40 +162,10 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
   const [connectType, setConnectType] = useState<TagType>('producer');
   const [creditSearchResults, setCreditSearchResults] = useState<{ id: string; tag_type: string; canonical_name: string; fromEvent?: boolean }[]>([]);
   const [creditSearching, setCreditSearching] = useState(false);
-  const [newAliasByIdentity, setNewAliasByIdentity] = useState<Record<string, string>>({});
   const [showCreateTagForm, setShowCreateTagForm] = useState(false);
-  const [aliasDeleteModeIdentityId, setAliasDeleteModeIdentityId] = useState<string | null>(null);
-  const [addingAliasForIdentityId, setAddingAliasForIdentityId] = useState<string | null>(null);
   const [creditConnectSuccess, setCreditConnectSuccess] = useState('');
   const [connectListActiveIdx, setConnectListActiveIdx] = useState(-1);
   const connectSearchInputRef = useRef<HTMLInputElement>(null);
-
-  const [adminIdentitySearch, setAdminIdentitySearch] = useState('');
-  const [adminIdentitySearchResults, setAdminIdentitySearchResults] = useState<TagIdentityRecord[]>([]);
-  const [adminIdentitySearching, setAdminIdentitySearching] = useState(false);
-  const [adminManagedIdentity, setAdminManagedIdentity] = useState<TagIdentityRecord | null>(null);
-  const [adminManagedAliases, setAdminManagedAliases] = useState<{ id: string; alias: string; normalized_alias: string }[]>([]);
-  const [adminAliasLoading, setAdminAliasLoading] = useState(false);
-  const [adminAliasError, setAdminAliasError] = useState<string | null>(null);
-  const [adminAliasDeleteMode, setAdminAliasDeleteMode] = useState(false);
-  const [adminAddingAlias, setAdminAddingAlias] = useState(false);
-  const [newAdminAliasText, setNewAdminAliasText] = useState('');
-  const [editingAdminAliasId, setEditingAdminAliasId] = useState<string | null>(null);
-  const [editAdminAliasDraft, setEditAdminAliasDraft] = useState('');
-  const [adminMergeSearch, setAdminMergeSearch] = useState('');
-  const [adminMergeSearchResults, setAdminMergeSearchResults] = useState<TagIdentityRecord[]>([]);
-  const [adminMergeSearching, setAdminMergeSearching] = useState(false);
-  const [adminMergeAbsorb, setAdminMergeAbsorb] = useState<TagIdentityRecord | null>(null);
-  const [adminLinking, setAdminLinking] = useState(false);
-  /** Every `tag_identities` row in the same cluster (including the open profile), for proof of linking. */
-  const [adminIdentityClusterMembers, setAdminIdentityClusterMembers] = useState<{ id: string; canonical_name: string }[]>([]);
-
-  /** Hide alias rows that only repeat the profile’s main name; “also credited as” is for alternate spellings. */
-  const adminAliasesForDisplay = useMemo(() => {
-    if (!adminManagedIdentity) return adminManagedAliases;
-    const c = normalizeTagName(adminManagedIdentity.canonical_name);
-    return adminManagedAliases.filter((al) => normalizeTagName(al.alias) !== c);
-  }, [adminManagedAliases, adminManagedIdentity]);
 
   const tagOptions: { key: SwatchColorKey; label: string }[] = [
     { key: 'producer', label: 'Producer' },
@@ -443,7 +406,7 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
 
   const fetchCredits = async () => {
     if (!userId) return;
-    const { data: creditRows, error: creditsErr } = await supabase.from('user_tag_credits').select('id, identity_id, preferred_alias_id').eq('user_id', userId);
+    const { data: creditRows, error: creditsErr } = await supabase.from('user_tag_credits').select('id, identity_id').eq('user_id', userId);
     if (creditsErr) {
       setCreditsError(creditsErr.message || 'Could not load credits');
       setCredits([]);
@@ -457,35 +420,25 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
     }
     const { data: identities, error: identitiesErr } = await supabase
       .from('tag_identities')
-      .select('id, tag_type, canonical_name, public_display_alias_id')
+      .select('id, tag_type, canonical_name')
       .in('id', identityIds);
     if (identitiesErr) {
       setCreditsError(identitiesErr.message || 'Could not load credit identities');
       setCredits([]);
       return;
     }
-    const { data: aliasRows } = await supabase.from('tag_aliases').select('id, identity_id, alias').in('identity_id', identityIds).order('alias', { ascending: true });
     const identityMap = new Map(
-      (identities || []).map((i: { id: string; tag_type: string; canonical_name: string; public_display_alias_id: string | null }) => [i.id, i])
+      (identities || []).map((i: { id: string; tag_type: string; canonical_name: string }) => [i.id, i])
     );
-    const aliasMap = new Map<string, { id: string; alias: string }[]>();
-    (aliasRows || []).forEach((a: { identity_id: string; id: string; alias: string }) => {
-      const existing = aliasMap.get(a.identity_id) || [];
-      existing.push({ id: a.id, alias: a.alias });
-      aliasMap.set(a.identity_id, existing);
-    });
-    const merged: CreditRow[] = (creditRows || []).map((c: { id: string; identity_id: string; preferred_alias_id: string | null }) => {
+    const merged: CreditRow[] = (creditRows || []).map((c: { id: string; identity_id: string }) => {
       const identity = identityMap.get(c.identity_id) as
-        | { tag_type: string; canonical_name: string; public_display_alias_id: string | null }
+        | { tag_type: string; canonical_name: string }
         | undefined;
       return {
         id: c.id,
         identity_id: c.identity_id,
-        preferred_alias_id: c.preferred_alias_id || null,
-        public_display_alias_id: identity?.public_display_alias_id ?? null,
         tag_type: identity?.tag_type || 'unknown',
         canonical_name: identity?.canonical_name || 'Unknown',
-        aliases: aliasMap.get(c.identity_id) || [],
       };
     });
     setCreditsError(null);
@@ -552,40 +505,6 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
     window.setTimeout(() => connectSearchInputRef.current?.focus(), 0);
   };
 
-  const removeAliasForCredit = async (credit: CreditRow, aliasId: string) => {
-    const alias = credit.aliases.find((a) => a.id === aliasId);
-    if (!alias) return;
-    if (normalizeTagName(alias.alias) === normalizeTagName(credit.canonical_name)) {
-      setCreditsError('Cannot remove the default name for this tag.');
-      return;
-    }
-    setCreditsError(null);
-    if (credit.public_display_alias_id === aliasId) {
-      const { error: e1 } = await supabase.from('tag_identities').update({ public_display_alias_id: null }).eq('id', credit.identity_id);
-      if (e1) {
-        setCreditsError(e1.message || 'Could not update cards before removing alias');
-        return;
-      }
-    }
-    if (credit.preferred_alias_id === aliasId) {
-      const { error: e2 } = await supabase.from('user_tag_credits').update({ preferred_alias_id: null }).eq('id', credit.id);
-      if (e2) {
-        setCreditsError(e2.message || 'Could not clear saved label before removing alias');
-        return;
-      }
-    }
-    const { data: deleted, error } = await supabase.from('tag_aliases').delete().eq('id', aliasId).select('id');
-    if (error) {
-      setCreditsError(error.message || 'Could not remove alias');
-      return;
-    }
-    if (!deleted?.length) {
-      setCreditsError('Could not remove alias. Check that you are linked to this tag or ask an admin.');
-      return;
-    }
-    fetchCredits();
-  };
-
   const handleConnectSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const list = creditSearchResults;
     if (list.length === 0) return;
@@ -626,68 +545,6 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
       return;
     }
     await connectCreditByIdentity(identity);
-  };
-
-  const addAliasForCredit = async (credit: CreditRow) => {
-    const alias = (newAliasByIdentity[credit.identity_id] || '').trim();
-    if (!alias) return;
-    const normalized = normalizeTagName(alias);
-    const { data: existing } = await supabase.from('tag_aliases').select('id').eq('identity_id', credit.identity_id).eq('normalized_alias', normalized).maybeSingle();
-    if (!existing) {
-      const taken = await isNormalizedAliasTakenByOtherIdentity(credit.tag_type as TagType, credit.identity_id, normalized);
-      if (taken) {
-        setCreditsError('That spelling is already used by another tag in this category.');
-        return;
-      }
-      const { error } = await supabase.from('tag_aliases').insert({ identity_id: credit.identity_id, alias, normalized_alias: normalized, created_by: userId });
-      if (error) {
-        setCreditsError(error.message || 'Could not add alias');
-        return;
-      }
-    }
-    setNewAliasByIdentity((prev) => ({ ...prev, [credit.identity_id]: '' }));
-    setAddingAliasForIdentityId(null);
-    fetchCredits();
-  };
-
-  const setPublicDisplayAlias = async (identityId: string, aliasId: string | null) => {
-    const { error } = await supabase.from('tag_identities').update({ public_display_alias_id: aliasId }).eq('id', identityId);
-    if (error) {
-      setCreditsError(error.message || 'Could not set name on event cards');
-      return;
-    }
-    fetchCredits();
-    onSettingsUpdated();
-  };
-
-  const addProfileNameAsAlias = async (credit: CreditRow) => {
-    const name = editName.trim();
-    if (!name) {
-      setCreditsError('Save your profile name first, or type it in Your Name.');
-      return;
-    }
-    const normalized = normalizeTagName(name);
-    const { data: existing } = await supabase
-      .from('tag_aliases')
-      .select('id')
-      .eq('identity_id', credit.identity_id)
-      .eq('normalized_alias', normalized)
-      .maybeSingle();
-    if (!existing) {
-      const taken = await isNormalizedAliasTakenByOtherIdentity(credit.tag_type as TagType, credit.identity_id, normalized);
-      if (taken) {
-        setCreditsError('That spelling is already used by another tag in this category.');
-        return;
-      }
-      const { error } = await supabase
-        .from('tag_aliases')
-        .insert({ identity_id: credit.identity_id, alias: name, normalized_alias: normalized, created_by: userId });
-      if (error) {
-        setCreditsError(error.message || 'Could not add alias');
-        return;
-      }
-    }
-    fetchCredits();
   };
 
   const removeCredit = async (creditId: string) => {
@@ -736,64 +593,6 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
   useEffect(() => {
     setConnectListActiveIdx(creditSearchResults.length > 0 ? 0 : -1);
   }, [creditSearchResults]);
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    if (adminManagedIdentity) {
-      setAdminIdentitySearchResults([]);
-      setAdminIdentitySearching(false);
-      return;
-    }
-    const q = adminIdentitySearch.trim();
-    if (q.length < 2) {
-      setAdminIdentitySearchResults([]);
-      return;
-    }
-    const t = window.setTimeout(() => {
-      setAdminIdentitySearching(true);
-      searchTagIdentities(q)
-        .then((rows) => {
-          setAdminIdentitySearchResults(rows);
-          setAdminIdentitySearching(false);
-        })
-        .catch(() => {
-          setAdminIdentitySearchResults([]);
-          setAdminIdentitySearching(false);
-        });
-    }, 200);
-    return () => window.clearTimeout(t);
-  }, [adminIdentitySearch, isAdmin, adminManagedIdentity]);
-
-  useEffect(() => {
-    if (!isAdmin || !adminManagedIdentity) {
-      setAdminMergeSearchResults([]);
-      return;
-    }
-    const q = adminMergeSearch.trim();
-    if (q.length < 2) {
-      setAdminMergeSearchResults([]);
-      return;
-    }
-    const keep = adminManagedIdentity;
-    const t = window.setTimeout(() => {
-      setAdminMergeSearching(true);
-      searchTagIdentities(q)
-        .then((rows) => {
-          setAdminMergeSearchResults(
-            rows.filter(
-              (r) =>
-                r.tag_type === keep.tag_type && r.id !== keep.id && r.clusterId !== keep.clusterId
-            )
-          );
-          setAdminMergeSearching(false);
-        })
-        .catch(() => {
-          setAdminMergeSearchResults([]);
-          setAdminMergeSearching(false);
-        });
-    }, 200);
-    return () => window.clearTimeout(t);
-  }, [adminMergeSearch, isAdmin, adminManagedIdentity]);
 
   useEffect(() => {
     setSettingsLoaded(false);
@@ -977,346 +776,6 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
     }
   };
 
-  /**
-   * Loads every tag in the same person-group as this row.
-   * Uses cluster_id + same tag_type, with an or() so we don’t miss rows (rep id, PostgREST edge cases, etc.).
-   * @param alsoPartnerId — after a fresh link, pass the other id in case a single query missed a row.
-   */
-  const fetchAdminLinkContext = async (
-    identityId: string,
-    alsoPartnerId?: string
-  ): Promise<{ id: string; canonical_name: string }[]> => {
-    const gen = ++fetchAdminLinkContextGenRef.current;
-    let row: { id: string; cluster_id?: string; canonical_name: string; tag_type: string } | null = null;
-    const r1 = await supabase
-      .from('tag_identities')
-      .select('id, cluster_id, canonical_name, tag_type')
-      .eq('id', identityId)
-      .maybeSingle();
-    if (r1.error) {
-      const r0 = await supabase
-        .from('tag_identities')
-        .select('id, canonical_name, tag_type')
-        .eq('id', identityId)
-        .maybeSingle();
-      if (r0.error || !r0.data) {
-        if (gen === fetchAdminLinkContextGenRef.current) {
-          setAdminIdentityClusterMembers([]);
-          setAdminAliasError('Could not load profile.');
-        }
-        return [];
-      }
-      const a = r0.data as { id: string; canonical_name: string; tag_type: string };
-      row = { id: a.id, canonical_name: a.canonical_name, tag_type: a.tag_type, cluster_id: a.id };
-    } else {
-      row = r1.data as { id: string; cluster_id?: string; canonical_name: string; tag_type: string };
-    }
-    if (!row) {
-      if (gen === fetchAdminLinkContextGenRef.current) {
-        setAdminIdentityClusterMembers([]);
-      }
-      return [];
-    }
-    const r = row;
-    const { members, errorMessage } = await loadAdminTagGroupMembers(r, alsoPartnerId);
-    if (gen !== fetchAdminLinkContextGenRef.current) {
-      return members;
-    }
-    if (errorMessage) {
-      setAdminAliasError(errorMessage);
-    } else {
-      setAdminAliasError((prev) =>
-        prev && (prev.startsWith('Could not load linked group') || /cluster_id|migration 202604/i.test(prev))
-          ? null
-          : prev
-      );
-    }
-    setAdminIdentityClusterMembers(members);
-    setAdminManagedIdentity((prev) =>
-      prev?.id === identityId
-        ? {
-            ...prev,
-            clusterId: r.cluster_id ?? r.id,
-            canonical_name: r.canonical_name,
-            tag_type: r.tag_type,
-          }
-        : prev
-    );
-    return members;
-  };
-
-  const fetchAdminAliasesForIdentity = async (identityId: string) => {
-    setAdminAliasLoading(true);
-    setAdminAliasError(null);
-    const { data, error } = await supabase
-      .from('tag_aliases')
-      .select('id, alias, normalized_alias')
-      .eq('identity_id', identityId)
-      .order('alias', { ascending: true });
-    setAdminAliasLoading(false);
-    if (error) {
-      setAdminAliasError(error.message);
-      setAdminManagedAliases([]);
-      return;
-    }
-    setAdminManagedAliases((data || []) as { id: string; alias: string; normalized_alias: string }[]);
-  };
-
-  const selectAdminManagedIdentity = (identity: TagIdentityRecord) => {
-    setAdminManagedIdentity(identity);
-    setAdminIdentitySearch('');
-    setAdminIdentitySearchResults([]);
-    setAdminMergeSearch('');
-    setAdminMergeSearchResults([]);
-    setAdminMergeAbsorb(null);
-    setEditingAdminAliasId(null);
-    setEditAdminAliasDraft('');
-    setAdminAliasDeleteMode(false);
-    void fetchAdminAliasesForIdentity(identity.id);
-    void fetchAdminLinkContext(identity.id);
-  };
-
-  const selectAdminMergeAbsorb = (row: TagIdentityRecord) => {
-    if (!adminManagedIdentity || row.id === adminManagedIdentity.id) return;
-    if (row.tag_type !== adminManagedIdentity.tag_type) return;
-    if (row.clusterId && adminManagedIdentity.clusterId && row.clusterId === adminManagedIdentity.clusterId) {
-      setAdminMergeSearch('');
-      setAdminMergeSearchResults([]);
-      setSuccess('Already connected.');
-      setTimeout(() => setSuccess(''), 3000);
-      void fetchAdminLinkContext(adminManagedIdentity.id, row.id);
-      return;
-    }
-    setAdminMergeAbsorb(row);
-    setAdminMergeSearch('');
-    setAdminMergeSearchResults([]);
-  };
-
-  /** Switch which cluster member is open (same group; aliases load for that row). */
-  const switchAdminToLinkedMember = (m: { id: string; canonical_name: string }) => {
-    if (!adminManagedIdentity || m.id === adminManagedIdentity.id) return;
-    setAdminManagedIdentity({
-      id: m.id,
-      tag_type: adminManagedIdentity.tag_type,
-      canonical_name: m.canonical_name,
-      clusterId: adminManagedIdentity.clusterId,
-    });
-    setAdminMergeSearch('');
-    setAdminMergeSearchResults([]);
-    setAdminMergeAbsorb(null);
-    setEditingAdminAliasId(null);
-    setEditAdminAliasDraft('');
-    setAdminAliasDeleteMode(false);
-    setAdminAddingAlias(false);
-    setNewAdminAliasText('');
-    void fetchAdminAliasesForIdentity(m.id);
-    void fetchAdminLinkContext(m.id);
-  };
-
-  const deleteAdminAliasRow = async (aliasId: string) => {
-    const { error } = await supabase.rpc('admin_delete_tag_alias', { p_alias_id: aliasId });
-    if (error) {
-      setAdminAliasError(error.message);
-      return;
-    }
-    setAdminAliasError(null);
-    if (adminManagedIdentity) void fetchAdminAliasesForIdentity(adminManagedIdentity.id);
-  };
-
-  const saveAdminAliasEdit = async () => {
-    if (!editingAdminAliasId || !adminManagedIdentity) return;
-    const text = editAdminAliasDraft.trim();
-    if (!text) return;
-    const { error } = await supabase.rpc('admin_update_tag_alias', {
-      p_alias_id: editingAdminAliasId,
-      p_new_alias: text,
-    });
-    if (error) {
-      setAdminAliasError(error.message);
-      return;
-    }
-    setEditingAdminAliasId(null);
-    setEditAdminAliasDraft('');
-    void fetchAdminAliasesForIdentity(adminManagedIdentity.id);
-  };
-
-  const addAdminAliasRow = async () => {
-    if (!adminManagedIdentity) return;
-    const text = newAdminAliasText.trim();
-    if (!text) return;
-    const norm = normalizeTagName(text);
-    if (norm === normalizeTagName(adminManagedIdentity.canonical_name)) {
-      setAdminAliasError('That spelling is already the name on file for this tag. Use an alternate or nickname.');
-      return;
-    }
-    const taken = await isNormalizedAliasTakenByOtherIdentity(
-      adminManagedIdentity.tag_type as TagType,
-      adminManagedIdentity.id,
-      norm
-    );
-    if (taken) {
-      setAdminAliasError('That spelling is already used by another tag in this category.');
-      return;
-    }
-    const { error } = await supabase.from('tag_aliases').insert({
-      identity_id: adminManagedIdentity.id,
-      alias: text,
-      normalized_alias: norm,
-      created_by: userId || null,
-    });
-    if (error) {
-      setAdminAliasError(error.message);
-      return;
-    }
-    setNewAdminAliasText('');
-    setAdminAddingAlias(false);
-    void fetchAdminAliasesForIdentity(adminManagedIdentity.id);
-  };
-
-  const runAdminLink = async () => {
-    if (!adminManagedIdentity || !adminMergeAbsorb) return;
-    if (adminMergeAbsorb.id === adminManagedIdentity.id) {
-      setAdminAliasError('Pick a different identity to link.');
-      return;
-    }
-    const otherName = adminMergeAbsorb.canonical_name;
-    const thisName = adminManagedIdentity.canonical_name;
-    const partnerId = adminMergeAbsorb.id;
-    const selfId = adminManagedIdentity.id;
-    setAdminAliasError(null);
-    setAdminLinking(true);
-
-    const { data: aRow } = await supabase.from('tag_identities').select('cluster_id').eq('id', partnerId).maybeSingle();
-    const { data: bRow } = await supabase.from('tag_identities').select('cluster_id').eq('id', selfId).maybeSingle();
-    const ca = (aRow as { cluster_id?: string } | null)?.cluster_id;
-    const cb = (bRow as { cluster_id?: string } | null)?.cluster_id;
-    if (ca != null && cb != null && ca === cb) {
-      setAdminLinking(false);
-      setAdminMergeAbsorb(null);
-      setAdminMergeSearch('');
-      setAdminMergeSearchResults([]);
-      setSuccess('Already connected — same person.');
-      setTimeout(() => setSuccess(''), 3500);
-      const { data: fresh } = await supabase
-        .from('tag_identities')
-        .select('id, tag_type, canonical_name, cluster_id')
-        .eq('id', selfId)
-        .maybeSingle();
-      if (fresh) {
-        const f = fresh as { id: string; tag_type: string; canonical_name: string; cluster_id?: string };
-        setAdminManagedIdentity({
-          id: f.id,
-          tag_type: f.tag_type,
-          canonical_name: f.canonical_name,
-          clusterId: f.cluster_id ?? f.id,
-        });
-      }
-      await fetchAdminAliasesForIdentity(selfId);
-      await fetchAdminLinkContext(selfId, partnerId);
-      return;
-    }
-
-    const { error } = await adminLinkTagIdentities(partnerId, selfId);
-    setAdminLinking(false);
-
-    if (error) {
-      const errText = (error as Error).message || 'Link failed';
-      const isCycle = /invalid link|would form a cycle|cycle/i.test(errText);
-      setAdminMergeAbsorb(null);
-      setAdminMergeSearch('');
-      setAdminMergeSearchResults([]);
-      const { data: freshE } = await supabase
-        .from('tag_identities')
-        .select('id, tag_type, canonical_name, cluster_id')
-        .eq('id', selfId)
-        .maybeSingle();
-      if (freshE) {
-        const f = freshE as { id: string; tag_type: string; canonical_name: string; cluster_id?: string };
-        setAdminManagedIdentity({
-          id: f.id,
-          tag_type: f.tag_type,
-          canonical_name: f.canonical_name,
-          clusterId: f.cluster_id ?? f.id,
-        });
-      }
-      await fetchAdminAliasesForIdentity(selfId);
-      let members = await fetchAdminLinkContext(selfId, partnerId);
-      if (isCycle && members.length < 2) {
-        const byId = new Map<string, { id: string; canonical_name: string }>();
-        byId.set(partnerId, { id: partnerId, canonical_name: otherName });
-        byId.set(selfId, { id: selfId, canonical_name: thisName });
-        members = Array.from(byId.values()).sort((a, b) => a.canonical_name.localeCompare(b.canonical_name));
-        setAdminIdentityClusterMembers(members);
-      }
-      if (isCycle) {
-        setAdminAliasError(null);
-        setSuccess('Already connected (same in the system).');
-        setTimeout(() => setSuccess(''), 4000);
-      } else {
-        setAdminAliasError(errText);
-      }
-      return;
-    }
-
-    setAdminMergeAbsorb(null);
-    setAdminMergeSearch('');
-    setAdminMergeSearchResults([]);
-    setSuccess(`Linked: “${otherName}” ↔ “${thisName}”`);
-    setTimeout(() => setSuccess(''), 4000);
-    const { data: fresh } = await supabase
-      .from('tag_identities')
-      .select('id, tag_type, canonical_name, cluster_id')
-      .eq('id', selfId)
-      .maybeSingle();
-    if (fresh) {
-      const f = fresh as { id: string; tag_type: string; canonical_name: string; cluster_id?: string };
-      setAdminManagedIdentity({
-        id: f.id,
-        tag_type: f.tag_type,
-        canonical_name: f.canonical_name,
-        clusterId: f.cluster_id ?? f.id,
-      });
-    }
-    await fetchAdminAliasesForIdentity(selfId);
-    await fetchAdminLinkContext(selfId, partnerId);
-  };
-
-  const runAdminUnlink = async (identityId: string) => {
-    if (!window.confirm('Remove this profile from the linked set? It becomes its own tag again.')) {
-      return;
-    }
-    setAdminAliasError(null);
-    setAdminLinking(true);
-    const { error } = await adminUnlinkTagIdentity(identityId);
-    setAdminLinking(false);
-    if (error) {
-      setAdminAliasError(error.message || 'Unlink failed');
-      return;
-    }
-    setSuccess('Unlinked');
-    setTimeout(() => setSuccess(''), 3000);
-    if (adminManagedIdentity) {
-      if (adminManagedIdentity.id === identityId) {
-        const { data: fr } = await supabase
-          .from('tag_identities')
-          .select('id, tag_type, canonical_name, cluster_id')
-          .eq('id', identityId)
-          .maybeSingle();
-        if (fr) {
-          const f = fr as { id: string; tag_type: string; canonical_name: string; cluster_id?: string };
-          setAdminManagedIdentity({
-            id: f.id,
-            tag_type: f.tag_type,
-            canonical_name: f.canonical_name,
-            clusterId: f.cluster_id ?? f.id,
-          });
-        }
-      }
-      await fetchAdminLinkContext(adminManagedIdentity.id);
-      void fetchAdminAliasesForIdentity(adminManagedIdentity.id);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
@@ -1483,45 +942,6 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
                 adminUsers={adminUsers}
                 handleAddAdmin={() => void handleAddAdmin()}
                 handleRemoveAdmin={handleRemoveAdmin}
-                adminIdentitySearch={adminIdentitySearch}
-                setAdminIdentitySearch={setAdminIdentitySearch}
-                adminIdentitySearching={adminIdentitySearching}
-                adminManagedIdentity={adminManagedIdentity}
-                setAdminManagedIdentity={setAdminManagedIdentity}
-                setAdminManagedAliases={setAdminManagedAliases}
-                adminIdentitySearchResults={adminIdentitySearchResults}
-                selectAdminManagedIdentity={selectAdminManagedIdentity}
-                adminIdentityClusterMembers={adminIdentityClusterMembers}
-                switchAdminToLinkedMember={switchAdminToLinkedMember}
-                runAdminUnlink={runAdminUnlink}
-                adminLinking={adminLinking}
-                adminAliasLoading={adminAliasLoading}
-                adminAliasError={adminAliasError}
-                adminAliasesForDisplay={adminAliasesForDisplay}
-                adminAliasDeleteMode={adminAliasDeleteMode}
-                setAdminAliasDeleteMode={setAdminAliasDeleteMode}
-                editingAdminAliasId={editingAdminAliasId}
-                setEditingAdminAliasId={setEditingAdminAliasId}
-                editAdminAliasDraft={editAdminAliasDraft}
-                setEditAdminAliasDraft={setEditAdminAliasDraft}
-                saveAdminAliasEdit={saveAdminAliasEdit}
-                deleteAdminAliasRow={deleteAdminAliasRow}
-                adminAddingAlias={adminAddingAlias}
-                setAdminAddingAlias={setAdminAddingAlias}
-                newAdminAliasText={newAdminAliasText}
-                setNewAdminAliasText={setNewAdminAliasText}
-                addAdminAliasRow={addAdminAliasRow}
-                adminMergeSearch={adminMergeSearch}
-                setAdminMergeSearch={setAdminMergeSearch}
-                adminMergeSearching={adminMergeSearching}
-                adminMergeSearchResults={adminMergeSearchResults}
-                setAdminMergeSearchResults={setAdminMergeSearchResults}
-                adminMergeAbsorb={adminMergeAbsorb}
-                setAdminMergeAbsorb={setAdminMergeAbsorb}
-                selectAdminMergeAbsorb={selectAdminMergeAbsorb}
-                runAdminLink={runAdminLink}
-                setAdminIdentityClusterMembers={setAdminIdentityClusterMembers}
-                fetchAdminLinkContextGenRef={fetchAdminLinkContextGenRef}
               />
             )}
 
@@ -1579,21 +999,11 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
                 creditConnectSuccess={creditConnectSuccess}
                 creditsError={creditsError}
                 credits={credits}
-                aliasDeleteModeIdentityId={aliasDeleteModeIdentityId}
-                setAliasDeleteModeIdentityId={setAliasDeleteModeIdentityId}
-                addingAliasForIdentityId={addingAliasForIdentityId}
-                setAddingAliasForIdentityId={setAddingAliasForIdentityId}
-                newAliasByIdentity={newAliasByIdentity}
-                setNewAliasByIdentity={setNewAliasByIdentity}
                 connectSearchInputRef={connectSearchInputRef}
                 handleConnectSearchKeyDown={handleConnectSearchKeyDown}
                 selectCreditSearchResult={selectCreditSearchResult}
                 connectOrCreateCredit={connectOrCreateCredit}
                 removeCredit={removeCredit}
-                setPublicDisplayAlias={setPublicDisplayAlias}
-                removeAliasForCredit={removeAliasForCredit}
-                addAliasForCredit={addAliasForCredit}
-                addProfileNameAsAlias={addProfileNameAsAlias}
               />
             )}
 

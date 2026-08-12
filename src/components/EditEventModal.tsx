@@ -139,7 +139,7 @@ export default function EditEventModal({ isOpen, onClose, onEventUpdated, event 
     }
 
     try {
-      /** Keep exact spellings; trim, dedupe by normalized form only. Identities/aliases are for search & credits, not to rewrite event text. */
+      /** Keep exact spellings; trim, dedupe by normalized form only. Identities are for search & credits, not to rewrite event text. */
       const resolveTags = (newTags: string[]): string[] => {
         const seenNorm = new Set<string>();
         const out: string[] = [];

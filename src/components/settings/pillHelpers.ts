@@ -58,11 +58,6 @@ export const CREDIT_PILL_SEGMENT_IDLE: TagPillSegmentColors = {
   backgroundColor: '#e5e7eb',
   color: '#4b5563',
 };
-export const ALIAS_NEUTRAL_PILL_COLORS: TagPillSegmentColors = {
-  backgroundColor: '#d1d5db',
-  color: '#4b5563',
-};
-
 /** EventCard-aligned: selected adds ring; fill is on each text chunk via segmentColors. */
 export function creditPillClass(active: boolean) {
   return [
@@ -75,9 +70,4 @@ export function creditPillClass(active: boolean) {
 
 export function creditPillSegmentColors(active: boolean): TagPillSegmentColors {
   return active ? CREDIT_PILL_SEGMENT_ACTIVE : CREDIT_PILL_SEGMENT_IDLE;
-}
-
-/** Same gray chunk styling as credit pills; no ring — selection is fill only. */
-export function linkedGroupPillClass() {
-  return `${tagPillSplitSegmentGroupClass} p-0 max-w-full text-xs transition-colors hover:opacity-80`;
 }
