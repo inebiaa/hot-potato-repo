@@ -730,7 +730,9 @@ export default function ProfilePage({
         setManageListId(realId);
         await fetchProfile();
       }
-      await navigator.clipboard.writeText(canonicalListUrl(realId));
+      const handle = userIdPublic.trim();
+      if (!handle) return;
+      await navigator.clipboard.writeText(canonicalListUrl(handle, realId));
       setListLinkCopied(true);
       window.setTimeout(() => setListLinkCopied(false), 2000);
     } catch {

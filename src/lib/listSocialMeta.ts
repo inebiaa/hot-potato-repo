@@ -4,6 +4,7 @@ import { eventAbsoluteImageUrl, type EventJsonLdPrerender } from './eventJsonLd'
 import {
   canonicalListUrl,
   canonicalListUrlFromParts,
+  publicSiteOrigin,
 } from './siteBase';
 import type { SocialMetaTagSpec } from './eventSocialMeta';
 
@@ -16,6 +17,9 @@ export type ListSharePayload = {
   description?: string | null;
   /** Cover or first board event image (may be relative). */
   imageUrl?: string | null;
+  /** Public profile handle used in `/:handle/list/:id` URLs. */
+  ownerHandle?: string | null;
+  /** Display name for titles / author (not the URL handle). */
   ownerUsername?: string | null;
   eventCount?: number;
 };
@@ -34,7 +38,7 @@ export function buildListOgDescription(list: ListSharePayload, maxLen = 200): st
   if (typeof list.eventCount === 'number' && list.eventCount >= 0) {
     bits.push(list.eventCount === 1 ? '1 show' : `${list.eventCount} shows`);
   }
-  const handle = list.ownerUsername?.trim();
+  const handle = list.ownerHandle?.trim() || list.ownerUsername?.trim();
   if (handle) bits.push(`curated by @${handle}`);
   const line = bits.length > 0 ? bits.join(' · ') : `A shared list on ${appName()}`;
   if (line.length <= maxLen) return line;
@@ -55,12 +59,20 @@ function listShareImageUrl(
 }
 
 function listCanonical(
-  listId: string,
+  list: ListSharePayload,
   prerender?: EventJsonLdPrerender,
 ): string {
+  const handle = (list.ownerHandle || '').trim();
+  if (!handle) {
+    // Fallback only if handle missing (should not ship in prerender).
+    const origin = prerender
+      ? prerender.siteOrigin.replace(/\/$/, '')
+      : publicSiteOrigin();
+    return `${origin}/list/${list.id}`;
+  }
   return prerender
-    ? canonicalListUrlFromParts(listId, prerender.siteOrigin, prerender.viteBase)
-    : canonicalListUrl(listId);
+    ? canonicalListUrlFromParts(handle, list.id, prerender.siteOrigin, prerender.viteBase)
+    : canonicalListUrl(handle, list.id);
 }
 
 /** Open Graph / Twitter tags for shared library lists. */
@@ -68,7 +80,7 @@ export function buildListSocialMetaTagsHtml(
   list: ListSharePayload,
   prerender?: EventJsonLdPrerender & { brandImageUrl?: string; shareImageUrl?: string },
 ): string {
-  const canonical = listCanonical(list.id, prerender);
+  const canonical = listCanonical(list, prerender);
   const title = list.title.trim() || 'Shared list';
   const description = buildListOgDescription(list);
   const image = listShareImageUrl(list, prerender);
@@ -106,7 +118,7 @@ export function buildListSocialMetaTagSpecs(
   list: ListSharePayload,
   prerender?: EventJsonLdPrerender & { brandImageUrl?: string; shareImageUrl?: string },
 ): SocialMetaTagSpec[] {
-  const canonical = listCanonical(list.id, prerender);
+  const canonical = listCanonical(list, prerender);
   const title = list.title.trim() || 'Shared list';
   const description = buildListOgDescription(list);
   const image = listShareImageUrl(list, prerender);
@@ -137,7 +149,7 @@ export function buildListJsonLd(
   list: ListSharePayload,
   prerender?: EventJsonLdPrerender,
 ): Record<string, unknown> {
-  const url = listCanonical(list.id, prerender);
+  const url = listCanonical(list, prerender);
   const image = listShareImageUrl(list, prerender ? { ...prerender } : undefined);
   const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org',
@@ -147,11 +159,11 @@ export function buildListJsonLd(
     url,
   };
   if (image) jsonLd.image = image;
-  const handle = list.ownerUsername?.trim();
-  if (handle) {
+  const authorName = list.ownerUsername?.trim() || list.ownerHandle?.trim();
+  if (authorName) {
     jsonLd.author = {
       '@type': 'Person',
-      name: handle,
+      name: authorName,
     };
   }
   return jsonLd;

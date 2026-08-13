@@ -35,16 +35,17 @@ export function canonicalEventUrl(eventId: string): string {
   return `${publicSiteOrigin()}${eventPagePath(eventId)}`;
 }
 
-/** Path to a shared library list (`/list/:id`), with Vite base prefix. */
-export function listPagePath(listId: string): string {
+/** Path to a shared library list (`/:handle/list/:id`), with Vite base prefix. */
+export function listPagePath(handle: string, listId: string): string {
   const base = viteBasePath();
   const prefix = base === '/' ? '' : base.slice(0, -1);
-  return `${prefix}/list/${listId}`.replace(/\/{2,}/g, '/');
+  const safe = encodeURIComponent(handle.trim());
+  return `${prefix}/${safe}/list/${listId}`.replace(/\/{2,}/g, '/');
 }
 
 /** Full canonical URL for a shared library list. */
-export function canonicalListUrl(listId: string): string {
-  return `${publicSiteOrigin()}${listPagePath(listId)}`;
+export function canonicalListUrl(handle: string, listId: string): string {
+  return `${publicSiteOrigin()}${listPagePath(handle, listId)}`;
 }
 
 /**
@@ -52,6 +53,7 @@ export function canonicalListUrl(listId: string): string {
  * `viteBase` is `process.env.VITE_BASE` (e.g. `/` or `/repo/`).
  */
 export function canonicalListUrlFromParts(
+  handle: string,
   listId: string,
   siteOrigin: string,
   viteBase: string,
@@ -61,7 +63,8 @@ export function canonicalListUrlFromParts(
   if (b === './') b = '/';
   if (!b.startsWith('/')) b = `/${b}`;
   const prefix = b === '/' ? '' : b.replace(/\/$/, '');
-  const path = `${prefix}/list/${listId}`.replace(/\/{2,}/g, '/');
+  const safe = encodeURIComponent(handle.trim());
+  const path = `${prefix}/${safe}/list/${listId}`.replace(/\/{2,}/g, '/');
   return `${origin}${path}`;
 }
 
