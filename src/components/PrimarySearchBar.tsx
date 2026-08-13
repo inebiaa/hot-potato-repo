@@ -1,10 +1,11 @@
 import { Search, X } from 'lucide-react';
-import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { useEffect, useId, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import type { AppSettings } from '../types/appSettings';
 import { showTypePillColors } from '../lib/showType';
 import { getPillColors } from './tagCards/getPillColors';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 import { useT } from '../contexts/CopyContext';
+import { regionKindFromCode } from '../lib/cityPlaces';
 
 export type CustomPerformerTagDef = { slug: string; bg_color: string; text_color: string };
 
@@ -43,11 +44,17 @@ interface PrimarySearchBarProps {
   onClearFilters: () => void;
 }
 
-function tagLabel(type: string): string {
+function tagLabel(type: string, value = ''): string {
   if (type === 'designer') return 'Designer: ';
   if (type === 'artist') return 'Artist: ';
   if (type === 'producer') return 'Producer: ';
   if (type === 'city') return 'City: ';
+  if (type === 'region') {
+    const kind = regionKindFromCode(value);
+    if (kind === 'state') return 'State: ';
+    if (kind === 'province') return 'Province: ';
+    return 'Country: ';
+  }
   if (type === 'venue') return 'Venue: ';
   if (type === 'season') return 'Season: ';
   if (type === 'year') return 'Year: ';
@@ -64,13 +71,20 @@ function tagLabel(type: string): string {
 const queryClearBtn =
   'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-600 opacity-80 transition-opacity hover:bg-gray-100 hover:opacity-100';
 
-function suggestionTypeLabel(type: string): string {
+function suggestionTypeLabel(type: string, value?: string): string {
   if (type === 'header_tags') return 'Genre';
   if (type === 'footer_tags') return 'Collection';
   if (type === 'hair_makeup') return 'Hair & Makeup';
   if (type === 'custom_performer') return 'Custom';
   if (type === 'show_type') return 'Show';
   if (type === 'date') return 'Date';
+  if (type === 'region' && value) {
+    const kind = regionKindFromCode(value);
+    if (kind === 'state') return 'State';
+    if (kind === 'province') return 'Province';
+    return 'Country';
+  }
+  if (type === 'region') return 'Region';
   return type.replace(/_/g, ' ');
 }
 
@@ -94,9 +108,11 @@ function pillColorsForFilter(
   const pillType =
     type === 'year' || type === 'date'
       ? 'year'
-      : type.startsWith('custom:')
-        ? 'custom_performer'
-        : type;
+      : type === 'region'
+        ? 'region'
+        : type.startsWith('custom:')
+          ? 'custom_performer'
+          : type;
   return getPillColors(pillType, appSettings);
 }
 
@@ -123,8 +139,11 @@ export default function PrimarySearchBar({
 }: PrimarySearchBarProps) {
   void _onClearFilters;
   const t = useT();
+  const listboxId = useId();
   const fieldRef = useRef<HTMLDivElement>(null);
+  const listboxRef = useRef<HTMLDivElement>(null);
   const [fieldFocused, setFieldFocused] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
 
   // Track focus via focusin/focusout so suggestion clicks and re-focus don't leave a stale "blurred" state.
   useEffect(() => {
@@ -146,6 +165,16 @@ export default function PrimarySearchBar({
     };
   }, []);
 
+  useEffect(() => {
+    setActiveIndex(-1);
+  }, [searchQuery, tagSuggestions]);
+
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    const option = listboxRef.current?.querySelector<HTMLElement>(`[data-suggestion-index="${activeIndex}"]`);
+    option?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex]);
+
   const hasFilterActivity = Boolean(searchQuery) || selectedTags.length > 0;
   const showCounts =
     !embeddedInHeader &&
@@ -154,6 +183,48 @@ export default function PrimarySearchBar({
     typeof totalCount === 'number';
 
   const showTagSuggestions = fieldFocused && tagSuggestions.length > 0;
+  const activeOptionId =
+    showTagSuggestions && activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined;
+
+  const selectSuggestion = (suggestion: TagSuggestion) => {
+    onSelectTagFilter(suggestion.type, suggestion.value, suggestion.label);
+    setActiveIndex(-1);
+  };
+
+  const onSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (!showTagSuggestions) return;
+    const count = tagSuggestions.length;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((i) => (i + 1) % count);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => (i <= 0 ? count - 1 : i - 1));
+      return;
+    }
+    if (e.key === 'Home') {
+      e.preventDefault();
+      setActiveIndex(0);
+      return;
+    }
+    if (e.key === 'End') {
+      e.preventDefault();
+      setActiveIndex(count - 1);
+      return;
+    }
+    if (e.key === 'Enter' && activeIndex >= 0 && activeIndex < count) {
+      e.preventDefault();
+      selectSuggestion(tagSuggestions[activeIndex]);
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setActiveIndex(-1);
+      (e.target as HTMLInputElement).blur();
+    }
+  };
 
   const searchFieldClass = embeddedInHeader
     ? `relative flex h-10 w-full min-w-0 flex-nowrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-900 shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'bg-neutral-100 ring-2 ring-neutral-400' : ''}`
@@ -178,7 +249,7 @@ export default function PrimarySearchBar({
               const { type, value, label } = selectedTag;
               const { bg, text } = pillColorsForFilter(type, value, appSettings, customPerformerTags);
               const shown = (label || value).replace(/\r\n|\r|\n/g, ' ').trim();
-              const pillText = `${tagLabel(type)}${shown}`;
+              const pillText = `${tagLabel(type, value)}${shown}`;
               return (
                 <span
                   key={`${type}:${value}`}
@@ -226,31 +297,54 @@ export default function PrimarySearchBar({
               placeholder={selectedTags.length ? '' : t('search.placeholder')}
               value={searchQuery}
               onChange={(e) => onSearchQueryChange(e.target.value)}
+              onKeyDown={onSearchKeyDown}
+              role="combobox"
+              aria-expanded={showTagSuggestions}
+              aria-controls={showTagSuggestions ? listboxId : undefined}
+              aria-autocomplete="list"
+              aria-activedescendant={activeOptionId}
               className="min-h-0 min-w-0 flex-1 border-0 bg-transparent py-0.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"
             />
           </div>
           {showTagSuggestions ? (
             <div
+              ref={listboxRef}
+              id={listboxId}
               className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white py-0.5 shadow-lg"
               role="listbox"
               aria-label="Tag suggestions"
             >
-              {tagSuggestions.map((t) => (
-                <button
-                  key={`${t.type}:${t.value}:${t.label}`}
-                  type="button"
-                  role="option"
-                  onMouseDown={(e) => { e.preventDefault(); onSelectTagFilter(t.type, t.value, t.label); }}
-                  className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
-                >
-                  <span className="shrink-0 text-xs capitalize text-gray-400">
-                    {suggestionTypeLabel(t.type)}:
-                  </span>
-                  <span className="min-w-0 truncate text-gray-900" title={t.label.replace(/\r\n|\r|\n/g, ' ')}>
-                    {t.label.replace(/\r\n|\r|\n/g, ' ')}
-                  </span>
-                </button>
-              ))}
+              {tagSuggestions.map((suggestion, index) => {
+                const active = index === activeIndex;
+                return (
+                  <button
+                    key={`${suggestion.type}:${suggestion.value}:${suggestion.label}`}
+                    id={`${listboxId}-opt-${index}`}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    data-suggestion-index={index}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      selectSuggestion(suggestion);
+                    }}
+                    className={`grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 px-3 py-2 text-left text-sm ${
+                      active ? 'bg-gray-100' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="shrink-0 text-xs capitalize text-gray-400">
+                      {suggestionTypeLabel(suggestion.type, suggestion.value)}:
+                    </span>
+                    <span
+                      className="min-w-0 truncate text-gray-900"
+                      title={suggestion.label.replace(/\r\n|\r|\n/g, ' ')}
+                    >
+                      {suggestion.label.replace(/\r\n|\r|\n/g, ' ')}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           ) : null}
         </div>
