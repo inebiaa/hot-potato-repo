@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Event } from '../lib/supabase';
 import { parseCommentToSegments } from '../lib/commentTagParsing';
-import { splitCanonicalCityLabel } from '../lib/cityPlaces';
+import { TAG_PILL_ROW_CLASS } from './tagPillShell';
 
 function escapeHtml(s: string): string {
   const div = document.createElement('div');
@@ -66,19 +66,17 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
       const el = editorRef.current;
       if (!el || !event?.id) return;
       const segments = parseCommentToSegments(newValue, event, tagColors, customPerformerTags);
+      // One pill per match; same pill-row gap as event cards. Do not split city/region
+      // into adjacent spans (innerText would glue "DenverColorado").
       const html = segments
         .map((seg) => {
           if (seg.type === 'tag' && seg.tag) {
-            const cityParts =
-              seg.tag.type === 'city'
-                ? splitCanonicalCityLabel(event.city || '') || splitCanonicalCityLabel(seg.tag.value)
-                : null;
-            const inner = cityParts
-              ? `${tagInnerHtml(seg.tag.bg, seg.tag.text, cityParts.cityName)}${tagInnerHtml(seg.tag.bg, seg.tag.text, cityParts.regionDisplayName)}`
-              : tagInnerHtml(seg.tag.bg, seg.tag.text, seg.value);
-            return `<span contenteditable="false" data-tag-pill class="inline-flex max-w-full min-w-0 flex-wrap items-center gap-1 p-0 text-left text-xs not-italic font-normal mx-0.5 select-none transition-colors hover:opacity-80">${inner}</span>`;
+            const inner = tagInnerHtml(seg.tag.bg, seg.tag.text, seg.value);
+            return `<span contenteditable="false" data-tag-pill class="inline-flex max-w-full min-w-0 flex-wrap items-center gap-1 p-0 text-left text-xs not-italic font-normal select-none transition-colors hover:opacity-80">${inner}</span>`;
           }
-          return escapeHtml(seg.value);
+          const text = seg.value.replace(/^\s+|\s+$/g, '');
+          if (!text) return '';
+          return `<span>${escapeHtml(text)}</span>`;
         })
         .join('');
       el.innerHTML = html || '';
@@ -188,7 +186,7 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
       suppressContentEditableWarning
       onInput={handleInput}
       data-placeholder={placeholder}
-      className={`w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-muted-foreground ${className}`}
+      className={`inline-flex w-full min-w-0 ${TAG_PILL_ROW_CLASS} rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-muted-foreground ${className}`}
       style={{ minHeight: `${rows * 1.5}rem` }}
     />
   );

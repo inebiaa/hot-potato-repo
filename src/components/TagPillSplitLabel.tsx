@@ -5,13 +5,16 @@ import { splitTagLabelByWidth } from '../lib/splitTagLabelByWidth';
 import { TAG_PILL_SIZE_CLASS, tagPillSegmentShellClass } from './tagPillShell';
 
 const tagPillSplitContainerBase =
-  'inline-flex max-w-full min-w-0 flex-wrap items-center gap-y-0.5 text-left';
+  'inline-flex max-w-full min-w-0 flex-wrap items-center text-left';
 
-/** Outer wrapper when each text chunk is its own mini-pill (`segmentColors` on TagPillSplitLabel). */
-export const tagPillSplitSegmentGroupClass = `${tagPillSplitContainerBase} gap-1`;
+/**
+ * Outer wrapper when each text chunk is its own mini-pill (`segmentColors` on TagPillSplitLabel).
+ * Equal X/Y gap (no separate gap-y) so horizontal matches vertical.
+ */
+export const tagPillSplitSegmentGroupClass = `${tagPillSplitContainerBase} gap-2`;
 
-/** Text-only tag pills (chunks spaced with gap-x-0.5) — use when chunks sit inside a parent that already supplies one pill shell. */
-export const tagPillSplitContainerClass = `${tagPillSplitContainerBase} gap-x-0.5`;
+/** Text-only tag pills — use when chunks sit inside a parent that already supplies one pill shell. */
+export const tagPillSplitContainerClass = `${tagPillSplitContainerBase} gap-2`;
 
 /**
  * Icon (or leading control) + `TagPillSplitLabel` on one horizontal row. Uses `flex-nowrap`

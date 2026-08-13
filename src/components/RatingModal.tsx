@@ -5,8 +5,8 @@ import { supabase, Event, Rating } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import CommentEditor from './CommentEditor';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
-import { getEventTagStyles } from '../lib/commentTagParsing';
-import { splitCanonicalCityLabel } from '../lib/cityPlaces';
+import { TAG_PILL_ROW_CLASS } from './tagPillShell';
+import { getEventInsertTagStyles } from '../lib/commentTagParsing';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
 
@@ -61,7 +61,7 @@ export default function RatingModal({
   const { user } = useAuth();
 
   const eventTags = useMemo(
-    () => getEventTagStyles(event, tagColors, customPerformerTags),
+    () => getEventInsertTagStyles(event, tagColors, customPerformerTags),
     [event, tagColors, customPerformerTags]
   );
 
@@ -181,33 +181,21 @@ export default function RatingModal({
               Comment
             </label>
             {eventTags.length > 0 && (
-              <div className="mb-2 flex flex-wrap gap-1.5 items-center">
+              <div className={`mb-2 ${TAG_PILL_ROW_CLASS}`}>
                 <span className="text-xs text-gray-500 self-center mr-1">Insert tag:</span>
                 {eventTags.map((tag) => {
-                  const cityParts =
-                    tag.type === 'city' ? splitCanonicalCityLabel(tag.value) : null;
                   const colors = {
                     backgroundColor: tag.bg || '#f3f4f6',
                     color: tag.text || '#374151',
                   };
                   return (
                     <button
-                      key={tag.value}
+                      key={`${tag.type}:${tag.value}`}
                       type="button"
                       onClick={() => insertTag(tag.value)}
                       className={`min-h-[44px] max-sm:min-h-[40px] ${tagPillSplitSegmentGroupClass} p-0 text-xs hover:opacity-90 sm:min-h-0 sm:py-1`}
                     >
-                      {cityParts ? (
-                        <>
-                          <TagPillSplitLabel text={cityParts.cityName} segmentColors={colors} />
-                          <TagPillSplitLabel
-                            text={cityParts.regionDisplayName}
-                            segmentColors={colors}
-                          />
-                        </>
-                      ) : (
-                        <TagPillSplitLabel text={tag.value} segmentColors={colors} />
-                      )}
+                      <TagPillSplitLabel text={tag.value} segmentColors={colors} />
                     </button>
                   );
                 })}

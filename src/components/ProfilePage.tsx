@@ -807,6 +807,7 @@ export default function ProfilePage({
       orderedBoardRows.sort((a, b) => compareEventsForFeed(a.event, b.event));
     }
 
+    const canRemoveFromBoard = isOwnProfile && !isRatingsList;
     const laneItems: MasonryLaneItem[] = orderedBoardRows.map(
       ({ event, listEvent, averageRating, ratingCount, userRating }) => ({
         id: listEvent.id,
@@ -828,6 +829,11 @@ export default function ProfilePage({
             onViewClick={onOpenEvent}
             tagColors={tagColors}
             customPerformerTags={customPerformerTags}
+            listMembership={
+              canRemoveFromBoard
+                ? { listId: listEvent.list_id, isLikedList }
+                : undefined
+            }
           />
         ),
       }),

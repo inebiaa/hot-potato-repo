@@ -33,6 +33,7 @@ export type CopyKey =
   | 'event.ratedListNameForUser'
   | 'event.saveToLiked'
   | 'event.removeFromLiked'
+  | 'event.removeFromList'
   | 'event.addToList'
   | 'event.addedToList'
   | 'event.noLists'
@@ -231,6 +232,11 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
   'event.removeFromLiked': {
     default: 'Saved',
     label: 'Remove from Liked (saved state)',
+    group: 'event',
+  },
+  'event.removeFromList': {
+    default: 'Remove from list',
+    label: 'Remove from list',
     group: 'event',
   },
   'event.addToList': {
