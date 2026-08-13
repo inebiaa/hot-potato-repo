@@ -9,6 +9,7 @@ import { fetchEventRatingStats } from '../lib/eventRatingStats';
 import { useAuth } from '../contexts/AuthContext';
 import { useT } from '../contexts/CopyContext';
 import { ListCover, pickListCollageUrls } from './ListCoverCollage';
+import ListSocialMeta from './ListSocialMeta';
 
 type BoardRow = {
   event: Event;
@@ -95,7 +96,7 @@ export default function SharedLibraryListPage({
       }
       setList(listRow);
 
-      if (listRow.is_rated_list && !isOwner) {
+      {
         const profileRes = await supabase
           .from('user_profiles')
           .select('username')
@@ -208,6 +209,34 @@ export default function SharedLibraryListPage({
     return list.name;
   }, [list, t, user, ownerUsername]);
 
+  /** Public-facing title for OG / crawlers (never “My Reviews”). */
+  const shareTitle = useMemo(() => {
+    if (!list) return '';
+    if (list.is_rated_list) {
+      const name = ownerUsername || t('nav.profile');
+      return t('event.ratedListNameForUser').replace('{name}', name);
+    }
+    if (list.is_liked_list) return t('event.likedListName');
+    return list.name;
+  }, [list, t, ownerUsername]);
+
+  const collageUrls = useMemo(
+    () => pickListCollageUrls(rows.map((r) => r.event?.image_url)),
+    [rows],
+  );
+  const shareImageUrl = (list?.cover_image_url || '').trim() || collageUrls[0] || null;
+  const sharePayload = useMemo(() => {
+    if (!list || !shareTitle || error) return null;
+    return {
+      id: list.id,
+      title: shareTitle,
+      description: list.description,
+      imageUrl: shareImageUrl,
+      ownerUsername: ownerUsername || null,
+      eventCount: rows.length,
+    };
+  }, [list, shareTitle, shareImageUrl, ownerUsername, rows.length, error]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -244,9 +273,10 @@ export default function SharedLibraryListPage({
 
   return (
     <div className="min-w-0">
+      {sharePayload ? <ListSocialMeta list={sharePayload} /> : null}
       <ListCover
         coverUrl={list?.cover_image_url}
-        collageUrls={pickListCollageUrls(rows.map((r) => r.event?.image_url))}
+        collageUrls={collageUrls}
         className="mb-6 h-40 w-full rounded-xl sm:h-52"
       />
       <h1 className="text-xl font-semibold text-neutral-900 tracking-tight mb-6">{title}</h1>
