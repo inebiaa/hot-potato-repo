@@ -104,3 +104,18 @@ export function collectSearchableTagsFromEvents(
   if (hasAustralia) add('region', COUNTRY_FILTER_AU, 'Australia');
   return tags.sort((a, b) => a.label.localeCompare(b.label));
 }
+
+/** Collect tag identity UUIDs referenced by searchable tag filter values. */
+export function identityIdsFromSearchableTags(tags: SearchableTag[]): Set<string> {
+  const ids = new Set<string>();
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  for (const t of tags) {
+    if (UUID_RE.test(t.value)) ids.add(t.value);
+    if (t.type === 'custom_performer' && t.value.includes('\x00')) {
+      const [, rest] = t.value.split('\x00');
+      if (rest && UUID_RE.test(rest)) ids.add(rest);
+    }
+  }
+  return ids;
+}
