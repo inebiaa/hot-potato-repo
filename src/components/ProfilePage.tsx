@@ -686,12 +686,12 @@ export default function ProfilePage({
     return sortListsLibraryFirst(items);
   }, [lists, reviews, userId, isOwnProfile]);
 
-  /** Public visitors never see Liked; other lists only when marked public.
+  /** Public visitors only see boards marked public (including Liked / Reviews).
    *  With an active search, keep boards that have at least one matching show. */
   const visibleLibraryLists = useMemo((): ListWithCount[] => {
     const base = isOwnProfile
       ? libraryLists
-      : libraryLists.filter((l) => !l.is_liked_list && l.is_public === true);
+      : libraryLists.filter((l) => l.is_public === true);
     if (!searchActive) return base;
     const matchIds = new Set(searchEvents.map((e) => e.id));
     return base.filter((l) => (l.event_ids || []).some((id) => matchIds.has(id)));
@@ -742,10 +742,6 @@ export default function ProfilePage({
 
   const toggleBoardPublic = async () => {
     if (!manageListId || !isOwnProfile || shareBusy) return;
-    const target =
-      libraryLists.find((l) => l.id === manageListId) ||
-      lists.find((l) => l.id === manageListId);
-    if (target?.is_liked_list || manageListId === VIRTUAL_LIKED_LIST_ID) return;
     setShareBusy(true);
     try {
       const realId = await resolveRealListId(manageListId);
@@ -773,7 +769,11 @@ export default function ProfilePage({
       const name = username.trim() || t('nav.profile');
       return t('event.ratedListNameForUser').replace('{name}', name);
     }
-    if (list.is_liked_list) return t('event.likedListName');
+    if (list.is_liked_list) {
+      if (isOwnProfile) return t('event.likedListName');
+      const name = username.trim() || t('nav.profile');
+      return t('event.likedListNameForUser').replace('{name}', name);
+    }
     return list.name;
   };
 
@@ -902,7 +902,6 @@ export default function ProfilePage({
                           <span>{t('event.addShow')}</span>
                         </button>
                       )}
-                      {!isLikedList && (
                       <button
                         type="button"
                         disabled={shareBusy}
@@ -911,18 +910,14 @@ export default function ProfilePage({
                             /* keep menu open briefly so “Copied” is visible */
                           });
                         }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center justify-between gap-2 disabled:opacity-50"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 disabled:opacity-50"
                       >
-                        <span className="inline-flex items-center gap-2">
-                          <Link2 size={14} className="text-neutral-500" />
-                          <span>{t('event.copyListLink')}</span>
-                        </span>
+                        <Link2 size={14} className="shrink-0 text-neutral-500" />
+                        <span className="min-w-0 flex-1">{t('event.copyListLink')}</span>
                         {listLinkCopied ? (
-                          <span className="text-xs text-neutral-500">{t('event.listLinkCopied')}</span>
+                          <span className="shrink-0 text-xs text-neutral-500">{t('event.listLinkCopied')}</span>
                         ) : null}
                       </button>
-                      )}
-                      {!isLikedList && (
                       <button
                         type="button"
                         disabled={shareBusy}
@@ -942,7 +937,6 @@ export default function ProfilePage({
                             : t('event.makeListPublic')}
                         </span>
                       </button>
-                      )}
                       {canDeleteList && (
                         <button
                           type="button"
@@ -1156,9 +1150,6 @@ export default function ProfilePage({
               </span>
               <div className="text-neutral-500 text-sm mt-1 space-y-0.5">
                 {userIdPublic && <p className="text-neutral-600">@{userIdPublic}</p>}
-                {isOwnProfile && currentUser?.email && (
-                  <p className="text-neutral-600">{currentUser.email}</p>
-                )}
               </div>
             </div>
           </div>

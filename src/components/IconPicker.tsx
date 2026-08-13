@@ -10,7 +10,7 @@ interface IconPickerProps {
   onChange: (iconName: string) => void;
 }
 
-const ICON_NAMES = ['Tag', 'Star', 'Users', 'Scissors', 'MapPin', 'Calendar', 'Sparkles', 'Palette'];
+const ICON_NAMES = Object.keys(EVENT_CARD_ICONS);
 
 export default function IconPicker({ label, value, onChange }: IconPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -42,7 +42,7 @@ export default function IconPicker({ label, value, onChange }: IconPickerProps) 
         {isOpen && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} aria-hidden="true" />
-            <div className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,320px)] max-h-64 overflow-y-auto overscroll-y-contain bg-white border border-gray-200 rounded-lg shadow-lg p-2 grid grid-cols-4 sm:grid-cols-6 gap-1">
+            <div className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,320px)] bg-white border border-gray-200 rounded-lg shadow-lg p-2 grid grid-cols-4 sm:grid-cols-6 gap-1">
               <button
                 type="button"
                 onClick={() => {

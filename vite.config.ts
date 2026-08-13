@@ -261,9 +261,7 @@ function staticSitePlugin(): Plugin {
           )
           .eq('is_public', true)
         if (listsRes.error) throw listsRes.error
-        const publicLists = ((listsRes.data || []) as PublicListRow[]).filter(
-          (l) => l?.id && !l.is_liked_list,
-        )
+        const publicLists = ((listsRes.data || []) as PublicListRow[]).filter((l) => !!l?.id)
 
         const ownerIds = [...new Set(publicLists.map((l) => l.user_id).filter(Boolean))]
         const profilesRes =
@@ -329,6 +327,8 @@ function staticSitePlugin(): Plugin {
 
         const ratedTitleTemplate =
           tCopy('event.ratedListNameForUser', copyOverrides).trim() || "{name}'s Reviews"
+        const likedTitleTemplate =
+          tCopy('event.likedListNameForUser', copyOverrides).trim() || "{name}'s Liked Events"
 
         const listPayloads: ListSharePayload[] = publicLists.map((l) => {
           const handle = usernameByUser.get(l.user_id) || ''
@@ -345,9 +345,12 @@ function staticSitePlugin(): Plugin {
               }
             }
           }
+          const displayName = handle || 'Profile'
           const title = l.is_rated_list
-            ? ratedTitleTemplate.replace('{name}', handle || 'Profile')
-            : (l.name || 'Shared list').trim()
+            ? ratedTitleTemplate.replace('{name}', displayName)
+            : l.is_liked_list
+              ? likedTitleTemplate.replace('{name}', displayName)
+              : (l.name || 'Shared list').trim()
           return {
             id: l.id,
             title,
