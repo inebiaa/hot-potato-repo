@@ -1,7 +1,6 @@
 import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Event } from '../lib/supabase';
 import { parseCommentToSegments } from '../lib/commentTagParsing';
-import { TAG_PILL_ROW_CLASS } from './tagPillShell';
 
 function escapeHtml(s: string): string {
   const div = document.createElement('div');
@@ -11,6 +10,33 @@ function escapeHtml(s: string): string {
 
 function tagInnerHtml(bg: string, text: string, label: string): string {
   return `<span class="inline-flex max-w-full whitespace-normal break-words rounded-md px-2 py-1 text-xs text-left" style="background-color:${escapeHtml(bg)};color:${escapeHtml(text)}">${escapeHtml(label)}</span>`;
+}
+
+function editorHtmlFromValue(
+  newValue: string,
+  event: Event,
+  tagColors: CommentEditorProps['tagColors'],
+  customPerformerTags: { slug: string; bg_color: string; text_color: string }[],
+): string {
+  const segments = parseCommentToSegments(newValue, event, tagColors, customPerformerTags);
+  // Normal inline flow (not flex): contentEditable + display:flex breaks typing/caret.
+  // Keep text whitespace. Put a real space between adjacent pills so innerText
+  // does not glue city/region labels on save.
+  const parts: string[] = [];
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const prev = segments[i - 1];
+    if (seg.type === 'tag' && seg.tag) {
+      if (prev?.type === 'tag') parts.push(' ');
+      const inner = tagInnerHtml(seg.tag.bg, seg.tag.text, seg.value);
+      parts.push(
+        `<span contenteditable="false" data-tag-pill class="mx-1 inline-flex max-w-full min-w-0 flex-wrap items-center gap-1 p-0 align-middle text-left text-xs not-italic font-normal select-none transition-colors hover:opacity-80">${inner}</span>`,
+      );
+    } else {
+      parts.push(`<span>${escapeHtml(seg.value)}</span>`);
+    }
+  }
+  return parts.join('');
 }
 
 interface CommentEditorProps {
@@ -65,21 +91,7 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
     (newValue: string, cursorPos?: number) => {
       const el = editorRef.current;
       if (!el || !event?.id) return;
-      const segments = parseCommentToSegments(newValue, event, tagColors, customPerformerTags);
-      // One pill per match; same pill-row gap as event cards. Do not split city/region
-      // into adjacent spans (innerText would glue "DenverColorado").
-      const html = segments
-        .map((seg) => {
-          if (seg.type === 'tag' && seg.tag) {
-            const inner = tagInnerHtml(seg.tag.bg, seg.tag.text, seg.value);
-            return `<span contenteditable="false" data-tag-pill class="inline-flex max-w-full min-w-0 flex-wrap items-center gap-1 p-0 text-left text-xs not-italic font-normal select-none transition-colors hover:opacity-80">${inner}</span>`;
-          }
-          const text = seg.value.replace(/^\s+|\s+$/g, '');
-          if (!text) return '';
-          return `<span>${escapeHtml(text)}</span>`;
-        })
-        .join('');
-      el.innerHTML = html || '';
+      el.innerHTML = editorHtmlFromValue(newValue, event, tagColors, customPerformerTags) || '';
       if (cursorPos !== undefined && newValue.length > 0) {
         requestAnimationFrame(() => {
           const sel = window.getSelection();
@@ -113,13 +125,12 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
 
   useEffect(() => {
     const el = editorRef.current;
-    if (!el) return;
-    const currentText = el.innerText || '';
-    if (currentText !== value) {
-      lastValueRef.current = value;
+    if (!el || !event?.id) return;
+
+    const readCursor = (): number => {
       const sel = window.getSelection();
       let cursorPos = value.length;
-      if (sel && el.contains(sel?.anchorNode)) {
+      if (sel && el.contains(sel.anchorNode)) {
         try {
           const range = sel.getRangeAt(0);
           const pre = document.createRange();
@@ -130,9 +141,24 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
           cursorPos = value.length;
         }
       }
-      syncFromValue(value, Math.min(cursorPos, value.length));
+      return Math.min(cursorPos, value.length);
+    };
+
+    const currentText = el.innerText || '';
+    if (currentText !== value) {
+      lastValueRef.current = value;
+      syncFromValue(value, readCursor());
+      return;
     }
-  }, [value, syncFromValue]);
+
+    // Same plain text: only rebuild when tag pills are out of sync (match typed / pill deleted).
+    const segments = parseCommentToSegments(value, event, tagColors, customPerformerTags);
+    const tagCount = segments.filter((s) => s.type === 'tag').length;
+    const pillCount = el.querySelectorAll('[data-tag-pill]').length;
+    if (tagCount === pillCount) return;
+    lastValueRef.current = value;
+    syncFromValue(value, readCursor());
+  }, [value, syncFromValue, event, tagColors, customPerformerTags]);
 
   const handleInput = useCallback(() => {
     const el = editorRef.current;
@@ -186,7 +212,7 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(function 
       suppressContentEditableWarning
       onInput={handleInput}
       data-placeholder={placeholder}
-      className={`inline-flex w-full min-w-0 ${TAG_PILL_ROW_CLASS} rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-muted-foreground ${className}`}
+      className={`block w-full min-w-0 whitespace-pre-wrap break-words rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-muted-foreground ${className}`}
       style={{ minHeight: `${rows * 1.5}rem` }}
     />
   );
