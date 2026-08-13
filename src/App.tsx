@@ -4,8 +4,8 @@ import { Sparkles, Search } from 'lucide-react';
 import AppHeader from './components/AppHeader';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
-import { eventDateFilterValue, eventDateMatchesSearch, formatEventDateDisplay } from './lib/formatEventDate';
-import { getSeasonFromDate, getYearFromDate } from './lib/season';
+import { eventDateMatchesSearch, formatEventDateDisplay } from './lib/formatEventDate';
+import { getSeasonFromDate } from './lib/season';
 import { isEventUpcoming, isUpcomingBeyondHorizon } from './lib/eventDates';
 import { effectiveHeaderTags } from './lib/eventHeaderTags';
 import { normalizeForSearch } from './lib/normalize';
@@ -29,24 +29,24 @@ import { CopyProvider } from './contexts/CopyContext';
 import { overridesFromSettings, t as copyT } from './copy';
 import {
   displayLabelForTagFilter,
-  eventArrayMatchesFilter,
-  eventMatchesVenueTag,
   fetchTagResolutionForEvents,
   tagResolutionKey,
   type TagResolutionMap,
 } from './lib/tagDisplayResolution';
 import {
   normalizeTagName,
-  sameTagSpelling,
   searchTagIdentities,
   type TagIdentityRecord,
 } from './lib/tagIdentity';
+import { filterEventsBySelectedTags } from './lib/eventTagFilter';
 import {
-  cityMatchesRegionCode,
   cityMatchesRegionQuery,
   regionSuggestionMatchesQuery,
 } from './lib/cityPlaces';
-import { collectSearchableTagsFromEvents } from './lib/searchableTagsFromEvents';
+import {
+  collectSearchableTagsFromEvents,
+  identityIdsFromSearchableTags,
+} from './lib/searchableTagsFromEvents';
 import PrimarySearchBar from './components/PrimarySearchBar';
 import MasonryLaneFeed, { type MasonryLaneItem } from './components/MasonryLaneFeed';
 import EventJsonLd from './components/EventJsonLd';
@@ -577,15 +577,6 @@ function App() {
     return s;
   }, [tagResolutionMap]);
 
-  const searchableTags = useMemo(
-    () => collectSearchableTagsFromEvents(events, tagResolutionMap),
-    [events, tagResolutionMap],
-  );
-
-  const profileBoardSearchableTags = useMemo(() => {
-    if (!profileBoardEvents) return null;
-    return collectSearchableTagsFromEvents(profileBoardEvents, tagResolutionMap);
-  }, [profileBoardEvents, tagResolutionMap]);
 
   useEffect(() => {
     const q = searchQuery.trim();
@@ -607,21 +598,33 @@ function App() {
   const tagSuggestions = useMemo(() => {
     const q = normalizeForSearch(searchQuery);
     if (!q || q.length < 2) return [];
-    const sourceTags = profileBoardSearchableTags ?? searchableTags;
-    const fromEvents = sourceTags.filter((t) => {
+    const suggestionEventPool = profileBoardEvents ?? events;
+    const scopedEvents = filterEventsBySelectedTags(
+      suggestionEventPool,
+      selectedTags,
+      tagResolutionMap,
+    );
+    const sourceTags = collectSearchableTagsFromEvents(scopedEvents, tagResolutionMap);
+    const selectedKeys = new Set(selectedTags.map((t) => `${t.type}:${t.value}`));
+    const tagMatchesQuery = (t: { type: string; value: string; label: string }) => {
       if (normalizeForSearch(t.label).includes(q)) return true;
       if (t.type === 'region' && regionSuggestionMatchesQuery(t.value, t.label, q)) return true;
       return t.type === 'date' && eventDateMatchesSearch(t.value, q);
-    });
-    if (profileBoardSearchableTags) {
+    };
+    const fromEvents = sourceTags.filter(
+      (t) => !selectedKeys.has(`${t.type}:${t.value}`) && tagMatchesQuery(t),
+    );
+    if (profileBoardEvents) {
       return fromEvents.slice(0, 8);
     }
     const suggestionKey = (t: { type: string; value: string; label: string }) =>
       `${t.type}:${t.value}\x00${normalizeTagName(t.label)}`;
     const seen = new Set(fromEvents.map(suggestionKey));
     const out: { type: string; value: string; label: string }[] = [...fromEvents];
+    const identityAllowlist =
+      selectedTags.length > 0 ? identityIdsFromSearchableTags(sourceTags) : identityIdsInUse;
     for (const id of identitySearchHits) {
-      if (!identityIdsInUse.has(id.clusterId)) continue;
+      if (!identityAllowlist.has(id.clusterId)) continue;
       const customSlug = id.tag_type.startsWith('custom:') ? id.tag_type.slice(7) : null;
       const sug =
         customSlug && !isSpecialGuestsSlug(customSlug)
@@ -635,6 +638,7 @@ function App() {
               value: id.clusterId,
               label: id.canonical_name,
             };
+      if (selectedKeys.has(`${sug.type}:${sug.value}`)) continue;
       const key = suggestionKey(sug);
       if (!seen.has(key)) {
         seen.add(key);
@@ -644,8 +648,10 @@ function App() {
     return out.slice(0, 8);
   }, [
     searchQuery,
-    searchableTags,
-    profileBoardSearchableTags,
+    events,
+    profileBoardEvents,
+    selectedTags,
+    tagResolutionMap,
     identitySearchHits,
     identityIdsInUse,
   ]);
@@ -671,7 +677,7 @@ function App() {
       const key = `${type}:${value}`;
       const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
       if (alreadySelected) return prev;
-      return [{ type, value, label }];
+      return [...prev, { type, value, label }];
     });
     setSearchQuery('');
     scrollFeedToTop();
@@ -683,7 +689,7 @@ function App() {
       const key = `${type}:${value}`;
       const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
       if (alreadySelected) return prev;
-      return [{ type, value, label }];
+      return [...prev, { type, value, label }];
     });
     setSearchQuery('');
     scrollFeedToTop();
@@ -961,62 +967,7 @@ function App() {
       }
     }
 
-    selectedTags.forEach((tag) => {
-      filtered = filtered.filter((event) => {
-        switch (tag.type) {
-          case 'city':
-            return sameTagSpelling(event.city, tag.value);
-          case 'region':
-            return cityMatchesRegionCode(event.city, tag.value);
-          case 'venue':
-            return eventMatchesVenueTag(event, tag.value, tagResolutionMap);
-          case 'season':
-            return getSeasonFromDate(event.date) === tag.value;
-          case 'show_type':
-            return normalizeShowType(event.show_type) === tag.value;
-          case 'year':
-            return getYearFromDate(event.date) === tag.value;
-          case 'date': {
-            const ymd = eventDateFilterValue(event.date || '');
-            return Boolean(ymd) && ymd === tag.value;
-          }
-          case 'producer':
-            return eventArrayMatchesFilter(tagResolutionMap, 'producer', event.producers, tag.value);
-          case 'designer':
-            return eventArrayMatchesFilter(tagResolutionMap, 'designer', event.featured_designers, tag.value);
-          case 'artist':
-            return (
-              eventArrayMatchesFilter(tagResolutionMap, 'artist', event.featured_artists, tag.value) ||
-              eventArrayMatchesFilter(tagResolutionMap, 'artist', getSpecialGuests(event.custom_tags), tag.value)
-            );
-          case 'hair_makeup':
-            return eventArrayMatchesFilter(tagResolutionMap, 'hair_makeup', event.hair_makeup, tag.value);
-          case 'header_tags':
-            return eventArrayMatchesFilter(tagResolutionMap, 'header_tags', effectiveHeaderTags(event), tag.value);
-          case 'footer_tags':
-            return eventArrayMatchesFilter(tagResolutionMap, 'footer_tags', event.footer_tags, tag.value);
-          case 'custom_performer': {
-            const [slug, tagValue] = tag.value.split('\x00');
-            if (!slug || !tagValue) return false;
-            if (isSpecialGuestsSlug(slug)) {
-              return (
-                eventArrayMatchesFilter(tagResolutionMap, 'artist', event.featured_artists, tagValue) ||
-                eventArrayMatchesFilter(tagResolutionMap, 'artist', getSpecialGuests(event.custom_tags), tagValue)
-              );
-            }
-            const vals = event.custom_tags?.[slug];
-            return eventArrayMatchesFilter(
-              tagResolutionMap,
-              `custom:${slug}`,
-              Array.isArray(vals) ? vals : null,
-              tagValue
-            );
-          }
-          default:
-            return true;
-        }
-      });
-    });
+    filtered = filterEventsBySelectedTags(filtered, selectedTags, tagResolutionMap);
 
     setFilteredEvents(filtered);
   }, [searchQuery, selectedTags, events, tagResolutionMap]);
