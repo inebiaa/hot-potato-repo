@@ -37,12 +37,7 @@ async function ensureSystemList(
     return { data: null, error: existing.error };
   }
   if (existing.data) {
-    const row = existing.data as UserList;
-    if (flag === 'is_liked_list' && row.is_public) {
-      await supabase.from('user_lists').update({ is_public: false }).eq('id', row.id);
-      return { data: { ...row, is_public: false }, error: null };
-    }
-    return { data: row, error: null };
+    return { data: existing.data as UserList, error: null };
   }
 
   const created = await supabase
@@ -54,7 +49,7 @@ async function ensureSystemList(
       sort_order: sortOrder,
       is_liked_list: flag === 'is_liked_list',
       is_rated_list: flag === 'is_rated_list',
-      // Liked is always private; Reviews start private until the owner shares.
+      // System boards start private until the owner shares.
       is_public: false,
     })
     .select('*')

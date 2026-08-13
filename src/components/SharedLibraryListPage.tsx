@@ -80,13 +80,6 @@ export default function SharedLibraryListPage({
       }
       const listRow = listRes.data as UserList;
       const isOwner = !!user && user.id === listRow.user_id;
-      if (listRow.is_liked_list && !isOwner) {
-        setError('This list is private');
-        setList(listRow);
-        setRows([]);
-        setLoading(false);
-        return;
-      }
       if (!listRow.is_public && !isOwner) {
         setError('This list is private');
         setList(listRow);
@@ -205,18 +198,25 @@ export default function SharedLibraryListPage({
       const name = ownerUsername || t('nav.profile');
       return t('event.ratedListNameForUser').replace('{name}', name);
     }
-    if (list.is_liked_list) return t('event.likedListName');
+    if (list.is_liked_list) {
+      const isOwner = !!user && user.id === list.user_id;
+      if (isOwner) return t('event.likedListName');
+      const name = ownerUsername || t('nav.profile');
+      return t('event.likedListNameForUser').replace('{name}', name);
+    }
     return list.name;
   }, [list, t, user, ownerUsername]);
 
-  /** Public-facing title for OG / crawlers (never “My Reviews”). */
+  /** Public-facing title for OG / crawlers (never “My …”). */
   const shareTitle = useMemo(() => {
     if (!list) return '';
+    const name = ownerUsername || t('nav.profile');
     if (list.is_rated_list) {
-      const name = ownerUsername || t('nav.profile');
       return t('event.ratedListNameForUser').replace('{name}', name);
     }
-    if (list.is_liked_list) return t('event.likedListName');
+    if (list.is_liked_list) {
+      return t('event.likedListNameForUser').replace('{name}', name);
+    }
     return list.name;
   }, [list, t, ownerUsername]);
 

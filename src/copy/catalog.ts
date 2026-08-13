@@ -29,6 +29,7 @@ export type CopyKey =
   | 'event.genre'
   | 'event.collection'
   | 'event.likedListName'
+  | 'event.likedListNameForUser'
   | 'event.ratedListName'
   | 'event.ratedListNameForUser'
   | 'event.saveToLiked'
@@ -192,6 +193,11 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
   'event.likedListName': {
     default: 'My Liked Events',
     label: 'Liked list name',
+    group: 'event',
+  },
+  'event.likedListNameForUser': {
+    default: "{name}'s Liked Events",
+    label: 'Public liked list name',
     group: 'event',
   },
   'event.ratedListName': {

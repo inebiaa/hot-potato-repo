@@ -52,7 +52,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'TOKEN_REFRESHED') return;
 
       const nextUser = session?.user ?? null;
-      setUser((prev) => (prev?.id === nextUser?.id ? prev : nextUser));
+      setUser((prev) => {
+        if (prev?.id !== nextUser?.id) return nextUser;
+        // Same account: still refresh when auth profile fields change (e.g. email).
+        if (event === 'USER_UPDATED') return nextUser;
+        return prev ?? nextUser;
+      });
       void checkAdmin(nextUser?.id);
       setLoading(false);
     };

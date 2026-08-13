@@ -146,6 +146,7 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
   });
 
   const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editUsername, setEditUsername] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
   const [editCoverUrl, setEditCoverUrl] = useState('');
@@ -389,6 +390,7 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
       .eq('user_id', userId)
       .maybeSingle();
     setEditName(data?.username || '');
+    setEditEmail((user?.email || '').trim());
     setEditUsername(data?.user_id_public || '');
     setEditAvatarUrl(data?.avatar_url || '');
     setEditCoverUrl(data?.cover_image_url || '');
@@ -426,8 +428,19 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
     try {
       const newName = editName.trim();
       const newUsername = editUsername.trim();
+      const newEmail = editEmail.trim().toLowerCase();
       if (!newName || newName.length < 1) {
         setProfileSaveError('Your name is required.');
+        setProfileSaving(false);
+        return;
+      }
+      if (!newEmail) {
+        setProfileSaveError('Email is required.');
+        setProfileSaving(false);
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+        setProfileSaveError('Enter a valid email.');
         setProfileSaving(false);
         return;
       }
@@ -477,11 +490,28 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
       if (prevCover && prevCover !== newCover) {
         await deleteStoredProfileImage(prevCover);
       }
+
+      const currentEmail = (user?.email || '').trim().toLowerCase();
+      let emailPendingConfirm = false;
+      if (newEmail !== currentEmail) {
+        const { error: emailError } = await supabase.auth.updateUser({ email: newEmail });
+        if (emailError) {
+          setProfileSaveError(emailError.message || 'Could not update email.');
+          setProfileSaving(false);
+          return;
+        }
+        emailPendingConfirm = true;
+      }
+
       await fetchAccountProfile();
-      setSuccess('Profile saved');
+      setSuccess(
+        emailPendingConfirm
+          ? 'Profile saved. Confirm the new email from your inbox.'
+          : 'Profile saved',
+      );
       onSettingsUpdated();
       onAccountUpdated?.();
-      setTimeout(() => setSuccess(''), 3000);
+      setTimeout(() => setSuccess(''), emailPendingConfirm ? 5000 : 3000);
     } catch {
       setProfileSaveError('Could not save profile.');
     } finally {
@@ -873,7 +903,8 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
 
             {activeTab === 'account' && user && (
               <AccountTab
-                accountEmail={user.email}
+                editEmail={editEmail}
+                setEditEmail={setEditEmail}
                 editName={editName}
                 setEditName={setEditName}
                 editUsername={editUsername}

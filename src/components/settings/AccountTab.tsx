@@ -4,7 +4,8 @@ import ProfileCoverField from '../ProfileCoverField';
 import { Button, Input, Label } from '../ui';
 
 export type AccountTabProps = {
-  accountEmail?: string | null;
+  editEmail: string;
+  setEditEmail: (v: string) => void;
   editName: string;
   setEditName: (v: string) => void;
   editUsername: string;
@@ -21,7 +22,8 @@ export type AccountTabProps = {
 
 export default function AccountTab(p: AccountTabProps) {
   const {
-    accountEmail, editName, setEditName, editUsername, setEditUsername,
+    editEmail, setEditEmail,
+    editName, setEditName, editUsername, setEditUsername,
     editAvatarUrl, setEditAvatarUrl, editCoverUrl, setEditCoverUrl, userId,
     profileSaveError, profileSaving, saveAccountProfile,
   } = p;
@@ -44,7 +46,7 @@ export default function AccountTab(p: AccountTabProps) {
           </div>
           <div className="min-w-0">
             <dt className="text-muted-foreground">Email</dt>
-            <dd className="truncate font-medium text-foreground">{accountEmail?.trim() || '—'}</dd>
+            <dd className="truncate font-medium text-foreground">{editEmail.trim() || '—'}</dd>
           </div>
           <div className="min-w-0">
             <dt className="text-muted-foreground">Username</dt>
@@ -76,6 +78,17 @@ export default function AccountTab(p: AccountTabProps) {
               onChange={(e) => setEditName(e.target.value)}
               maxLength={80}
               placeholder="Jane Doe"
+            />
+          </div>
+          <div>
+            <Label htmlFor="editEmail">Email</Label>
+            <Input
+              id="editEmail"
+              type="email"
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+              autoComplete="email"
+              placeholder="you@example.com"
             />
           </div>
           <div>
