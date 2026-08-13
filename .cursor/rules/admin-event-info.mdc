@@ -21,7 +21,7 @@ When the user asks to **admin / add / update / insert / fix event info**, do not
 | `header_tags` | Genres + `Festival` on festival cards (genres alone is not enough) |
 | `producers` | Only with explicit presenter credit (producers-accuracy) |
 | `countdown_link` | Official tickets / event page (artist Ticketmaster hub, fest site, venue). Not StubHub/SeatGeek unless nothing else exists |
-| `image_url` | **Horizontal** (landscape) promo art or a real photo of **that** show/fest/tour. Recent edition when possible. Official press, lineup, or tour art preferred |
+| `image_url` | Must end as a **Supabase `event-images` public URL**. Source may be an external promo/press link, but always rehost via `ingest-event-image` / `ensureEventImageStored` (or `scripts/backfill-event-images.mjs`) before saving. Never leave hotlinks in `image_url`. |
 | `custom_tags` | Openers as `special-guests` when billed that way |
 | `created_by` | Admin `9ab4f944-acce-463b-8f0d-a1a12b52a24c` on inserts |
 
@@ -44,6 +44,7 @@ Also set `formatted_address` when you can resolve a stable venue address.
 
 ## Images
 
+- **Host on Supabase only.** External URLs are source material for ingest, never the stored `image_url`. Use `ensureEventImageStored` / `ingest-event-image`, or `node scripts/backfill-event-images.mjs` after a SQL batch.
 - Must be wider than tall (card-friendly landscape). Reject square/vertical-only assets when a horizontal exists.
 - Must be connected to the event: that festival’s grounds/crowd/stage, that tour’s official promo, or that night’s billed art. Not a random artist headshot, Unsplash crowd, or decade-old Wikimedia of a different year.
 - Festivals: prefer recent press from **that** fest. Tours: official tour poster / press still used for that run.
@@ -54,3 +55,4 @@ Also set `formatted_address` when you can resolve a stable venue address.
 - Reuse one tour image for an unrelated festival day (or the reverse) without a reason
 - Leave `countdown_link` empty when an official URL is findable in a normal search
 - Use vertical posters, generic stock, or old photos from a different edition when a current horizontal promo exists
+- Write hotlinked `image_url` values straight into the DB and skip rehost
