@@ -302,7 +302,7 @@ export default function ViewRatingsModal({
                         }
                       }}
                     >
-                      <p className="text-base text-gray-700 italic mt-3">
+                      <p className="mt-3 text-base text-gray-700 italic">
                         {event ? (
                           <>"<CommentWithTags
                             comment={rating.comment}

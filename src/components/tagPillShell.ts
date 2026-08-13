@@ -4,6 +4,9 @@
  */
 export const TAG_PILL_SIZE_CLASS = 'rounded-md px-2 py-1 text-xs';
 
+/** Wrap for a row of pills: equal horizontal + vertical gutter. */
+export const TAG_PILL_ROW_CLASS = 'flex flex-wrap items-center gap-2';
+
 /** One solid pill shell (icon + label) — city/season/header. */
 export const tagPillShellClass = `inline-flex max-w-full min-w-0 items-center gap-1 ${TAG_PILL_SIZE_CLASS}`;
 

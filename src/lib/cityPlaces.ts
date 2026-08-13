@@ -243,6 +243,23 @@ const COUNTRY_DISPLAY: Record<string, string> = {
  */
 export const COUNTRY_FILTER_US = 'US';
 export const COUNTRY_FILTER_CANADA = 'CANADA';
+export const COUNTRY_FILTER_AU = 'AU';
+
+/** Australian state/territory suffixes used on some fest cities (`Barunah Plains, VIC`). */
+const AU_STATE_CODES = new Set(['VIC', 'NSW', 'QLD', 'SA', 'TAS', 'ACT', 'NT']);
+/** Cities billed `City, WA` that mean Western Australia, not Washington state. */
+const AU_WA_CITY_NAMES = new Set(['perth', 'fremantle']);
+
+/**
+ * CA province codes that collide with ISO country codes in this catalog.
+ * `NL` is Netherlands (Amsterdam), not Newfoundland and Labrador.
+ */
+const CA_PROVINCE_CODES_AS_COUNTRY = new Set(['NL']);
+/**
+ * US state codes that collide with ISO country codes in this catalog.
+ * `AR` is Argentina (San Isidro), not Arkansas.
+ */
+const US_STATE_CODES_AS_COUNTRY = new Set(['AR']);
 
 const US_COUNTRY_QUERY_ALIASES = new Set([
   'us',
@@ -253,13 +270,22 @@ const US_COUNTRY_QUERY_ALIASES = new Set([
 ]);
 /** Do not include bare `ca` (that is California). */
 const CANADA_COUNTRY_QUERY_ALIASES = new Set(['canada', 'can']);
+const AU_COUNTRY_QUERY_ALIASES = new Set(['au', 'australia', 'aussie']);
 
 export function isUsStateCode(code: string): boolean {
-  return Boolean(US_STATE_DISPLAY[code.trim().toUpperCase()]);
+  const c = code.trim().toUpperCase();
+  if (US_STATE_CODES_AS_COUNTRY.has(c)) return false;
+  return Boolean(US_STATE_DISPLAY[c]);
 }
 
 export function isCaProvinceCode(code: string): boolean {
-  return Boolean(CA_PROVINCE_DISPLAY[code.trim().toUpperCase()]);
+  const c = code.trim().toUpperCase();
+  if (CA_PROVINCE_CODES_AS_COUNTRY.has(c)) return false;
+  return Boolean(CA_PROVINCE_DISPLAY[c]);
+}
+
+export function isAuStateCode(code: string): boolean {
+  return AU_STATE_CODES.has(code.trim().toUpperCase());
 }
 
 /** Spelled-out region/country for a 2–3 letter code (falls back to the code). */
@@ -267,6 +293,11 @@ export function regionDisplayNameFromCode(code: string): string {
   const c = code.trim().toUpperCase();
   if (!c) return code.trim();
   if (c === COUNTRY_FILTER_CANADA) return 'Canada';
+  // Prefer country names for known tour-market collisions before US/CA abbrev maps.
+  if (CA_PROVINCE_CODES_AS_COUNTRY.has(c) || US_STATE_CODES_AS_COUNTRY.has(c)) {
+    return COUNTRY_DISPLAY[c] || c;
+  }
+  if (AU_STATE_CODES.has(c)) return 'Australia';
   return (
     US_STATE_DISPLAY[c] ||
     CA_PROVINCE_DISPLAY[c] ||
@@ -277,31 +308,105 @@ export function regionDisplayNameFromCode(code: string): string {
 
 export type RegionKind = 'state' | 'province' | 'country';
 
+export type ResolvedCityRegion = {
+  /** Filter chip value (may fold AU states into `AU`). */
+  filterCode: string;
+  label: string;
+  kind: RegionKind;
+  /** Raw suffix from `City, XX`. */
+  rawCode: string;
+};
+
+/** Resolve a city label to the region/country chip it should use in search. */
+export function resolveRegionFromCity(city: string): ResolvedCityRegion | null {
+  const parts = splitCanonicalCityLabel(city);
+  if (!parts) return null;
+  const rawCode = parts.regionCode;
+  const cityKey = normalizeKey(parts.cityName);
+
+  if (rawCode === 'NL') {
+    return { filterCode: 'NL', label: 'Netherlands', kind: 'country', rawCode };
+  }
+  if (rawCode === 'AR') {
+    return { filterCode: 'AR', label: 'Argentina', kind: 'country', rawCode };
+  }
+  if (rawCode === 'WA' && AU_WA_CITY_NAMES.has(cityKey)) {
+    return {
+      filterCode: COUNTRY_FILTER_AU,
+      label: 'Australia',
+      kind: 'country',
+      rawCode,
+    };
+  }
+  if (isAuStateCode(rawCode) || rawCode === COUNTRY_FILTER_AU) {
+    return {
+      filterCode: COUNTRY_FILTER_AU,
+      label: 'Australia',
+      kind: 'country',
+      rawCode,
+    };
+  }
+  if (isUsStateCode(rawCode)) {
+    return {
+      filterCode: rawCode,
+      label: regionDisplayNameFromCode(rawCode),
+      kind: 'state',
+      rawCode,
+    };
+  }
+  if (isCaProvinceCode(rawCode)) {
+    return {
+      filterCode: rawCode,
+      label: regionDisplayNameFromCode(rawCode),
+      kind: 'province',
+      rawCode,
+    };
+  }
+  return {
+    filterCode: rawCode,
+    label: regionDisplayNameFromCode(rawCode),
+    kind: 'country',
+    rawCode,
+  };
+}
+
 /** US state vs CA province vs country/other for search chip labels. */
 export function regionKindFromCode(code: string): RegionKind {
   const c = code.trim().toUpperCase();
-  if (c === COUNTRY_FILTER_US || c === COUNTRY_FILTER_CANADA) return 'country';
-  if (US_STATE_DISPLAY[c]) return 'state';
-  if (CA_PROVINCE_DISPLAY[c]) return 'province';
+  if (
+    c === COUNTRY_FILTER_US ||
+    c === COUNTRY_FILTER_CANADA ||
+    c === COUNTRY_FILTER_AU ||
+    CA_PROVINCE_CODES_AS_COUNTRY.has(c) ||
+    US_STATE_CODES_AS_COUNTRY.has(c)
+  ) {
+    return 'country';
+  }
+  if (AU_STATE_CODES.has(c)) return 'country';
+  if (isUsStateCode(c)) return 'state';
+  if (isCaProvinceCode(c)) return 'province';
   return 'country';
 }
 
-/** True when `city` is `…, XX` for the given region/country code. */
+/** True when `city` matches the given region/country filter code. */
 export function cityMatchesRegionCode(
   city: string | null | undefined,
   regionCode: string,
 ): boolean {
-  const parts = splitCanonicalCityLabel(city || '');
-  if (!parts) return false;
+  const resolved = resolveRegionFromCity(city || '');
+  if (!resolved) return false;
   const code = regionCode.trim().toUpperCase();
-  if (code === COUNTRY_FILTER_US) return isUsStateCode(parts.regionCode);
-  if (code === COUNTRY_FILTER_CANADA) return isCaProvinceCode(parts.regionCode);
-  return parts.regionCode === code;
+  if (code === COUNTRY_FILTER_US) return resolved.kind === 'state';
+  if (code === COUNTRY_FILTER_CANADA) return resolved.kind === 'province';
+  if (code === COUNTRY_FILTER_AU) {
+    return resolved.filterCode === COUNTRY_FILTER_AU || resolved.rawCode === COUNTRY_FILTER_AU;
+  }
+  return resolved.filterCode === code || resolved.rawCode === code;
 }
 
 /**
  * Free-text / typeahead match against a city's region code or spelled-out name
- * (`CO`, `Colorado`, `UK`, `United Kingdom`, `USA`, `Canada`). `queryNorm` should
+ * (`CO`, `Colorado`, `UK`, `Netherlands`, `USA`, `Canada`). `queryNorm` should
  * already be search-normalized (lowercase, accents stripped).
  */
 export function cityMatchesRegionQuery(
@@ -309,15 +414,21 @@ export function cityMatchesRegionQuery(
   queryNorm: string,
 ): boolean {
   if (!queryNorm) return false;
-  const parts = splitCanonicalCityLabel(city || '');
-  if (!parts) return false;
-  if (US_COUNTRY_QUERY_ALIASES.has(queryNorm) && isUsStateCode(parts.regionCode)) return true;
-  if (CANADA_COUNTRY_QUERY_ALIASES.has(queryNorm) && isCaProvinceCode(parts.regionCode)) {
+  const resolved = resolveRegionFromCity(city || '');
+  if (!resolved) return false;
+  if (US_COUNTRY_QUERY_ALIASES.has(queryNorm) && resolved.kind === 'state') return true;
+  if (CANADA_COUNTRY_QUERY_ALIASES.has(queryNorm) && resolved.kind === 'province') return true;
+  if (
+    AU_COUNTRY_QUERY_ALIASES.has(queryNorm) &&
+    (resolved.filterCode === COUNTRY_FILTER_AU || resolved.rawCode === COUNTRY_FILTER_AU)
+  ) {
     return true;
   }
-  const codeNorm = normalizeKey(parts.regionCode);
-  const nameNorm = normalizeKey(parts.regionDisplayName);
-  if (codeNorm === queryNorm || codeNorm.startsWith(queryNorm)) return true;
+  const filterNorm = normalizeKey(resolved.filterCode);
+  const rawNorm = normalizeKey(resolved.rawCode);
+  const nameNorm = normalizeKey(resolved.label);
+  if (filterNorm === queryNorm || filterNorm.startsWith(queryNorm)) return true;
+  if (rawNorm === queryNorm || rawNorm.startsWith(queryNorm)) return true;
   if (nameNorm.includes(queryNorm)) return true;
   return false;
 }
@@ -332,6 +443,7 @@ export function regionSuggestionMatchesQuery(
   const code = regionCode.trim().toUpperCase();
   if (code === COUNTRY_FILTER_US && US_COUNTRY_QUERY_ALIASES.has(queryNorm)) return true;
   if (code === COUNTRY_FILTER_CANADA && CANADA_COUNTRY_QUERY_ALIASES.has(queryNorm)) return true;
+  if (code === COUNTRY_FILTER_AU && AU_COUNTRY_QUERY_ALIASES.has(queryNorm)) return true;
   const codeNorm = normalizeKey(regionCode);
   const nameNorm = normalizeKey(displayName);
   if (codeNorm === queryNorm || codeNorm.startsWith(queryNorm)) return true;

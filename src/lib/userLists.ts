@@ -241,6 +241,30 @@ export async function toggleLikedEvent(
   return { liked: error ? false : true, error };
 }
 
+/** Remove an event from one list (Liked or custom). Does not touch other lists. */
+export async function removeEventFromList(
+  listId: string,
+  eventId: string,
+  opts?: { userId?: string; isLikedList?: boolean },
+): Promise<{ error: Error | null }> {
+  const { error } = await supabase
+    .from('user_list_events')
+    .delete()
+    .eq('list_id', listId)
+    .eq('event_id', eventId);
+
+  if (error) return { error };
+
+  if (opts?.isLikedList && opts.userId) {
+    if (likedIdsCache?.userId === opts.userId) {
+      likedIdsCache.ids.delete(eventId);
+    } else {
+      invalidateLikedEventIdsCache(opts.userId);
+    }
+  }
+  return { error: null };
+}
+
 /**
  * Add event to a custom list, and also to Your Liked Events.
  * Removals stay independent (caller removes from one list only).

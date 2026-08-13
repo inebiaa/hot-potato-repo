@@ -7,6 +7,7 @@ import { getSpecialGuests, isSpecialGuestsSlug } from '../lib/specialGuests';
 import { cityTagSpelledLabel, splitCanonicalCityLabel } from '../lib/cityPlaces';
 import type { CommentTagColors } from '../lib/commentTagParsing';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
+import { TAG_PILL_ROW_CLASS } from './tagPillShell';
 
 interface TagStyle {
   value: string;
@@ -56,7 +57,7 @@ export default function CommentWithTags({
     } else if (type === 'hair_makeup') {
       bg = tagColors?.hair_makeup_bg_color || '#f3e8ff';
       text = tagColors?.hair_makeup_text_color || '#7e22ce';
-    } else if (type === 'city') {
+    } else if (type === 'city' || type === 'region') {
       bg = tagColors?.city_bg_color || '#dbeafe';
       text = tagColors?.city_text_color || '#1e40af';
     } else if (type === 'season') {
@@ -86,9 +87,16 @@ export default function CommentWithTags({
   effectiveHeaderTags(event).forEach((v) => add(v, 'header_tags'));
   (event.footer_tags || []).forEach((v) => add(v, 'footer_tags'));
   if (event.city) {
-    add(event.city, 'city');
-    const spelled = cityTagSpelledLabel(event.city);
-    if (spelled) add(spelled, 'city');
+    const parts = splitCanonicalCityLabel(event.city);
+    if (parts) {
+      add(parts.cityName, 'city');
+      add(parts.regionDisplayName, 'region');
+      add(event.city, 'city');
+      const spelled = cityTagSpelledLabel(event.city);
+      if (spelled) add(spelled, 'city');
+    } else {
+      add(event.city, 'city');
+    }
   }
   if (event.date) add(getSeasonFromDate(event.date), 'season');
   if (event.custom_tags && typeof event.custom_tags === 'object') {
@@ -133,11 +141,20 @@ export default function CommentWithTags({
     }
   }
 
+  const cityParts = splitCanonicalCityLabel(event.city || '');
+
   return (
-    <span className={className}>
+    <span className={`inline-flex max-w-full ${TAG_PILL_ROW_CLASS} ${className}`.trim()}>
       {segments.map((seg, i) => {
         if (seg.type !== 'tag' || !seg.tag) {
-          return <React.Fragment key={i}>{seg.value}</React.Fragment>;
+          // Edge spaces are handled by the shared pill-row gap.
+          const text = seg.value.replace(/^\s+|\s+$/g, '');
+          if (!text) return null;
+          return (
+            <span key={i} className="min-w-0">
+              {text}
+            </span>
+          );
         }
 
         const onClick = (e: React.MouseEvent) => {
@@ -147,7 +164,10 @@ export default function CommentWithTags({
             onTagClick('custom_performer', `${seg.tag!.slug}\x00${seg.tag!.value}`, seg.value);
             return;
           }
-          // City filter always uses the stored canonical event.city value.
+          if (seg.tag!.type === 'region' && cityParts) {
+            onTagClick('region', cityParts.regionCode, cityParts.regionDisplayName);
+            return;
+          }
           if (seg.tag!.type === 'city' && event.city) {
             onTagClick('city', event.city, event.city);
             return;
@@ -155,49 +175,12 @@ export default function CommentWithTags({
           onTagClick(seg.tag!.type, seg.tag!.value, seg.value);
         };
 
-        const cityParts =
-          seg.tag.type === 'city'
-            ? splitCanonicalCityLabel(event.city || '') || splitCanonicalCityLabel(seg.tag.value)
-            : null;
-
-        if (cityParts) {
-          const colors = { backgroundColor: seg.tag.bg, color: seg.tag.text };
-          return (
-            <span key={i} className={`${tagPillSplitSegmentGroupClass} mx-0.5`}>
-              <button
-                type="button"
-                data-tag-pill
-                className={`${tagPillSplitSegmentGroupClass} p-0 text-xs not-italic font-normal transition-colors hover:opacity-80 ${onTagClick ? 'cursor-pointer' : ''}`}
-                onClick={onClick}
-              >
-                <TagPillSplitLabel
-                  fitToContainer={fitTagPillsToContainer}
-                  text={cityParts.cityName}
-                  segmentColors={colors}
-                />
-              </button>
-              <button
-                type="button"
-                data-tag-pill
-                className={`${tagPillSplitSegmentGroupClass} p-0 text-xs not-italic font-normal transition-colors hover:opacity-80 ${onTagClick ? 'cursor-pointer' : ''}`}
-                onClick={onClick}
-              >
-                <TagPillSplitLabel
-                  fitToContainer={fitTagPillsToContainer}
-                  text={cityParts.regionDisplayName}
-                  segmentColors={colors}
-                />
-              </button>
-            </span>
-          );
-        }
-
         return (
           <button
             type="button"
             key={i}
             data-tag-pill
-            className={`${tagPillSplitSegmentGroupClass} p-0 text-xs not-italic font-normal mx-0.5 transition-colors hover:opacity-80 ${onTagClick ? 'cursor-pointer' : ''}`}
+            className={`${tagPillSplitSegmentGroupClass} p-0 text-xs not-italic font-normal transition-colors hover:opacity-80 ${onTagClick ? 'cursor-pointer' : ''}`}
             onClick={onClick}
           >
             <TagPillSplitLabel

@@ -3,7 +3,7 @@ import type { Event } from './supabase';
 import { effectiveHeaderTags } from './eventHeaderTags';
 import { getSeasonFromDate } from './season';
 import { getSpecialGuests, isSpecialGuestsSlug } from './specialGuests';
-import { cityTagSpelledLabel } from './cityPlaces';
+import { cityTagSpelledLabel, splitCanonicalCityLabel } from './cityPlaces';
 
 /** Tag pill colors aligned with CommentWithTags / EventCard */
 export interface CommentTagColors {
@@ -58,7 +58,7 @@ export function getEventTagStyles(
     } else if (type === 'hair_makeup') {
       bg = tagColors?.hair_makeup_bg_color || '#f3e8ff';
       text = tagColors?.hair_makeup_text_color || '#7e22ce';
-    } else if (type === 'city') {
+    } else if (type === 'city' || type === 'region') {
       bg = tagColors?.city_bg_color || '#dbeafe';
       text = tagColors?.city_text_color || '#1e40af';
     } else if (type === 'season') {
@@ -86,7 +86,20 @@ export function getEventTagStyles(
   (event.hair_makeup || []).forEach((v) => add(v, 'hair_makeup'));
   effectiveHeaderTags(event).forEach((v) => add(v, 'header_tags'));
   (event.footer_tags || []).forEach((v) => add(v, 'footer_tags'));
-  if (event.city) add(event.city, 'city');
+  if (event.city) {
+    const parts = splitCanonicalCityLabel(event.city);
+    if (parts) {
+      // Separate insertable/matchable chips: city or state/country.
+      add(parts.cityName, 'city');
+      add(parts.regionDisplayName, 'region');
+      // Full forms still match when typed as one phrase.
+      add(event.city, 'city');
+      const spelled = cityTagSpelledLabel(event.city);
+      if (spelled) add(spelled, 'city');
+    } else {
+      add(event.city, 'city');
+    }
+  }
   if (event.date) add(getSeasonFromDate(event.date), 'season');
   if (event.custom_tags && typeof event.custom_tags === 'object') {
     Object.entries(event.custom_tags).forEach(([slug, vals]) => {
@@ -95,6 +108,20 @@ export function getEventTagStyles(
     });
   }
   return tags;
+}
+
+/** Tags shown on the “Insert tag” row (city and region as separate chips). */
+export function getEventInsertTagStyles(
+  event: Event,
+  tagColors?: CommentTagColors,
+  customPerformerTags: { slug: string; bg_color: string; text_color: string }[] = [],
+): TagStyleResult[] {
+  const parts = splitCanonicalCityLabel(event.city || '');
+  return getEventTagStyles(event, tagColors, customPerformerTags).filter((tag) => {
+    if (tag.type !== 'city' || !parts) return true;
+    // Hide combined “City, XX” / “City, State” from insert; keep city name only.
+    return normalizeTagNameKey(tag.value) === normalizeTagNameKey(parts.cityName);
+  });
 }
 
 export interface ParsedSegment {
@@ -153,20 +180,7 @@ export function parseCommentToSegments(
   tagColors?: CommentTagColors,
   customPerformerTags: { slug: string; bg_color: string; text_color: string }[] = []
 ): ParsedSegment[] {
-  const tagStyles = getEventTagStyles(event, tagColors, customPerformerTags);
-  const tags = [...tagStyles];
-  if (event.city) {
-    const spelled = cityTagSpelledLabel(event.city);
-    if (spelled && !tags.some((t) => normalizeTagNameKey(t.value) === normalizeTagNameKey(spelled))) {
-      const cityStyle = tags.find((t) => t.type === 'city');
-      tags.push({
-        value: spelled,
-        bg: cityStyle?.bg || tagColors?.city_bg_color || '#dbeafe',
-        text: cityStyle?.text || tagColors?.city_text_color || '#1e40af',
-        type: 'city',
-      });
-    }
-  }
+  const tags = [...getEventTagStyles(event, tagColors, customPerformerTags)];
   if (tags.length === 0) return comment ? [{ type: 'text', value: comment }] : [];
   tags.sort((a, b) => b.value.length - a.value.length);
   const segments: ParsedSegment[] = [];

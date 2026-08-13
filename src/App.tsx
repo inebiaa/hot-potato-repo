@@ -650,6 +650,19 @@ function App() {
     identityIdsInUse,
   ]);
 
+  const scrollFeedToTop = useCallback(() => {
+    feedScrollRef.current?.scrollTo({ top: 0 });
+  }, []);
+
+  const wasFilteringRef = useRef(false);
+  useEffect(() => {
+    const filtering = selectedTags.length > 0 || searchQuery.trim().length >= 2;
+    if (filtering && !wasFilteringRef.current) {
+      scrollFeedToTop();
+    }
+    wasFilteringRef.current = filtering;
+  }, [selectedTags, searchQuery, scrollFeedToTop]);
+
   const handleTagClick = (type: string, value: string, explicitLabel?: string) => {
     if (overlayEventId) closeEventOverlay();
     else navigate({ pathname: '/', search: '' });
@@ -661,6 +674,7 @@ function App() {
       return [{ type, value, label }];
     });
     setSearchQuery('');
+    scrollFeedToTop();
   };
 
   const selectTagFilter = (type: string, value: string, explicitLabel?: string) => {
@@ -672,6 +686,7 @@ function App() {
       return [{ type, value, label }];
     });
     setSearchQuery('');
+    scrollFeedToTop();
   };
 
   const removeTagFilter = (type: string, value: string) => {
@@ -681,6 +696,7 @@ function App() {
   const clearFilters = () => {
     setSearchQuery('');
     setSelectedTags([]);
+    scrollFeedToTop();
   };
 
   // Legacy URLs: /?event=uuid → /event/uuid (keeps embed, stats, etc.)

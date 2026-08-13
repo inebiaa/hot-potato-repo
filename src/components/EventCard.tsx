@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Calendar, MapPin, Star, Edit, Trash2, Share2, Mail, MoreVertical, Heart, ListPlus, Check, Plus } from 'lucide-react';
+import { Calendar, MapPin, Star, Edit, Trash2, Share2, Mail, MoreVertical, Heart, ListPlus, ListMinus, Check, Plus } from 'lucide-react';
 import { Event, Rating, supabase, type UserList } from '../lib/supabase';
 import { getIcon } from '../lib/eventCardIcons';
 import { getSeasonFromDate } from '../lib/season';
@@ -10,7 +10,7 @@ import EditEventModal from './EditEventModal';
 import ViewRatingsModal from './ViewRatingsModal';
 import CommentWithTags from './CommentWithTags';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
-import { tagPillShellClass } from './tagPillShell';
+import { TAG_PILL_ROW_CLASS, tagPillShellClass } from './tagPillShell';
 import { useAuth } from '../contexts/AuthContext';
 import { useTagDisplayMap } from '../contexts/TagDisplayContext';
 import { tagResolutionKey } from '../lib/tagDisplayResolution';
@@ -32,7 +32,14 @@ import {
 } from '../lib/specialGuests';
 import { eventCardImageUrl } from '../lib/eventCardImageUrl';
 import { deleteStoredEventImage } from '../lib/eventImageUpload';
-import { addEventToListAndLiked, createUserPlaylist, fetchLikedEventIds, fetchUserPlaylists, toggleLikedEvent } from '../lib/userLists';
+import {
+  addEventToListAndLiked,
+  createUserPlaylist,
+  fetchLikedEventIds,
+  fetchUserPlaylists,
+  removeEventFromList,
+  toggleLikedEvent,
+} from '../lib/userLists';
 import { BackIconButton } from './ui';
 import { formControlClass, formControlPaddingClass, formControlTextClass } from './ui/field';
 
@@ -106,6 +113,11 @@ interface EventCardProps {
   /** Opacity for the image only (for stack front card photo blending) */
   imageOpacity?: number;
   customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
+  /** When set (own library board), overflow menu can remove this show from that list. */
+  listMembership?: {
+    listId: string;
+    isLikedList?: boolean;
+  };
 }
 
 export default function EventCard({
@@ -122,6 +134,7 @@ export default function EventCard({
   customPerformerTags = [],
   stackPhotoOnly = false,
   imageOpacity,
+  listMembership,
 }: EventCardProps) {
   const t = useT();
   const navigate = useNavigate();
@@ -186,6 +199,7 @@ export default function EventCard({
   const [expandedTagSections, setExpandedTagSections] = useState<Record<string, boolean>>({});
   const [isLiked, setIsLiked] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
+  const [removeFromListBusy, setRemoveFromListBusy] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const actionsMenuBtnRef = useRef<HTMLButtonElement | null>(null);
   const playlistsFetchGen = useRef(0);
@@ -364,6 +378,23 @@ export default function EventCard({
       setIsLiked(prev);
     } finally {
       setLikeBusy(false);
+    }
+  };
+
+  const handleRemoveFromList = async () => {
+    if (!user || !listMembership || removeFromListBusy) return;
+    setRemoveFromListBusy(true);
+    try {
+      const { error } = await removeEventFromList(listMembership.listId, event.id, {
+        userId: user.id,
+        isLikedList: listMembership.isLikedList,
+      });
+      if (error) return;
+      if (listMembership.isLikedList) setIsLiked(false);
+      setShowActionsMenu(false);
+      onEventUpdated();
+    } finally {
+      setRemoveFromListBusy(false);
     }
   };
 
@@ -748,9 +779,24 @@ export default function EventCard({
                       }}
                       className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
                     >
-                      <ListPlus size={14} className="text-gray-500" />
+                      <ListPlus size={14} className="shrink-0 text-gray-500" />
                       <span>{t('event.addToList')}</span>
                     </button>
+                    {listMembership ? (
+                      <button
+                        type="button"
+                        disabled={removeFromListBusy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleRemoveFromList();
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
+                      >
+                        <ListMinus size={14} className="shrink-0 text-gray-500" />
+                        <span>{t('event.removeFromList')}</span>
+                      </button>
+                    ) : null}
+                    <div className="border-t border-gray-100 my-1" />
                     <button
                       onClick={() => { copyToClipboard(shareLink, 'link'); setShowActionsMenu(false); }}
                       className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
@@ -828,7 +874,7 @@ export default function EventCard({
             )}
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap mb-2">
+          <div className={`${TAG_PILL_ROW_CLASS} mb-2`}>
             {event.city && (
                 <button
                 data-tag-pill
@@ -878,7 +924,7 @@ export default function EventCard({
             const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
             return (
               <div className="mb-3">
-                <div className="flex flex-wrap gap-2 items-center">
+                <div className={TAG_PILL_ROW_CLASS}>
                   {visible.map((tag, idx) => (
                     <button
                       key={idx}
@@ -967,7 +1013,7 @@ export default function EventCard({
                       {t('event.starring')}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-1 items-center">
+                  <div className={TAG_PILL_ROW_CLASS}>
                     {visible.map((name, idx) => (
                       <button
                         key={idx}
@@ -1012,7 +1058,7 @@ export default function EventCard({
                       {t(tags.length === 1 ? 'event.specialGuest' : 'event.specialGuests')}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-1 items-center">
+                  <div className={TAG_PILL_ROW_CLASS}>
                     {visible.map((name, idx) => (
                       <button
                         key={idx}
@@ -1052,7 +1098,7 @@ export default function EventCard({
                       {t('event.producedBy')}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-1 items-center">
+                  <div className={TAG_PILL_ROW_CLASS}>
                     {visible.map((producer, idx) => (
                       <button
                         key={idx}
@@ -1092,7 +1138,7 @@ export default function EventCard({
                       {t('event.hairMakeup')}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-1 items-center">
+                  <div className={TAG_PILL_ROW_CLASS}>
                     {visible.map((artist, idx) => (
                       <button
                         key={idx}
@@ -1157,7 +1203,7 @@ export default function EventCard({
                           {tagDef.label}
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-1 items-center">
+                      <div className={TAG_PILL_ROW_CLASS}>
                         {visible.map((val, idx) => (
                           <button
                             key={idx}
@@ -1224,7 +1270,7 @@ export default function EventCard({
                 Your rating: {userRating.rating} stars
               </p>
               {userRating.comment && (
-                <p className="text-sm text-gray-500 mt-1 italic">
+                <p className="mt-1 text-sm text-gray-500 italic">
                   <CommentWithTags
                     comment={userRating.comment}
                     event={event}
@@ -1244,7 +1290,7 @@ export default function EventCard({
             const visible = showMore ? tags.slice(0, TAG_LIMIT) : tags;
             return (
               <div className="mt-3 pt-3 border-t">
-                <div className="flex flex-wrap gap-1 items-center">
+                <div className={TAG_PILL_ROW_CLASS}>
                   {visible.map((tag, idx) => (
                     <button
                       key={idx}

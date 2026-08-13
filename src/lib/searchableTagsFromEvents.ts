@@ -1,11 +1,9 @@
 import type { Event } from './supabase';
 import {
+  COUNTRY_FILTER_AU,
   COUNTRY_FILTER_CANADA,
   COUNTRY_FILTER_US,
-  isCaProvinceCode,
-  isUsStateCode,
-  regionDisplayNameFromCode,
-  splitCanonicalCityLabel,
+  resolveRegionFromCity,
 } from './cityPlaces';
 import { effectiveHeaderTags } from './eventHeaderTags';
 import { getSpecialGuests, isSpecialGuestsSlug } from './specialGuests';
@@ -48,6 +46,7 @@ export function collectSearchableTagsFromEvents(
   };
   let hasUsState = false;
   let hasCaProvince = false;
+  let hasAustralia = false;
   events.forEach((e) => {
     (e.producers || []).forEach((v) => expandIdentity('producer', v));
     (e.featured_designers || []).forEach((v) => expandIdentity('designer', v));
@@ -58,11 +57,12 @@ export function collectSearchableTagsFromEvents(
     (e.footer_tags || []).forEach((v) => expandIdentity('footer_tags', v));
     if (e.city) {
       add('city', e.city);
-      const region = splitCanonicalCityLabel(e.city);
+      const region = resolveRegionFromCity(e.city);
       if (region) {
-        add('region', region.regionCode, regionDisplayNameFromCode(region.regionCode));
-        if (isUsStateCode(region.regionCode)) hasUsState = true;
-        if (isCaProvinceCode(region.regionCode)) hasCaProvince = true;
+        add('region', region.filterCode, region.label);
+        if (region.kind === 'state') hasUsState = true;
+        if (region.kind === 'province') hasCaProvince = true;
+        if (region.filterCode === COUNTRY_FILTER_AU) hasAustralia = true;
       }
     }
     if (e.location) expandIdentity('venue', e.location);
@@ -98,8 +98,9 @@ export function collectSearchableTagsFromEvents(
       });
     }
   });
-  // Cities store state/province codes; expose country chips for those markets.
+  // Cities store state/province (or AU state) codes; expose country chips for those markets.
   if (hasUsState) add('region', COUNTRY_FILTER_US, 'United States');
   if (hasCaProvince) add('region', COUNTRY_FILTER_CANADA, 'Canada');
+  if (hasAustralia) add('region', COUNTRY_FILTER_AU, 'Australia');
   return tags.sort((a, b) => a.label.localeCompare(b.label));
 }

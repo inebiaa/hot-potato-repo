@@ -4,7 +4,7 @@ import { fetchExistingTags, fetchCustomTagSuggestions, fetchExistingCities, fetc
 import { searchCities } from '../lib/cityPlaces';
 import { tagMatchesQuery } from '../lib/normalize';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
-import { TAG_INPUT_EDIT_PILL_COLORS } from './tagPillShell';
+import { TAG_INPUT_EDIT_PILL_COLORS, TAG_PILL_ROW_CLASS } from './tagPillShell';
 import { formControlClass, formControlPaddingClass } from './ui/field';
 import { cn } from '../lib/utils';
 
@@ -318,7 +318,8 @@ export default function TagInput({
         className={cn(
           formControlClass,
           formControlPaddingClass,
-          'flex min-h-10 flex-wrap items-center gap-1 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring',
+          TAG_PILL_ROW_CLASS,
+          'min-h-10 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring',
         )}
         onClick={() => inputRef.current?.focus()}
       >
