@@ -59,7 +59,8 @@ export default function ListSocialMeta({ list }: ListSocialMetaProps) {
       link.rel = 'canonical';
       document.head.appendChild(link);
     }
-    link.href = canonicalListUrl(list.id);
+    const handle = (list.ownerHandle || '').trim();
+    link.href = handle ? canonicalListUrl(handle, list.id) : `${window.location.origin}/list/${list.id}`;
 
     for (const spec of buildListSocialMetaTagSpecs(list)) {
       const meta = document.createElement('meta');

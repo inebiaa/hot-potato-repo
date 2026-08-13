@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase, type Event, type Rating, type UserList } from '../lib/supabase';
 import EventCard from './EventCard';
 import MasonryLaneFeed, { type MasonryLaneItem } from './MasonryLaneFeed';
@@ -8,6 +9,7 @@ import { normalizeEventTagArrays } from '../lib/eventTagArray';
 import { fetchEventRatingStats } from '../lib/eventRatingStats';
 import { useAuth } from '../contexts/AuthContext';
 import { useT } from '../contexts/CopyContext';
+import { listPagePath } from '../lib/siteBase';
 import { ListCover, pickListCollageUrls } from './ListCoverCollage';
 import ListSocialMeta from './ListSocialMeta';
 
@@ -20,6 +22,8 @@ type BoardRow = {
 
 type SharedLibraryListPageProps = {
   listId: string;
+  /** Handle from `/:handle/list/:id` when present (may be missing on legacy `/list/:id`). */
+  urlHandle?: string | null;
   onOpenEvent?: (eventId: string) => void;
   onTagClick?: (type: string, value: string, displayLabel?: string) => void;
   tagColors?: ProfileTagColors;
@@ -49,6 +53,7 @@ type ProfileTagColors = {
 
 export default function SharedLibraryListPage({
   listId,
+  urlHandle = null,
   onOpenEvent,
   onTagClick,
   tagColors,
@@ -56,8 +61,10 @@ export default function SharedLibraryListPage({
 }: SharedLibraryListPageProps) {
   const { user } = useAuth();
   const t = useT();
+  const navigate = useNavigate();
   const [list, setList] = useState<UserList | null>(null);
   const [ownerUsername, setOwnerUsername] = useState('');
+  const [ownerHandle, setOwnerHandle] = useState('');
   const [rows, setRows] = useState<BoardRow[]>([]);
   const [tagMap, setTagMap] = useState<TagResolutionMap | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,6 +76,7 @@ export default function SharedLibraryListPage({
       setLoading(true);
       setError(null);
       setOwnerUsername('');
+      setOwnerHandle('');
       const listRes = await supabase.from('user_lists').select('*').eq('id', listId).maybeSingle();
       if (cancelled) return;
       if (listRes.error || !listRes.data) {
@@ -92,10 +100,13 @@ export default function SharedLibraryListPage({
       {
         const profileRes = await supabase
           .from('user_profiles')
-          .select('username')
+          .select('username, user_id_public')
           .eq('user_id', listRow.user_id)
           .maybeSingle();
-        if (!cancelled) setOwnerUsername((profileRes.data?.username || '').trim());
+        if (!cancelled) {
+          setOwnerUsername((profileRes.data?.username || '').trim());
+          setOwnerHandle((profileRes.data?.user_id_public || '').trim());
+        }
       }
 
       if (listRow.is_rated_list) {
@@ -175,6 +186,14 @@ export default function SharedLibraryListPage({
     };
   }, [listId, user?.id]);
 
+  // Canonical path is /:handle/list/:id (rewrite legacy /list/:id and wrong handles).
+  useEffect(() => {
+    if (!ownerHandle || !listId) return;
+    const current = (urlHandle || '').trim();
+    if (current.toLowerCase() === ownerHandle.toLowerCase()) return;
+    navigate(listPagePath(ownerHandle, listId), { replace: true });
+  }, [ownerHandle, listId, urlHandle, navigate]);
+
   useEffect(() => {
     const events = rows.map((r) => r.event);
     if (events.length === 0) {
@@ -226,16 +245,17 @@ export default function SharedLibraryListPage({
   );
   const shareImageUrl = (list?.cover_image_url || '').trim() || collageUrls[0] || null;
   const sharePayload = useMemo(() => {
-    if (!list || !shareTitle || error) return null;
+    if (!list || !shareTitle || error || !ownerHandle) return null;
     return {
       id: list.id,
       title: shareTitle,
       description: list.description,
       imageUrl: shareImageUrl,
+      ownerHandle,
       ownerUsername: ownerUsername || null,
       eventCount: rows.length,
     };
-  }, [list, shareTitle, shareImageUrl, ownerUsername, rows.length, error]);
+  }, [list, shareTitle, shareImageUrl, ownerHandle, ownerUsername, rows.length, error]);
 
   if (loading) {
     return (

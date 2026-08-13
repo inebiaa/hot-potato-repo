@@ -150,7 +150,10 @@ function injectListSeoShell(
   shareImageUrl?: string,
 ): string {
   const prerender = { siteOrigin: site, viteBase, brandImageUrl, shareImageUrl }
-  const canonical = canonicalListUrlFromParts(list.id, site, viteBase)
+  const handle = (list.ownerHandle || '').trim()
+  const canonical = handle
+    ? canonicalListUrlFromParts(handle, list.id, site, viteBase)
+    : `${site.replace(/\/$/, '')}/list/${list.id}`
   const jsonLd = jsonLdForHtml(listJsonLdScriptContentPrerender(list, prerender))
   const socialMeta = buildListSocialMetaTagsHtml(list, prerender)
   const title = `${list.title.trim() || 'Shared list'} | ${APP_NAME}`
@@ -197,7 +200,7 @@ function staticSitePlugin(): Plugin {
 
       if (!url || !key) {
         const msg =
-          '[static-site] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY: cannot write sitemap.xml or event/*/list/*/index.html (GitHub Pages needs these files for /event/:id and /list/:id).'
+          '[static-site] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY: cannot write sitemap.xml or event/*/ and :handle/list/*/index.html (GitHub Pages needs these files for crawlers).'
         if (isCi) {
           throw new Error(
             `${msg} Add both as repository Secrets and re-run the workflow.`
@@ -266,11 +269,24 @@ function staticSitePlugin(): Plugin {
         const ownerIds = [...new Set(publicLists.map((l) => l.user_id).filter(Boolean))]
         const profilesRes =
           ownerIds.length > 0
-            ? await client.from('user_profiles').select('user_id, username').in('user_id', ownerIds)
-            : { data: [] as { user_id: string; username: string | null }[], error: null }
+            ? await client
+                .from('user_profiles')
+                .select('user_id, username, user_id_public')
+                .in('user_id', ownerIds)
+            : {
+                data: [] as {
+                  user_id: string
+                  username: string | null
+                  user_id_public: string | null
+                }[],
+                error: null,
+              }
         if (profilesRes.error) throw profilesRes.error
-        const usernameByUser = new Map(
+        const displayNameByUser = new Map(
           (profilesRes.data || []).map((p) => [p.user_id, (p.username || '').trim()]),
+        )
+        const handleByUser = new Map(
+          (profilesRes.data || []).map((p) => [p.user_id, (p.user_id_public || '').trim()]),
         )
 
         const customListIds = publicLists.filter((l) => !l.is_rated_list).map((l) => l.id)
@@ -330,41 +346,45 @@ function staticSitePlugin(): Plugin {
         const likedTitleTemplate =
           tCopy('event.likedListNameForUser', copyOverrides).trim() || "{name}'s Liked Events"
 
-        const listPayloads: ListSharePayload[] = publicLists.map((l) => {
-          const handle = usernameByUser.get(l.user_id) || ''
-          const eventIds = l.is_rated_list
-            ? ratingsByUser.get(l.user_id) || []
-            : eventsByList.get(l.id) || []
-          let imageUrl = (l.cover_image_url || '').trim() || null
-          if (!imageUrl) {
-            for (const eid of eventIds) {
-              const img = imageByEvent.get(eid)
-              if (img) {
-                imageUrl = img
-                break
+        const listPayloads: ListSharePayload[] = publicLists
+          .map((l) => {
+            const handle = handleByUser.get(l.user_id) || ''
+            if (!handle) return null
+            const eventIds = l.is_rated_list
+              ? ratingsByUser.get(l.user_id) || []
+              : eventsByList.get(l.id) || []
+            let imageUrl = (l.cover_image_url || '').trim() || null
+            if (!imageUrl) {
+              for (const eid of eventIds) {
+                const img = imageByEvent.get(eid)
+                if (img) {
+                  imageUrl = img
+                  break
+                }
               }
             }
-          }
-          const displayName = handle || 'Profile'
-          const title = l.is_rated_list
-            ? ratedTitleTemplate.replace('{name}', displayName)
-            : l.is_liked_list
-              ? likedTitleTemplate.replace('{name}', displayName)
-              : (l.name || 'Shared list').trim()
-          return {
-            id: l.id,
-            title,
-            description: l.description,
-            imageUrl,
-            ownerUsername: handle || null,
-            eventCount: eventIds.length,
-          }
-        })
+            const displayName = displayNameByUser.get(l.user_id) || handle || 'Profile'
+            const title = l.is_rated_list
+              ? ratedTitleTemplate.replace('{name}', displayName)
+              : l.is_liked_list
+                ? likedTitleTemplate.replace('{name}', displayName)
+                : (l.name || 'Shared list').trim()
+            return {
+              id: l.id,
+              title,
+              description: l.description,
+              imageUrl,
+              ownerHandle: handle,
+              ownerUsername: displayName,
+              eventCount: eventIds.length,
+            } satisfies ListSharePayload
+          })
+          .filter((x): x is ListSharePayload => x != null)
 
         const urls = [
           site + '/',
           ...rows.map((row) => `${site}/event/${row.id}`),
-          ...listPayloads.map((l) => `${site}/list/${l.id}`),
+          ...listPayloads.map((l) => `${site}/${encodeURIComponent(l.ownerHandle || '')}/list/${l.id}`),
         ]
         const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -437,7 +457,9 @@ ${urls.map((loc) => `  <url><loc>${escapeXml(loc)}</loc><changefreq>weekly</chan
 
         let listPages = 0
         for (const list of listPayloads) {
-          const dir = resolve(distDir, 'list', list.id)
+          const handle = (list.ownerHandle || '').trim()
+          if (!handle) continue
+          const dir = resolve(distDir, handle, 'list', list.id)
           mkdirSync(dir, { recursive: true })
           const html = injectListSeoShell(
             indexHtml,
@@ -450,7 +472,7 @@ ${urls.map((loc) => `  <url><loc>${escapeXml(loc)}</loc><changefreq>weekly</chan
           writeFileSync(resolve(dir, 'index.html'), html, 'utf8')
           listPages += 1
         }
-        console.log('[static-site] Wrote', listPages, 'list/*/index.html copies (HTTP 200 for crawlers)')
+        console.log('[static-site] Wrote', listPages, ':handle/list/*/index.html copies (HTTP 200 for crawlers)')
 
         writeFileSync(resolve(distDir, '404.html'), indexHtml, 'utf8')
         console.log('[static-site] Wrote 404.html (SPA fallback for static hosts)')

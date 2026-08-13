@@ -710,7 +710,7 @@ function App() {
     navigate(`/event/${q}${qs ? `?${qs}` : ''}`, { replace: true });
   }, [location.pathname, searchParams, params.eventId, navigate]);
 
-  // Legacy URLs: /?list=uuid → /list/uuid
+  // Legacy URLs: /?list=uuid → /list/uuid (SharedLibraryListPage then rewrites to /:handle/list/:id)
   useEffect(() => {
     const q = searchParams.get('list');
     if (!q || params.listId) return;
@@ -726,11 +726,17 @@ function App() {
   const eventIdFromPath = params.eventId ?? null;
   const eventIdFromUrl = eventIdFromPath ?? eventIdFromQuery;
   const showProfile = searchParams.get('profile') === '1';
-  const profileHandle =
-    params.handle && isProfileHandlePathSegment(params.handle) ? params.handle : null;
-  const showProfileView = showProfile || !!profileHandle;
   const sharedListId = params.listId ?? searchParams.get('list');
   const showSharedList = !!sharedListId;
+  const listUrlHandle =
+    showSharedList && params.handle && isProfileHandlePathSegment(params.handle)
+      ? params.handle
+      : null;
+  const profileHandle =
+    !showSharedList && params.handle && isProfileHandlePathSegment(params.handle)
+      ? params.handle
+      : null;
+  const showProfileView = showProfile || !!profileHandle;
   const showStats = searchParams.get('stats') === '1';
   const showSettings = searchParams.get('settings') === '1';
   const pathname = location.pathname;
@@ -1507,6 +1513,7 @@ function App() {
             />
             <SharedLibraryListPage
               listId={sharedListId}
+              urlHandle={listUrlHandle}
               onTagClick={handleTagClick}
               onOpenEvent={(id) => openEventOverlay(id)}
               tagColors={appSettings}
