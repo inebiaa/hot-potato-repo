@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { Event } from './supabase';
+import { regionDisplayNameFromCode } from './cityPlaces';
 import { effectiveHeaderTags } from './eventHeaderTags';
 import { coalesceTagList } from './eventTagArray';
 import { formatEventDateDisplay } from './formatEventDate';
@@ -34,6 +35,9 @@ export function displayLabelForTagFilter(
   }
   if (explicitLabel && explicitLabel.trim()) return explicitLabel.trim();
   if (!value) return value;
+  if (type === 'region') {
+    return regionDisplayNameFromCode(value);
+  }
   if (type === 'show_type') {
     return value === 'music' ? 'Music' : value === 'fashion' ? 'Fashion' : value;
   }

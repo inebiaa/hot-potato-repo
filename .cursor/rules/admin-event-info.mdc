@@ -17,15 +17,37 @@ When the user asks to **admin / add / update / insert / fix event info**, do not
 | `location` | Venue / site name as billed |
 | `season` | From date (`Winter`/`Spring`/`Summer`/`Fall` + year) |
 | `show_type` | Usually `music` for concerts/fests |
-| `featured_artists` | Full day/tour bill when building festival cards; catalog spelling |
+| `featured_artists` | Headliner(s) for shows/tours. Festivals: see **Artist-triggered festivals**. Catalog spelling |
 | `header_tags` | Genres + `Festival` on festival cards (genres alone is not enough) |
 | `producers` | Only with explicit presenter credit (producers-accuracy) |
-| `countdown_link` | Official tickets / event page (artist Ticketmaster hub, fest site, venue). Not StubHub/SeatGeek unless nothing else exists |
+| `countdown_link` | **Future events only.** If the event date is still ahead, set official tickets / event page (artist Ticketmaster hub, fest site, venue). Not StubHub/SeatGeek unless nothing else exists. If the event is already past, leave `countdown_link` null / empty (do not backfill ticket links onto past shows). The app clears the link automatically when the countdown pill hits zero (`clear_expired_countdown_link`) and via a daily DB sweep. |
 | `image_url` | Must end as a **Supabase `event-images` public URL**. Source may be an external promo/press link, but always rehost via `ingest-event-image` / `ensureEventImageStored` (or `scripts/backfill-event-images.mjs`) before saving. Never leave hotlinks in `image_url`. |
-| `custom_tags` | Openers as `special-guests` when billed that way |
+| `custom_tags` | All billed openers / special guests / supporting acts as `special-guests` (see below) |
 | `created_by` | Admin `9ab4f944-acce-463b-8f0d-a1a12b52a24c` on inserts |
 
 Also set `formatted_address` when you can resolve a stable venue address.
+
+## Shows and tours: support billing
+
+When adding a **headline show or tour night**, research support for **that date** (tour announce, Ticketmaster/venue page, official artist site):
+
+1. Put the headliner(s) in `featured_artists`.
+2. Put **every billed** special guest, opener, and supporting act in `custom_tags.special-guests` (array). Do not skip “also appearing” / “with…” / regional openers when the source lists them for that night.
+3. If support differs by market/leg, set guests **per night**, not one tour-wide guess.
+4. If a night truly has no announced support, leave `special-guests` empty. If support is rumored but not billed, omit it.
+5. Catalog spelling for guest names (artist-name-spelling).
+6. **Full tour, not one night.** If you add or update **any** date of a named tour (or clearly announced tour leg), also add/update **every other public headline night** on that same tour / leg from the official announce or Ticketmaster hub. Do not leave a lone market because that was the only city the user named. Skip private / TV / festival slots per usual fest rules; for festivals on the routing, take the full fest run (see below) or skip the fest entirely.
+
+## Artist-triggered festivals
+
+When the user asks to admin an **artist** and that leads to adding or updating a **festival** card (Pride, OUTLOUD, LadyLand, Homobloc, Coachella day, etc.):
+
+1. Do **not** insert a fest card that only lists that artist (or a short cherry-picked subset).
+2. Research the **official full lineup for that day/card** from the fest site, presenter, or a complete set-times source.
+3. Put **every announced act** for that day into `featured_artists` (expand billed B2Bs into the named DJs/acts; keep catalog spelling).
+4. If the full day bill is unclear, incomplete, or only “and more…”, **skip that fest card** (or ask) until it is clear. Prefer skipping over a partial ship.
+5. Multi-day fests: one card per day with that day’s complete bill, not one blended weekend list.
+6. **Full run, not one day.** If you add or update **any** day of a multi-day festival edition, also add/update **every other day** of that same run (same fest + edition year) when those days exist. Do not leave a lone Day 2 because the tracked artist only played that day. Apply the same full-lineup bar to each sibling day; if any day cannot be completed, skip or ask for the whole run rather than shipping a partial weekend.
 
 ## Naming
 
@@ -52,7 +74,13 @@ Also set `formatted_address` when you can resolve a stable venue address.
 ## Do not
 
 - Ship festival days with only genre tags and no `Festival`
+- Add a festival just because the tracked artist played it, with only that artist (or a partial lineup) on the card
+- Add only the fest day the tracked artist played and leave the other days of that edition missing
+- Add only one (or a few) nights of a named tour / tour leg and leave the rest of that announce missing
+- Ship a festival card with a partial/guessed lineup when the official day bill is incomplete or unavailable
+- Ship a headline show with announced openers/special guests missing from `special-guests`
 - Reuse one tour image for an unrelated festival day (or the reverse) without a reason
-- Leave `countdown_link` empty when an official URL is findable in a normal search
+- Leave `countdown_link` empty on a **future** event when an official URL is findable in a normal search
+- Add or keep a `countdown_link` on a **past** event (clear it when touching past rows if it’s still set)
 - Use vertical posters, generic stock, or old photos from a different edition when a current horizontal promo exists
 - Write hotlinked `image_url` values straight into the DB and skip rehost

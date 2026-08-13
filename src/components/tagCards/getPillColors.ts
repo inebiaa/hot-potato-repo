@@ -12,6 +12,7 @@ export function getPillColors(tagType: string, tagColors?: TagColorsForPills): {
     case 'hair_makeup':
       return { bg: c.hair_makeup_bg_color || '#f3e8ff', text: c.hair_makeup_text_color || '#7c3aed' };
     case 'city':
+    case 'region':
       return { bg: c.city_bg_color || '#dbeafe', text: c.city_text_color || '#1e40af' };
     case 'venue':
       return { bg: c.city_bg_color || '#dbeafe', text: c.city_text_color || '#1e40af' };

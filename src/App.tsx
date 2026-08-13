@@ -41,6 +41,11 @@ import {
   searchTagIdentities,
   type TagIdentityRecord,
 } from './lib/tagIdentity';
+import {
+  cityMatchesRegionCode,
+  cityMatchesRegionQuery,
+  regionSuggestionMatchesQuery,
+} from './lib/cityPlaces';
 import { collectSearchableTagsFromEvents } from './lib/searchableTagsFromEvents';
 import PrimarySearchBar from './components/PrimarySearchBar';
 import MasonryLaneFeed, { type MasonryLaneItem } from './components/MasonryLaneFeed';
@@ -605,6 +610,7 @@ function App() {
     const sourceTags = profileBoardSearchableTags ?? searchableTags;
     const fromEvents = sourceTags.filter((t) => {
       if (normalizeForSearch(t.label).includes(q)) return true;
+      if (t.type === 'region' && regionSuggestionMatchesQuery(t.value, t.label, q)) return true;
       return t.type === 'date' && eventDateMatchesSearch(t.value, q);
     });
     if (profileBoardSearchableTags) {
@@ -883,7 +889,9 @@ function App() {
         };
         filtered = filtered.filter((event) => {
           const nameMatch = normalizeForSearch(event.name || '').includes(queryNorm);
-          const cityMatch = normalizeForSearch(event.city || '').includes(queryNorm);
+          const cityMatch =
+            normalizeForSearch(event.city || '').includes(queryNorm) ||
+            cityMatchesRegionQuery(event.city, queryNorm);
           const locationMatch = normalizeForSearch(event.location || '').includes(queryNorm);
           const venueMatch = event.location ? tagLineMatch('venue', event.location) : false;
           const designersMatch = event.featured_designers?.some((d) => tagLineMatch('designer', d)) || false;
@@ -931,6 +939,8 @@ function App() {
         switch (tag.type) {
           case 'city':
             return sameTagSpelling(event.city, tag.value);
+          case 'region':
+            return cityMatchesRegionCode(event.city, tag.value);
           case 'venue':
             return eventMatchesVenueTag(event, tag.value, tagResolutionMap);
           case 'season':

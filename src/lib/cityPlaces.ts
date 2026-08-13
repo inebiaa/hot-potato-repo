@@ -237,16 +237,106 @@ const COUNTRY_DISPLAY: Record<string, string> = {
   ZA: 'South Africa',
 };
 
+/**
+ * Synthetic country filter values for markets that store state/province codes on
+ * cities (not `City, US` / `City, CA`). `CANADA` avoids clashing with California `CA`.
+ */
+export const COUNTRY_FILTER_US = 'US';
+export const COUNTRY_FILTER_CANADA = 'CANADA';
+
+const US_COUNTRY_QUERY_ALIASES = new Set([
+  'us',
+  'usa',
+  'united states',
+  'united states of america',
+  'america',
+]);
+/** Do not include bare `ca` (that is California). */
+const CANADA_COUNTRY_QUERY_ALIASES = new Set(['canada', 'can']);
+
+export function isUsStateCode(code: string): boolean {
+  return Boolean(US_STATE_DISPLAY[code.trim().toUpperCase()]);
+}
+
+export function isCaProvinceCode(code: string): boolean {
+  return Boolean(CA_PROVINCE_DISPLAY[code.trim().toUpperCase()]);
+}
+
 /** Spelled-out region/country for a 2–3 letter code (falls back to the code). */
 export function regionDisplayNameFromCode(code: string): string {
   const c = code.trim().toUpperCase();
   if (!c) return code.trim();
+  if (c === COUNTRY_FILTER_CANADA) return 'Canada';
   return (
     US_STATE_DISPLAY[c] ||
     CA_PROVINCE_DISPLAY[c] ||
     COUNTRY_DISPLAY[c] ||
     c
   );
+}
+
+export type RegionKind = 'state' | 'province' | 'country';
+
+/** US state vs CA province vs country/other for search chip labels. */
+export function regionKindFromCode(code: string): RegionKind {
+  const c = code.trim().toUpperCase();
+  if (c === COUNTRY_FILTER_US || c === COUNTRY_FILTER_CANADA) return 'country';
+  if (US_STATE_DISPLAY[c]) return 'state';
+  if (CA_PROVINCE_DISPLAY[c]) return 'province';
+  return 'country';
+}
+
+/** True when `city` is `…, XX` for the given region/country code. */
+export function cityMatchesRegionCode(
+  city: string | null | undefined,
+  regionCode: string,
+): boolean {
+  const parts = splitCanonicalCityLabel(city || '');
+  if (!parts) return false;
+  const code = regionCode.trim().toUpperCase();
+  if (code === COUNTRY_FILTER_US) return isUsStateCode(parts.regionCode);
+  if (code === COUNTRY_FILTER_CANADA) return isCaProvinceCode(parts.regionCode);
+  return parts.regionCode === code;
+}
+
+/**
+ * Free-text / typeahead match against a city's region code or spelled-out name
+ * (`CO`, `Colorado`, `UK`, `United Kingdom`, `USA`, `Canada`). `queryNorm` should
+ * already be search-normalized (lowercase, accents stripped).
+ */
+export function cityMatchesRegionQuery(
+  city: string | null | undefined,
+  queryNorm: string,
+): boolean {
+  if (!queryNorm) return false;
+  const parts = splitCanonicalCityLabel(city || '');
+  if (!parts) return false;
+  if (US_COUNTRY_QUERY_ALIASES.has(queryNorm) && isUsStateCode(parts.regionCode)) return true;
+  if (CANADA_COUNTRY_QUERY_ALIASES.has(queryNorm) && isCaProvinceCode(parts.regionCode)) {
+    return true;
+  }
+  const codeNorm = normalizeKey(parts.regionCode);
+  const nameNorm = normalizeKey(parts.regionDisplayName);
+  if (codeNorm === queryNorm || codeNorm.startsWith(queryNorm)) return true;
+  if (nameNorm.includes(queryNorm)) return true;
+  return false;
+}
+
+/** True when a region suggestion (code + display name) matches the query. */
+export function regionSuggestionMatchesQuery(
+  regionCode: string,
+  displayName: string,
+  queryNorm: string,
+): boolean {
+  if (!queryNorm) return false;
+  const code = regionCode.trim().toUpperCase();
+  if (code === COUNTRY_FILTER_US && US_COUNTRY_QUERY_ALIASES.has(queryNorm)) return true;
+  if (code === COUNTRY_FILTER_CANADA && CANADA_COUNTRY_QUERY_ALIASES.has(queryNorm)) return true;
+  const codeNorm = normalizeKey(regionCode);
+  const nameNorm = normalizeKey(displayName);
+  if (codeNorm === queryNorm || codeNorm.startsWith(queryNorm)) return true;
+  if (nameNorm.includes(queryNorm)) return true;
+  return false;
 }
 
 export type CityTagParts = {

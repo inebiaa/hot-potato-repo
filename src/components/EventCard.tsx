@@ -16,6 +16,7 @@ import { useTagDisplayMap } from '../contexts/TagDisplayContext';
 import { tagResolutionKey } from '../lib/tagDisplayResolution';
 import { tryNormalizeExternalUrl } from '../lib/externalUrl';
 import { isEventUpcoming } from '../lib/eventDates';
+import { clearExpiredCountdownLink } from '../lib/clearExpiredCountdownLink';
 import EventCountdownPill from './EventCountdownPill';
 import { effectiveHeaderTags } from '../lib/eventHeaderTags';
 import { coalesceTagList } from '../lib/eventTagArray';
@@ -904,7 +905,14 @@ export default function EventCard({
                       countdownOpenUrl={countdownOpenUrl}
                       countdownBg={tagColors?.countdown_bg_color}
                       countdownText={tagColors?.countdown_text_color}
-                      onExpired={onEventUpdated}
+                      onExpired={() => {
+                        void (async () => {
+                          if (event.countdown_link) {
+                            await clearExpiredCountdownLink(event.id);
+                          }
+                          onEventUpdated();
+                        })();
+                      }}
                       onButtonClick={() => {
                         if (countdownOpenUrl) window.open(countdownOpenUrl, '_blank', 'noopener,noreferrer');
                       }}

@@ -1,4 +1,12 @@
 import type { Event } from './supabase';
+import {
+  COUNTRY_FILTER_CANADA,
+  COUNTRY_FILTER_US,
+  isCaProvinceCode,
+  isUsStateCode,
+  regionDisplayNameFromCode,
+  splitCanonicalCityLabel,
+} from './cityPlaces';
 import { effectiveHeaderTags } from './eventHeaderTags';
 import { getSpecialGuests, isSpecialGuestsSlug } from './specialGuests';
 import { formatEventDateDisplay, eventDateFilterValue } from './formatEventDate';
@@ -38,6 +46,8 @@ export function collectSearchableTagsFromEvents(
       });
     }
   };
+  let hasUsState = false;
+  let hasCaProvince = false;
   events.forEach((e) => {
     (e.producers || []).forEach((v) => expandIdentity('producer', v));
     (e.featured_designers || []).forEach((v) => expandIdentity('designer', v));
@@ -46,7 +56,15 @@ export function collectSearchableTagsFromEvents(
     (e.hair_makeup || []).forEach((v) => expandIdentity('hair_makeup', v));
     effectiveHeaderTags(e).forEach((v) => expandIdentity('header_tags', v));
     (e.footer_tags || []).forEach((v) => expandIdentity('footer_tags', v));
-    if (e.city) add('city', e.city);
+    if (e.city) {
+      add('city', e.city);
+      const region = splitCanonicalCityLabel(e.city);
+      if (region) {
+        add('region', region.regionCode, regionDisplayNameFromCode(region.regionCode));
+        if (isUsStateCode(region.regionCode)) hasUsState = true;
+        if (isCaProvinceCode(region.regionCode)) hasCaProvince = true;
+      }
+    }
     if (e.location) expandIdentity('venue', e.location);
     add('season', getSeasonFromDate(e.date));
     {
@@ -80,5 +98,8 @@ export function collectSearchableTagsFromEvents(
       });
     }
   });
+  // Cities store state/province codes; expose country chips for those markets.
+  if (hasUsState) add('region', COUNTRY_FILTER_US, 'United States');
+  if (hasCaProvince) add('region', COUNTRY_FILTER_CANADA, 'Canada');
   return tags.sort((a, b) => a.label.localeCompare(b.label));
 }
