@@ -710,6 +710,17 @@ function App() {
     navigate(`/event/${q}${qs ? `?${qs}` : ''}`, { replace: true });
   }, [location.pathname, searchParams, params.eventId, navigate]);
 
+  // Legacy URLs: /?list=uuid → /list/uuid
+  useEffect(() => {
+    const q = searchParams.get('list');
+    if (!q || params.listId) return;
+    if (location.pathname !== '/') return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('list');
+    const qs = next.toString();
+    navigate(`/list/${q}${qs ? `?${qs}` : ''}`, { replace: true });
+  }, [location.pathname, searchParams, params.listId, navigate]);
+
   const embedMode = searchParams.get('embed') === '1';
   const eventIdFromQuery = searchParams.get('event');
   const eventIdFromPath = params.eventId ?? null;
@@ -718,7 +729,7 @@ function App() {
   const profileHandle =
     params.handle && isProfileHandlePathSegment(params.handle) ? params.handle : null;
   const showProfileView = showProfile || !!profileHandle;
-  const sharedListId = searchParams.get('list');
+  const sharedListId = params.listId ?? searchParams.get('list');
   const showSharedList = !!sharedListId;
   const showStats = searchParams.get('stats') === '1';
   const showSettings = searchParams.get('settings') === '1';

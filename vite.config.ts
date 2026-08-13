@@ -7,9 +7,14 @@ import { dirname, extname, resolve } from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import type { Plugin } from 'vite'
 import type { Event } from './src/lib/eventTypes'
-import { canonicalEventUrlFromParts } from './src/lib/siteBase'
+import { canonicalEventUrlFromParts, canonicalListUrlFromParts } from './src/lib/siteBase'
 import { eventJsonLdScriptContentPrerender } from './src/lib/eventJsonLd'
 import { buildEventSocialMetaTagsHtml, stripSiteSocialFromHtml } from './src/lib/eventSocialMeta'
+import {
+  buildListSocialMetaTagsHtml,
+  listJsonLdScriptContentPrerender,
+  type ListSharePayload,
+} from './src/lib/listSocialMeta'
 import {
   applyBrandDescriptionToSiteHtml,
   applyBrandShareImageToSiteHtml,
@@ -136,6 +141,37 @@ function injectEventSeoShell(
   return html
 }
 
+function injectListSeoShell(
+  indexHtml: string,
+  list: ListSharePayload,
+  site: string,
+  viteBase: string,
+  brandImageUrl?: string,
+  shareImageUrl?: string,
+): string {
+  const prerender = { siteOrigin: site, viteBase, brandImageUrl, shareImageUrl }
+  const canonical = canonicalListUrlFromParts(list.id, site, viteBase)
+  const jsonLd = jsonLdForHtml(listJsonLdScriptContentPrerender(list, prerender))
+  const socialMeta = buildListSocialMetaTagsHtml(list, prerender)
+  const title = `${list.title.trim() || 'Shared list'} | ${APP_NAME}`
+  let html = stripSiteSocialFromHtml(indexHtml)
+  html = html.replace(/<title>.*?<\/title>/s, `<title>${escapeTitleText(title)}</title>`)
+  const block = `  <link rel="canonical" href="${escapeHtmlAttr(canonical)}" />\n${socialMeta}\n  <script id="secret-blogger-list-jsonld" type="application/ld+json">${jsonLd}</script>\n`
+  html = html.replace('</head>', `${block}</head>`)
+  return html
+}
+
+type PublicListRow = {
+  id: string
+  user_id: string
+  name: string
+  description: string | null
+  is_public?: boolean
+  is_liked_list?: boolean
+  is_rated_list?: boolean
+  cover_image_url?: string | null
+}
+
 /**
  * After build: sitemap.xml, one static index.html per event URL, and 404.html for SPA hosts.
  *
@@ -161,7 +197,7 @@ function staticSitePlugin(): Plugin {
 
       if (!url || !key) {
         const msg =
-          '[static-site] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY — cannot write sitemap.xml or event/*/index.html (GitHub Pages needs these files for /event/:id).'
+          '[static-site] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY: cannot write sitemap.xml or event/*/list/*/index.html (GitHub Pages needs these files for /event/:id and /list/:id).'
         if (isCi) {
           throw new Error(
             `${msg} Add both as repository Secrets and re-run the workflow.`
@@ -217,7 +253,116 @@ function staticSitePlugin(): Plugin {
         }
 
         const rows = (data || []) as Event[]
-        const urls = [site + '/', ...rows.map((row) => `${site}/event/${row.id}`)]
+
+        const listsRes = await client
+          .from('user_lists')
+          .select(
+            'id, user_id, name, description, is_public, is_liked_list, is_rated_list, cover_image_url',
+          )
+          .eq('is_public', true)
+        if (listsRes.error) throw listsRes.error
+        const publicLists = ((listsRes.data || []) as PublicListRow[]).filter(
+          (l) => l?.id && !l.is_liked_list,
+        )
+
+        const ownerIds = [...new Set(publicLists.map((l) => l.user_id).filter(Boolean))]
+        const profilesRes =
+          ownerIds.length > 0
+            ? await client.from('user_profiles').select('user_id, username').in('user_id', ownerIds)
+            : { data: [] as { user_id: string; username: string | null }[], error: null }
+        if (profilesRes.error) throw profilesRes.error
+        const usernameByUser = new Map(
+          (profilesRes.data || []).map((p) => [p.user_id, (p.username || '').trim()]),
+        )
+
+        const customListIds = publicLists.filter((l) => !l.is_rated_list).map((l) => l.id)
+        const membershipRes =
+          customListIds.length > 0
+            ? await client
+                .from('user_list_events')
+                .select('list_id, event_id, position')
+                .in('list_id', customListIds)
+                .order('position', { ascending: true })
+            : { data: [] as { list_id: string; event_id: string; position: number }[], error: null }
+        if (membershipRes.error) throw membershipRes.error
+
+        const eventsByList = new Map<string, string[]>()
+        for (const row of membershipRes.data || []) {
+          const arr = eventsByList.get(row.list_id) || []
+          arr.push(row.event_id)
+          eventsByList.set(row.list_id, arr)
+        }
+
+        const ratedOwnerIds = [
+          ...new Set(publicLists.filter((l) => l.is_rated_list).map((l) => l.user_id)),
+        ]
+        const ratingsByUser = new Map<string, string[]>()
+        if (ratedOwnerIds.length > 0) {
+          const ratingsRes = await client
+            .from('ratings')
+            .select('user_id, event_id, created_at')
+            .in('user_id', ratedOwnerIds)
+            .order('created_at', { ascending: false })
+          if (ratingsRes.error) throw ratingsRes.error
+          for (const row of ratingsRes.data || []) {
+            const arr = ratingsByUser.get(row.user_id) || []
+            if (!arr.includes(row.event_id)) arr.push(row.event_id)
+            ratingsByUser.set(row.user_id, arr)
+          }
+        }
+
+        const allEventIds = new Set<string>()
+        for (const ids of eventsByList.values()) for (const id of ids) allEventIds.add(id)
+        for (const ids of ratingsByUser.values()) for (const id of ids) allEventIds.add(id)
+        const imageByEvent = new Map<string, string>()
+        const eventIdList = [...allEventIds]
+        // Chunk .in() queries to stay under URL limits.
+        for (let i = 0; i < eventIdList.length; i += 200) {
+          const chunk = eventIdList.slice(i, i + 200)
+          const evRes = await client.from('events').select('id, image_url').in('id', chunk)
+          if (evRes.error) throw evRes.error
+          for (const ev of evRes.data || []) {
+            const img = typeof ev.image_url === 'string' ? ev.image_url.trim() : ''
+            if (img) imageByEvent.set(ev.id, img)
+          }
+        }
+
+        const ratedTitleTemplate =
+          tCopy('event.ratedListNameForUser', copyOverrides).trim() || "{name}'s Reviews"
+
+        const listPayloads: ListSharePayload[] = publicLists.map((l) => {
+          const handle = usernameByUser.get(l.user_id) || ''
+          const eventIds = l.is_rated_list
+            ? ratingsByUser.get(l.user_id) || []
+            : eventsByList.get(l.id) || []
+          let imageUrl = (l.cover_image_url || '').trim() || null
+          if (!imageUrl) {
+            for (const eid of eventIds) {
+              const img = imageByEvent.get(eid)
+              if (img) {
+                imageUrl = img
+                break
+              }
+            }
+          }
+          const title = l.is_rated_list
+            ? ratedTitleTemplate.replace('{name}', handle || 'Profile')
+            : (l.name || 'Shared list').trim()
+          return {
+            id: l.id,
+            title,
+            description: l.description,
+            imageUrl,
+            ownerUsername: handle || null,
+            eventCount: eventIds.length,
+          }
+        })
+
+        const urls = [
+          site + '/',
+          ...rows.map((row) => `${site}/event/${row.id}`),
+          ...listPayloads.map((l) => `${site}/list/${l.id}`),
+        ]
         const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map((loc) => `  <url><loc>${escapeXml(loc)}</loc><changefreq>weekly</changefreq></url>`).join('\n')}
@@ -235,7 +380,7 @@ ${urls.map((loc) => `  <url><loc>${escapeXml(loc)}</loc><changefreq>weekly</chan
           console.log('[static-site] Homepage OG image set from brand settings')
         } else {
           writeFileSync(rootIndex, indexHtml, 'utf8')
-          console.warn('[static-site] No app_logo_url / app_icon_url / app_favicon_url — homepage OG image unchanged')
+          console.warn('[static-site] No app_logo_url / app_icon_url / app_favicon_url: homepage OG image unchanged')
         }
 
         const eventsDir = resolve(shareDir, 'events')
@@ -271,6 +416,38 @@ ${urls.map((loc) => `  <url><loc>${escapeXml(loc)}</loc><changefreq>weekly</chan
           eventPages += 1
         }
         console.log('[static-site] Wrote', eventPages, 'event/*/index.html copies (HTTP 200 for crawlers)')
+
+        const listsDir = resolve(shareDir, 'lists')
+        mkdirSync(listsDir, { recursive: true })
+        const listMirrored = await mapPool(listPayloads, 6, async (list) => {
+          const src = (list.imageUrl || '').trim()
+          if (!src) return { id: list.id, shareImageUrl: undefined as string | undefined }
+          const rel = await mirrorShareImage(src, resolve(listsDir, list.id))
+          return {
+            id: list.id,
+            shareImageUrl: rel ? `${site}/${rel}` : undefined,
+          }
+        })
+        const listShareById = new Map(listMirrored.map((m) => [m.id, m.shareImageUrl]))
+        const listMirroredCount = listMirrored.filter((m) => m.shareImageUrl).length
+        console.log('[static-site] Mirrored', listMirroredCount, 'list share image(s) into dist/share/lists')
+
+        let listPages = 0
+        for (const list of listPayloads) {
+          const dir = resolve(distDir, 'list', list.id)
+          mkdirSync(dir, { recursive: true })
+          const html = injectListSeoShell(
+            indexHtml,
+            list,
+            site,
+            viteBase,
+            brandImage,
+            listShareById.get(list.id),
+          )
+          writeFileSync(resolve(dir, 'index.html'), html, 'utf8')
+          listPages += 1
+        }
+        console.log('[static-site] Wrote', listPages, 'list/*/index.html copies (HTTP 200 for crawlers)')
 
         writeFileSync(resolve(distDir, '404.html'), indexHtml, 'utf8')
         console.log('[static-site] Wrote 404.html (SPA fallback for static hosts)')
