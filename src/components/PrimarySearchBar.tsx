@@ -64,6 +64,7 @@ function tagLabel(type: string, value = ''): string {
   if (type === 'footer_tags') return 'Collection: ';
   if (type === 'custom_performer') return 'Custom: ';
   if (type === 'show_type') return 'Show: ';
+  if (type === 'query') return '';
   return '';
 }
 
@@ -97,6 +98,9 @@ function pillColorsForFilter(
   if (type === 'show_type') {
     const colors = showTypePillColors(value);
     return { bg: colors.backgroundColor, text: colors.color };
+  }
+  if (type === 'query') {
+    return { bg: '#f3f4f6', text: '#374151' };
   }
   if (type === 'custom_performer' && customPerformerTags?.length) {
     const slug = value.split('\x00')[0];
@@ -192,8 +196,33 @@ export default function PrimarySearchBar({
   };
 
   const onSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (!showTagSuggestions) return;
     const count = tagSuggestions.length;
+    if (e.key === 'Backspace' && !searchQuery && selectedTags.length > 0) {
+      e.preventDefault();
+      const last = selectedTags[selectedTags.length - 1];
+      onRemoveTagFilter(last.type, last.value);
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (showTagSuggestions && count > 0) {
+        const pick = activeIndex >= 0 && activeIndex < count ? activeIndex : 0;
+        selectSuggestion(tagSuggestions[pick]);
+        return;
+      }
+      const q = searchQuery.trim();
+      if (q.length >= 2) {
+        onSelectTagFilter('query', q, q);
+      }
+      return;
+    }
+    if (!showTagSuggestions) {
+      if (e.key === 'Escape') {
+        setActiveIndex(-1);
+        (e.target as HTMLInputElement).blur();
+      }
+      return;
+    }
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setActiveIndex((i) => (i + 1) % count);
@@ -214,11 +243,6 @@ export default function PrimarySearchBar({
       setActiveIndex(count - 1);
       return;
     }
-    if (e.key === 'Enter' && activeIndex >= 0 && activeIndex < count) {
-      e.preventDefault();
-      selectSuggestion(tagSuggestions[activeIndex]);
-      return;
-    }
     if (e.key === 'Escape') {
       e.preventDefault();
       setActiveIndex(-1);
@@ -227,11 +251,11 @@ export default function PrimarySearchBar({
   };
 
   const searchFieldClass = embeddedInHeader
-    ? `relative flex h-10 w-full min-w-0 flex-nowrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-900 shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'bg-neutral-100 ring-2 ring-neutral-400' : ''}`
-    : `relative flex min-h-[2.5rem] w-full min-w-[200px] flex-nowrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'ring-2 ring-neutral-400 bg-neutral-100' : ''}`;
+    ? `relative flex min-h-10 w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-sm text-gray-900 shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'bg-neutral-100 ring-2 ring-neutral-400' : ''}`
+    : `relative flex min-h-[2.5rem] w-full min-w-[200px] flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'ring-2 ring-neutral-400 bg-neutral-100' : ''}`;
 
   const chipsAndInputRow =
-    'flex min-h-0 min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-hidden';
+    'flex min-h-0 min-w-0 flex-1 flex-wrap items-center gap-1';
 
   return (
     <div className={embeddedInHeader ? 'w-full min-w-0' : 'mb-6 border-b border-gray-200 pb-4'}>
@@ -253,7 +277,7 @@ export default function PrimarySearchBar({
               return (
                 <span
                   key={`${type}:${value}`}
-                  className={`${tagPillSplitSegmentGroupClass} min-w-0 max-w-[min(28rem,100%)] shrink p-0`}
+                  className={`${tagPillSplitSegmentGroupClass} min-w-0 max-w-full shrink-0 p-0`}
                   title={pillText}
                 >
                   <TagPillSplitLabel
@@ -303,7 +327,7 @@ export default function PrimarySearchBar({
               aria-controls={showTagSuggestions ? listboxId : undefined}
               aria-autocomplete="list"
               aria-activedescendant={activeOptionId}
-              className="min-h-0 min-w-0 flex-1 border-0 bg-transparent py-0.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"
+              className="min-h-0 min-w-[7rem] flex-1 border-0 bg-transparent py-0.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"
             />
           </div>
           {showTagSuggestions ? (
