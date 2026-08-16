@@ -273,7 +273,7 @@ export default function SharedLibraryListPage({
     );
   }
 
-  const laneItems: MasonryLaneItem[] = rows.map(({ event, averageRating, ratingCount, userRating }) => ({
+  const laneItems: MasonryLaneItem[] = rows.map(({ event, averageRating, ratingCount, userRating }, index) => ({
     id: event.id,
     children: (
       <EventCard
@@ -287,6 +287,7 @@ export default function SharedLibraryListPage({
         onViewClick={onOpenEvent}
         tagColors={tagColors}
         customPerformerTags={customPerformerTags}
+        imagePriority={index < 4}
       />
     ),
   }));

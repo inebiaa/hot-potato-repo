@@ -1,4 +1,5 @@
 import { eventCardImageUrl } from '../lib/eventCardImageUrl';
+import RemoteImg from './RemoteImg';
 
 /** Up to four distinct event image URLs for a temporary board cover collage. */
 export function pickListCollageUrls(
@@ -29,7 +30,7 @@ export default function ListCoverCollage({ urls, className = '' }: ListCoverColl
   if (pics.length === 1) {
     return (
       <div className={`overflow-hidden bg-neutral-100 ${className}`.trim()}>
-        <img src={pics[0]} alt="" className="h-full w-full object-cover" />
+        <RemoteImg src={pics[0]} alt="" className="h-full w-full object-cover" />
       </div>
     );
   }
@@ -38,7 +39,7 @@ export default function ListCoverCollage({ urls, className = '' }: ListCoverColl
     return (
       <div className={`grid grid-cols-2 gap-px overflow-hidden bg-neutral-200 ${className}`.trim()}>
         {pics.map((src) => (
-          <img key={src} src={src} alt="" className="h-full w-full min-h-0 min-w-0 object-cover" />
+          <RemoteImg key={src} src={src} alt="" className="h-full w-full min-h-0 min-w-0 object-cover" />
         ))}
       </div>
     );
@@ -47,7 +48,7 @@ export default function ListCoverCollage({ urls, className = '' }: ListCoverColl
   return (
     <div className={`grid grid-cols-2 grid-rows-2 gap-px overflow-hidden bg-neutral-200 ${className}`.trim()}>
       {pics.slice(0, 4).map((src) => (
-        <img key={src} src={src} alt="" className="h-full w-full min-h-0 min-w-0 object-cover" />
+        <RemoteImg key={src} src={src} alt="" className="h-full w-full min-h-0 min-w-0 object-cover" />
       ))}
       {pics.length === 3 ? <div className="bg-neutral-100" aria-hidden /> : null}
     </div>
@@ -66,7 +67,7 @@ export function ListCover({ coverUrl, collageUrls = [], className = '' }: ListCo
   if (custom) {
     return (
       <div className={`overflow-hidden bg-neutral-100 ${className}`.trim()}>
-        <img src={custom} alt="" className="h-full w-full object-cover" />
+        <RemoteImg src={custom} alt="" className="h-full w-full object-cover" />
       </div>
     );
   }
