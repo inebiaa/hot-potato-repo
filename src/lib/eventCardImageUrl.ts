@@ -6,7 +6,7 @@
 const CARD_MAX_WIDTH = 960;
 
 function rewritePinimg(url: string): string | null {
-  // i.pinimg.com/{size}/… — prefer ~736w for cards
+  // i.pinimg.com/{size}/... prefer ~736w for cards
   const m = url.match(/^(https?:\/\/i\.pinimg\.com)\/(\d+x\d*|\d+x)\/(.+)$/i);
   if (!m) return null;
   const size = m[2].toLowerCase();

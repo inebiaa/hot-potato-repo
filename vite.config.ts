@@ -546,10 +546,27 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Share mirrors are for crawlers only — do not precache hundreds of event posters.
+        // Share mirrors are for crawlers only: do not precache hundreds of event posters.
         globIgnores: ['**/share/**'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api/],
+        runtimeCaching: [
+          {
+            // Storage gateway sends Cache-Control: no-cache, so the SW is the
+            // durable browser cache for event / profile / branding photos.
+            urlPattern: /\/storage\/v1\/object\/public\//i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'supabase-public-images',
+              expiration: {
+                maxEntries: 400,
+                maxAgeSeconds: 30 * 24 * 60 * 60,
+                purgeOnQuotaError: true,
+              },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+        ],
       },
     }),
   ],
