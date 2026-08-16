@@ -14,6 +14,7 @@
     "backfill:event-images": "node scripts/backfill-event-images.mjs",
     "recompress:event-images": "node scripts/recompress-event-images-local.mjs",
     "recompress:event-images:remote": "node scripts/invoke-recompress-event-images.mjs",
+    "cleanup:orphan-event-images": "node scripts/cleanup-orphan-event-images.mjs",
     "backfill:branding-images": "node scripts/backfill-branding-images.mjs",
     "generate:pwa-icons": "node scripts/create-pwa-icons.mjs",
     "server:dev": "nodemon",
