@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, startTransition, type ReactNode } from 'react';
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { Sparkles, Search } from 'lucide-react';
-import AppHeader from './components/AppHeader';
+import AppHeader, { type AppHeaderActiveView } from './components/AppHeader';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
 import { eventDateMatchesSearch, formatEventDateDisplay } from './lib/formatEventDate';
@@ -48,6 +48,7 @@ import {
   identityIdsFromSearchableTags,
 } from './lib/searchableTagsFromEvents';
 import PrimarySearchBar from './components/PrimarySearchBar';
+import HeaderPinnedArtistsBar from './components/HeaderPinnedArtistsBar';
 import MasonryLaneFeed, { type MasonryLaneItem } from './components/MasonryLaneFeed';
 import EventJsonLd from './components/EventJsonLd';
 import { eventPagePath } from './lib/siteBase';
@@ -79,6 +80,11 @@ import {
   toEventWithStats,
   type EventWithStats,
 } from './lib/eventsFeed';
+import {
+  parseHeaderPinnedArtistIds,
+  resolvePinnedArtistsForDisplay,
+  type PinnedArtistEntry,
+} from './lib/headerPinnedArtists';
 
 /** Survive remounts so we don't flash a full-page spinner on every route land. */
 let settingsCache: AppSettings | null = null;
@@ -119,6 +125,7 @@ function App() {
   const [deepLinkFailed, setDeepLinkFailed] = useState(false);
   const [searchDragOver, setSearchDragOver] = useState(false);
   const [tagResolutionMap, setTagResolutionMap] = useState<TagResolutionMap | null>(null);
+  const [pinnedArtists, setPinnedArtists] = useState<PinnedArtistEntry[]>([]);
   const [profileReviewCounts, setProfileReviewCounts] = useState<{ visible: number; total: number } | null>(null);
   const [profileBoardEvents, setProfileBoardEvents] = useState<Event[] | null>(null);
   const [profileHeaderBack, setProfileHeaderBack] = useState<{
@@ -262,6 +269,7 @@ function App() {
         optional_tags_text_color: resolveText(optionalBg, settingsObj.optional_tags_text_color, '#3730a3'),
         special_guests_bg_color: specialGuestsBg,
         special_guests_text_color: resolveText(specialGuestsBg, settingsObj.special_guests_text_color, '#3730a3'),
+        header_pinned_artists: settingsObj.header_pinned_artists ?? '',
       };
       settingsCache = nextSettings;
       setAppSettings(nextSettings);
@@ -669,6 +677,25 @@ function App() {
     wasFilteringRef.current = filtering;
   }, [selectedTags, searchQuery, scrollFeedToTop]);
 
+  useEffect(() => {
+    if (!appSettings) {
+      setPinnedArtists([]);
+      return;
+    }
+    const ids = parseHeaderPinnedArtistIds(appSettings.header_pinned_artists);
+    if (ids.length === 0) {
+      setPinnedArtists([]);
+      return;
+    }
+    let cancelled = false;
+    void resolvePinnedArtistsForDisplay(ids, tagResolutionMap).then((resolved) => {
+      if (!cancelled) setPinnedArtists(resolved);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [appSettings?.header_pinned_artists, tagResolutionMap, appSettings]);
+
   const handleTagClick = (type: string, value: string, explicitLabel?: string) => {
     if (overlayEventId) closeEventOverlay();
     else navigate({ pathname: '/', search: '' });
@@ -698,6 +725,17 @@ function App() {
   const removeTagFilter = (type: string, value: string) => {
     setSelectedTags((prev) => prev.filter((t) => !(t.type === type && t.value === value)));
   };
+
+  const toggleTagFilter = useCallback((type: string, value: string, explicitLabel?: string) => {
+    const key = `${type}:${value}`;
+    setSelectedTags((prev) => {
+      const exists = prev.some((t) => `${t.type}:${t.value}` === key);
+      if (exists) return prev.filter((t) => !(t.type === type && t.value === value));
+      const label = displayLabelForTagFilter(type, value, tagResolutionMap, explicitLabel);
+      return [...prev, { type, value, label }];
+    });
+    scrollFeedToTop();
+  }, [tagResolutionMap, scrollFeedToTop]);
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -1110,6 +1148,85 @@ function App() {
     window.scrollTo(0, 0);
   };
 
+  const handlePinnedArtistToggle = useCallback((id: string, label: string) => {
+    if (overlayEventId) closeEventOverlay();
+    else if (location.pathname !== '/' || searchParams.toString()) {
+      navigate({ pathname: '/', search: '' });
+    }
+    const key = `artist:${id}`;
+    const exists = selectedTags.some((t) => `${t.type}:${t.value}` === key);
+    toggleTagFilter('artist', id, label);
+    if (!exists) setSearchQuery('');
+  }, [overlayEventId, location.pathname, searchParams, selectedTags, toggleTagFilter, navigate, closeEventOverlay]);
+
+  const headerPinnedArtistBar = useMemo(() => {
+    if (!appSettings || pinnedArtists.length === 0) return null;
+    return (
+      <HeaderPinnedArtistsBar
+        artists={pinnedArtists}
+        selectedTags={selectedTags}
+        appSettings={appSettings}
+        onToggleArtist={handlePinnedArtistToggle}
+      />
+    );
+  }, [appSettings, pinnedArtists, selectedTags, handlePinnedArtistToggle]);
+
+  const makeHeaderSearchBar = (
+    opts: {
+      filteredCount?: number;
+      totalCount?: number;
+      summaryLabelSingular?: string;
+      summaryLabelPlural?: string;
+    } = {},
+  ) => {
+    if (!appSettings) return null;
+    return (
+      <PrimarySearchBar
+        embeddedInHeader
+        appSettings={appSettings}
+        searchDragOver={searchDragOver}
+        selectedTags={selectedTags}
+        searchQuery={searchQuery}
+        tagSuggestions={tagSuggestions}
+        filteredCount={opts.filteredCount ?? filteredEvents.length}
+        totalCount={opts.totalCount ?? events.length}
+        summaryLabelSingular={opts.summaryLabelSingular}
+        summaryLabelPlural={opts.summaryLabelPlural}
+        onSearchDrop={handleSearchDrop}
+        onSearchDragOver={handleSearchDragOver}
+        onSearchDragLeave={handleSearchDragLeave}
+        onSearchQueryChange={setSearchQuery}
+        onSelectTagFilter={selectTagFilter}
+        onRemoveTagFilter={removeTagFilter}
+        onClearFilters={clearFilters}
+      />
+    );
+  };
+
+  const renderAppShellHeader = (
+    activeView: AppHeaderActiveView,
+    onGoHome: () => void,
+    searchBar?: ReactNode,
+  ) => (
+    <AppHeader
+      pathname={pathname}
+      activeView={activeView}
+      desktopLikePointer={desktopLikePointer}
+      appSettings={appSettings!}
+      user={user}
+      isAdmin={!!isAdmin}
+      onGoHome={onGoHome}
+      onOpenStats={openStats}
+      onOpenProfile={openProfile}
+      onOpenSettings={openSettings}
+      onAddEvent={openAddEventModal}
+      onSignIn={() => openAuthModal('signin')}
+      onSignOut={() => signOut()}
+      searchBar={searchBar}
+      pinnedArtistBar={headerPinnedArtistBar}
+    />
+  );
+
   const openProfile = () => {
     void (async () => {
       if (user) {
@@ -1237,40 +1354,10 @@ function App() {
       <TagDisplayProvider map={tagResolutionMap}>
       <CopyProvider settings={appSettings}>
       <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
-        <AppHeader
-          pathname={pathname}
-          activeView="settings"
-          desktopLikePointer={desktopLikePointer}
-          appSettings={appSettings}
-          user={user}
-          isAdmin={!!isAdmin}
-          onGoHome={goBackFromSettings}
-          onOpenStats={openStats}
-          onOpenProfile={openProfile}
-          onOpenSettings={openSettings}
-          onAddEvent={openAddEventModal}
-          onSignIn={() => openAuthModal('signin')}
-          onSignOut={() => signOut()}
-          searchBar={
-            <PrimarySearchBar
-              embeddedInHeader
-              appSettings={appSettings}
-              searchDragOver={searchDragOver}
-              selectedTags={selectedTags}
-              searchQuery={searchQuery}
-              tagSuggestions={tagSuggestions}
-              filteredCount={filteredEvents.length}
-              totalCount={filteredEvents.length}
-              onSearchDrop={handleSearchDrop}
-              onSearchDragOver={handleSearchDragOver}
-              onSearchDragLeave={handleSearchDragLeave}
-              onSearchQueryChange={setSearchQuery}
-              onSelectTagFilter={selectTagFilter}
-              onRemoveTagFilter={removeTagFilter}
-              onClearFilters={clearFilters}
-            />
-          }
-        />
+        {renderAppShellHeader('settings', goBackFromSettings, makeHeaderSearchBar({
+          filteredCount: filteredEvents.length,
+          totalCount: filteredEvents.length,
+        }))}
         <main
           className={`flex-1 min-h-0 overflow-y-auto ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
         >
@@ -1316,40 +1403,10 @@ function App() {
       <TagDisplayProvider map={tagResolutionMap}>
       <CopyProvider settings={appSettings}>
       <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
-        <AppHeader
-          pathname={pathname}
-          activeView="stats"
-          desktopLikePointer={desktopLikePointer}
-          appSettings={appSettings}
-          user={user}
-          isAdmin={!!isAdmin}
-          onGoHome={goBackFromStats}
-          onOpenStats={openStats}
-          onOpenProfile={openProfile}
-          onOpenSettings={openSettings}
-          onAddEvent={openAddEventModal}
-          onSignIn={() => openAuthModal('signin')}
-          onSignOut={() => signOut()}
-          searchBar={
-            <PrimarySearchBar
-              embeddedInHeader
-              appSettings={appSettings}
-              searchDragOver={searchDragOver}
-              selectedTags={selectedTags}
-              searchQuery={searchQuery}
-              tagSuggestions={tagSuggestions}
-              filteredCount={filteredEvents.length}
-              totalCount={filteredEvents.length}
-              onSearchDrop={handleSearchDrop}
-              onSearchDragOver={handleSearchDragOver}
-              onSearchDragLeave={handleSearchDragLeave}
-              onSearchQueryChange={setSearchQuery}
-              onSelectTagFilter={selectTagFilter}
-              onRemoveTagFilter={removeTagFilter}
-              onClearFilters={clearFilters}
-            />
-          }
-        />
+        {renderAppShellHeader('stats', goBackFromStats, makeHeaderSearchBar({
+          filteredCount: filteredEvents.length,
+          totalCount: filteredEvents.length,
+        }))}
         <main
           className={`flex-1 min-h-0 overflow-y-auto ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
         >
@@ -1437,22 +1494,7 @@ function App() {
       <TagDisplayProvider map={tagResolutionMap}>
       <CopyProvider settings={appSettings}>
       <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
-        <AppHeader
-          pathname={pathname}
-          activeView="home"
-          desktopLikePointer={desktopLikePointer}
-          appSettings={appSettings}
-          user={user}
-          isAdmin={!!isAdmin}
-          onGoHome={goBack}
-          onOpenStats={openStats}
-          onOpenProfile={openProfile}
-          onOpenSettings={openSettings}
-          onAddEvent={openAddEventModal}
-          onSignIn={() => openAuthModal('signin')}
-          onSignOut={() => signOut()}
-          searchBar={null}
-        />
+        {renderAppShellHeader('home', goBack, null)}
         <main
           className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
         >
@@ -1531,42 +1573,12 @@ function App() {
       <TagDisplayProvider map={tagResolutionMap}>
       <CopyProvider settings={appSettings}>
       <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
-        <AppHeader
-          pathname={pathname}
-          activeView="profile"
-          desktopLikePointer={desktopLikePointer}
-          appSettings={appSettings}
-          user={user}
-          isAdmin={!!isAdmin}
-          onGoHome={goBack}
-          onOpenStats={openStats}
-          onOpenProfile={openProfile}
-          onOpenSettings={openSettings}
-          onAddEvent={openAddEventModal}
-          onSignIn={() => openAuthModal('signin')}
-          onSignOut={() => signOut()}
-          searchBar={
-            <PrimarySearchBar
-              embeddedInHeader
-              appSettings={appSettings}
-              searchDragOver={searchDragOver}
-              selectedTags={selectedTags}
-              searchQuery={searchQuery}
-              tagSuggestions={tagSuggestions}
-              filteredCount={profileReviewCounts?.visible}
-              totalCount={profileReviewCounts?.total}
-              summaryLabelSingular="review"
-              summaryLabelPlural="reviews"
-              onSearchDrop={handleSearchDrop}
-              onSearchDragOver={handleSearchDragOver}
-              onSearchDragLeave={handleSearchDragLeave}
-              onSearchQueryChange={setSearchQuery}
-              onSelectTagFilter={selectTagFilter}
-              onRemoveTagFilter={removeTagFilter}
-              onClearFilters={clearFilters}
-            />
-          }
-        />
+        {renderAppShellHeader('profile', goBack, makeHeaderSearchBar({
+          filteredCount: profileReviewCounts?.visible,
+          totalCount: profileReviewCounts?.total,
+          summaryLabelSingular: 'review',
+          summaryLabelPlural: 'reviews',
+        }))}
         <main
           className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden ${desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'}`}
         >
@@ -1687,40 +1699,7 @@ function App() {
     <CopyProvider settings={appSettings}>
     {params.eventId && overlayEvent ? <EventJsonLd event={overlayEvent} /> : null}
     <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
-      <AppHeader
-        pathname={pathname}
-        activeView="home"
-        desktopLikePointer={desktopLikePointer}
-        appSettings={appSettings}
-        user={user}
-        isAdmin={!!isAdmin}
-        onGoHome={goToHome}
-        onOpenStats={openStats}
-        onOpenProfile={openProfile}
-        onOpenSettings={openSettings}
-        onAddEvent={openAddEventModal}
-        onSignIn={() => openAuthModal('signin')}
-        onSignOut={() => signOut()}
-        searchBar={
-          <PrimarySearchBar
-            embeddedInHeader
-            appSettings={appSettings}
-            searchDragOver={searchDragOver}
-            selectedTags={selectedTags}
-            searchQuery={searchQuery}
-            tagSuggestions={tagSuggestions}
-            filteredCount={filteredEvents.length}
-            totalCount={events.length}
-            onSearchDrop={handleSearchDrop}
-            onSearchDragOver={handleSearchDragOver}
-            onSearchDragLeave={handleSearchDragLeave}
-            onSearchQueryChange={setSearchQuery}
-            onSelectTagFilter={selectTagFilter}
-            onRemoveTagFilter={removeTagFilter}
-            onClearFilters={clearFilters}
-          />
-        }
-      />
+      {renderAppShellHeader('home', goToHome, makeHeaderSearchBar())}
 
       <main
         ref={feedScrollRef}

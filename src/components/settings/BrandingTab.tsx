@@ -8,10 +8,13 @@ import {
 } from '../../copy';
 import { Input, Label, Textarea } from '../ui';
 import BrandImageField from '../BrandImageField';
+import TagInput from '../TagInput';
 
 type BrandingTabProps = {
   settings: AppSettings;
   onChange: (patch: Partial<AppSettings>) => void;
+  pinnedArtistNames: string[];
+  onPinnedArtistsChange: (names: string[]) => void;
 };
 
 const HOME_COPY_KEYS: { key: CopyKey; label: string; long?: boolean }[] = [
@@ -21,7 +24,7 @@ const HOME_COPY_KEYS: { key: CopyKey; label: string; long?: boolean }[] = [
 ];
 
 /** Admin branding fields — uses shared form controls. */
-export default function BrandingTab({ settings, onChange }: BrandingTabProps) {
+export default function BrandingTab({ settings, onChange, pinnedArtistNames, onPinnedArtistsChange }: BrandingTabProps) {
   const overrides = parseCopyOverrides(settings.copy_overrides);
 
   const setHomeCopy = (key: CopyKey, value: string) => {
@@ -84,6 +87,17 @@ export default function BrandingTab({ settings, onChange }: BrandingTabProps) {
             </div>
           );
         })}
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-neutral-800 border-b border-neutral-200 pb-1">Pinned artists</h3>
+        <TagInput
+          id="settings-pinned-artists"
+          label="Header pills"
+          tagColumn="featured_artists"
+          value={pinnedArtistNames}
+          onChange={onPinnedArtistsChange}
+        />
       </section>
 
       <section className="space-y-3">
