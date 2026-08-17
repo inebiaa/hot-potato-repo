@@ -31,6 +31,7 @@ import {
   isSpecialGuestsSlug,
 } from '../lib/specialGuests';
 import { eventCardImageUrl } from '../lib/eventCardImageUrl';
+import RemoteImg from './RemoteImg';
 import { deleteStoredEventImage } from '../lib/eventImageUpload';
 import {
   addEventToListAndLiked,
@@ -112,6 +113,8 @@ interface EventCardProps {
   stackPhotoOnly?: boolean;
   /** Opacity for the image only (for stack front card photo blending) */
   imageOpacity?: number;
+  /** Eager-load the photo (overlay / first feed cards). */
+  imagePriority?: boolean;
   customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
   /** When set (own library board), overflow menu can remove this show from that list. */
   listMembership?: {
@@ -134,6 +137,7 @@ export default function EventCard({
   customPerformerTags = [],
   stackPhotoOnly = false,
   imageOpacity,
+  imagePriority = false,
   listMembership,
 }: EventCardProps) {
   const t = useT();
@@ -556,13 +560,12 @@ export default function EventCard({
 
   if (stackPhotoOnly) {
     return (
-      <div className={`rounded-lg shadow-md overflow-hidden shrink-0 h-48 ${cardImageSrc ? 'bg-transparent' : 'bg-gray-200'}`}>
+      <div className={`rounded-lg shadow-md overflow-hidden shrink-0 h-48 ${imageOpacity !== undefined ? 'bg-transparent' : 'bg-gray-200'}`}>
         {cardImageSrc ? (
-          <img
+          <RemoteImg
             src={cardImageSrc}
             alt=""
-            loading="lazy"
-            decoding="async"
+            priority={imagePriority}
             className="w-full h-full object-cover"
             style={imageOpacity !== undefined ? { opacity: imageOpacity } : undefined}
           />
@@ -581,12 +584,11 @@ export default function EventCard({
         onKeyDown={onViewClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewClick(event.id); } } : undefined}
       >
         {cardImageSrc && (
-          <div className="overflow-hidden rounded-t-lg shrink-0">
-            <img
+          <div className="overflow-hidden rounded-t-lg shrink-0 h-48 bg-gray-200">
+            <RemoteImg
               src={cardImageSrc}
               alt=""
-              loading="lazy"
-              decoding="async"
+              priority={imagePriority}
               className="w-full h-48 object-cover flex-shrink-0 rounded-t-lg"
               style={imageOpacity !== undefined ? { opacity: imageOpacity } : undefined}
             />

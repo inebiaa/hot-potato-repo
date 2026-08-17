@@ -811,7 +811,7 @@ export default function ProfilePage({
 
     const canRemoveFromBoard = isOwnProfile && !isRatingsList;
     const laneItems: MasonryLaneItem[] = orderedBoardRows.map(
-      ({ event, listEvent, averageRating, ratingCount, userRating }) => ({
+      ({ event, listEvent, averageRating, ratingCount, userRating }, index) => ({
         id: listEvent.id,
         children: (
           <EventCard
@@ -831,6 +831,7 @@ export default function ProfilePage({
             onViewClick={onOpenEvent}
             tagColors={tagColors}
             customPerformerTags={customPerformerTags}
+            imagePriority={index < 4}
             listMembership={
               canRemoveFromBoard
                 ? { listId: listEvent.list_id, isLikedList }
@@ -1273,7 +1274,10 @@ export default function ProfilePage({
               }
 
               if (searchActive) {
+                let searchIdx = 0;
                 for (const event of boardSavedSearchEvents) {
+                  const imagePriority = searchIdx < 4;
+                  searchIdx += 1;
                   libraryLaneItems.push({
                     id: event.id,
                     children: (
@@ -1288,6 +1292,7 @@ export default function ProfilePage({
                         onViewClick={onOpenEvent}
                         tagColors={tagColors}
                         customPerformerTags={customPerformerTags}
+                        imagePriority={imagePriority}
                       />
                     ),
                   });
