@@ -29,7 +29,7 @@ export default function HeaderPinnedArtistsBar({
   const pillColors = { backgroundColor: bg, color: text };
 
   return (
-    <div className={TAG_PILL_ROW_CLASS}>
+    <div className={`${TAG_PILL_ROW_CLASS} pb-0.5`}>
       {artists.map(({ id, label }) => {
         const isSelected = selectedTags.some((t) => t.type === 'artist' && t.value === id);
         return (
@@ -39,8 +39,8 @@ export default function HeaderPinnedArtistsBar({
             aria-pressed={isSelected}
             onClick={() => onToggleArtist(id, label)}
             data-tag-pill
-            className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-colors hover:opacity-80 ${
-              isSelected ? 'ring-2 ring-neutral-900 ring-offset-1' : ''
+            className={`${tagPillSplitSegmentGroupClass} p-0 text-xs transition-opacity hover:opacity-100 ${
+              isSelected ? 'opacity-100' : 'opacity-55 hover:opacity-80'
             }`}
           >
             <TagPillSplitLabel fitToContainer text={label} segmentColors={pillColors} />
