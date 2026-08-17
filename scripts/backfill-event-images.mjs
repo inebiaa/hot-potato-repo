@@ -17,6 +17,7 @@ import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { compressEventPhoto } from './compress-event-photo.mjs';
 
 const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 config({ path: resolve(repoRoot, '.env') });
@@ -124,7 +125,11 @@ async function backfillOne(row) {
 
   if (DRY_RUN) return { id: row.id, status: 'dry-run', source };
 
-  const { bytes, contentType, ext } = await fetchImage(source);
+  const fetched = await fetchImage(source);
+  const compressed = await compressEventPhoto(fetched.bytes);
+  const bytes = compressed?.bytes ?? fetched.bytes;
+  const contentType = compressed?.contentType ?? fetched.contentType;
+  const ext = compressed?.ext ?? fetched.ext;
   const owner = row.created_by || 'backfill';
   const path = `${owner}/${row.id}.${ext}`;
 

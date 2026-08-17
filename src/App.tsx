@@ -1286,6 +1286,7 @@ function App() {
             onTagClick={handleTagClick}
             tagColors={appSettings}
             customPerformerTags={[]}
+            imagePriority
           />
         </div>
         <TagRatingsModal
@@ -1454,6 +1455,7 @@ function App() {
                   onTagClick={handleTagClick}
                   tagColors={appSettings}
                   customPerformerTags={[]}
+                  imagePriority
                 />
               </div>
             ) : (
@@ -1649,6 +1651,7 @@ function App() {
                   onTagClick={handleTagClick}
                   tagColors={appSettings}
                   customPerformerTags={[]}
+                  imagePriority
                 />
               </div>
             ) : (
@@ -1784,8 +1787,13 @@ function App() {
           const ungroupedPast = pastEvents;
 
           const CARD_TOP_SPACER = 'h-6 shrink-0';
+          const PRIORITY_FEED_IMAGES = 6;
+          let feedImageIndex = 0;
 
-          const renderCard = (event: EventWithStats) => (
+          const renderCard = (event: EventWithStats) => {
+            const imagePriority = feedImageIndex < PRIORITY_FEED_IMAGES;
+            feedImageIndex += 1;
+            return (
             <div
               key={event.id}
               ref={(el) => { eventCardRefs.current[event.id] = el; }}
@@ -1802,9 +1810,11 @@ function App() {
                 customPerformerTags={[]}
                 viewHref={eventPagePath(event.id)}
                 onViewClick={(id) => openEventOverlay(id)}
+                imagePriority={imagePriority}
               />
             </div>
-          );
+            );
+          };
 
           const cardCell = (content: ReactNode, withSpacer = true) => (
             <div className="flex min-w-0 w-full flex-col self-start">
@@ -1887,6 +1897,7 @@ function App() {
                 onTagClick={handleTagClick}
                 tagColors={appSettings}
                 customPerformerTags={[]}
+                imagePriority
               />
             </div>
           ) : (
