@@ -37,20 +37,20 @@ export function eventMatchesSelectedTag(
       return Boolean(ymd) && ymd === tag.value;
     }
     case 'producer':
-      return eventArrayMatchesFilter(tagResolutionMap, 'producer', event.producers, tag.value);
+      return eventArrayMatchesFilter(tagResolutionMap, 'producer', event.producers, tag.value, tag.label);
     case 'designer':
-      return eventArrayMatchesFilter(tagResolutionMap, 'designer', event.featured_designers, tag.value);
+      return eventArrayMatchesFilter(tagResolutionMap, 'designer', event.featured_designers, tag.value, tag.label);
     case 'artist':
       return (
-        eventArrayMatchesFilter(tagResolutionMap, 'artist', event.featured_artists, tag.value) ||
-        eventArrayMatchesFilter(tagResolutionMap, 'artist', getSpecialGuests(event.custom_tags), tag.value)
+        eventArrayMatchesFilter(tagResolutionMap, 'artist', event.featured_artists, tag.value, tag.label) ||
+        eventArrayMatchesFilter(tagResolutionMap, 'artist', getSpecialGuests(event.custom_tags), tag.value, tag.label)
       );
     case 'hair_makeup':
-      return eventArrayMatchesFilter(tagResolutionMap, 'hair_makeup', event.hair_makeup, tag.value);
+      return eventArrayMatchesFilter(tagResolutionMap, 'hair_makeup', event.hair_makeup, tag.value, tag.label);
     case 'header_tags':
-      return eventArrayMatchesFilter(tagResolutionMap, 'header_tags', effectiveHeaderTags(event), tag.value);
+      return eventArrayMatchesFilter(tagResolutionMap, 'header_tags', effectiveHeaderTags(event), tag.value, tag.label);
     case 'footer_tags':
-      return eventArrayMatchesFilter(tagResolutionMap, 'footer_tags', event.footer_tags, tag.value);
+      return eventArrayMatchesFilter(tagResolutionMap, 'footer_tags', event.footer_tags, tag.value, tag.label);
     case 'custom_performer': {
       const [slug, tagValue] = tag.value.split('\x00');
       if (!slug || !tagValue) return false;

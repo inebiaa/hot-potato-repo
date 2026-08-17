@@ -531,9 +531,9 @@ function App() {
   useEffect(() => {
     const needsFullCatalog =
       selectedTags.length > 0 || searchQuery.trim().length >= 2;
-    if (!needsFullCatalog || !hasMoreEvents) return;
+    if (!needsFullCatalog) return;
     void ensureFullCatalog();
-  }, [selectedTags, searchQuery, hasMoreEvents, ensureFullCatalog]);
+  }, [selectedTags, searchQuery, ensureFullCatalog]);
 
   useEffect(() => {
     if (events.length === 0) {
