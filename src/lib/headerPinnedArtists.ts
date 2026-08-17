@@ -1,5 +1,5 @@
 import { displayLabelForTagFilter, type TagResolutionMap } from './tagDisplayResolution';
-import { fetchIdentitiesByIds, findIdentityByName } from './tagIdentity';
+import { fetchIdentitiesByIds, ensureIdentity, findIdentityByName } from './tagIdentity';
 
 export const HEADER_PINNED_ARTISTS_KEY = 'header_pinned_artists';
 
@@ -61,13 +61,18 @@ export async function resolvePinnedArtistsForDisplay(
     .filter((entry): entry is PinnedArtistEntry => !!entry);
 }
 
-/** Resolve catalog artist names to tag identity ids (skips unresolved names). */
-export async function resolvePinnedArtistNamesToIds(names: string[]): Promise<string[]> {
+/** Resolve catalog artist names to tag identity ids (creates missing identities). */
+export async function resolvePinnedArtistNamesToIds(
+  names: string[],
+  createdBy?: string,
+): Promise<string[]> {
   const ids: string[] = [];
   for (const name of names) {
     const trimmed = name.trim();
     if (!trimmed) continue;
-    const identity = await findIdentityByName('artist', trimmed);
+    const identity =
+      (await findIdentityByName('artist', trimmed)) ??
+      (await ensureIdentity('artist', trimmed, createdBy));
     if (identity) ids.push(identity.id);
   }
   return ids;
