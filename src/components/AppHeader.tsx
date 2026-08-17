@@ -117,8 +117,9 @@ export default function AppHeader({
     <>
       <header className="sticky top-0 z-40 shrink-0 border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto max-w-[2400px] px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-            <div className="flex flex-col gap-2 sm:gap-3 lg:contents">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+              <div className="flex flex-col gap-2 sm:gap-3 lg:contents">
               <div className="flex min-w-0 items-center justify-between gap-2 pr-2 lg:shrink-0 lg:pr-0">
                 <div className="flex min-w-0 items-center gap-3">
                   {appSettings.app_logo_url ? (
@@ -208,9 +209,12 @@ export default function AppHeader({
                   </button>
                 )}
               </div>
+              </div>
             </div>
+            {pinnedArtistBar ? (
+              <div className="min-w-0 border-t border-gray-100 pt-3">{pinnedArtistBar}</div>
+            ) : null}
           </div>
-          {pinnedArtistBar ? <div className="min-w-0">{pinnedArtistBar}</div> : null}
         </div>
       </header>
 
