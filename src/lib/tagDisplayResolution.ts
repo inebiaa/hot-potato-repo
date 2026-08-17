@@ -148,7 +148,8 @@ export function eventArrayMatchesFilter(
   map: TagResolutionMap | null | undefined,
   tagType: string,
   eventValues: string[] | null | undefined,
-  filterValue: string
+  filterValue: string,
+  filterLabel?: string,
 ): boolean {
   if (!eventValues?.length) return false;
   if (map) {
@@ -157,6 +158,16 @@ export function eventArrayMatchesFilter(
         const e = map.get(tagResolutionKey(tagType, v));
         if (e?.identityId === filterValue) return true;
       }
+      let canonical = filterLabel?.trim();
+      if (!canonical) {
+        for (const e of map.values()) {
+          if (e.identityId === filterValue) {
+            canonical = e.canonical;
+            break;
+          }
+        }
+      }
+      if (canonical && tagArrayContainsNormalized(eventValues, canonical)) return true;
       return false;
     }
     const filterEntry = map.get(tagResolutionKey(tagType, filterValue));
