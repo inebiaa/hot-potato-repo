@@ -764,7 +764,7 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
         void deleteStoredBrandImage(prev.app_favicon_url);
       }
 
-      const pinnedArtistIds = await resolvePinnedArtistNamesToIds(pinnedArtistNames);
+      const pinnedArtistIds = await resolvePinnedArtistNamesToIds(pinnedArtistNames, user.id);
       const headerPinnedArtists = serializeHeaderPinnedArtistIds(pinnedArtistIds);
 
       const updates = [
@@ -868,7 +868,7 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
                 pinnedArtistNames={pinnedArtistNames}
                 onPinnedArtistsChange={(names) => {
                   setPinnedArtistNames(names);
-                  void resolvePinnedArtistNamesToIds(names).then((ids) => {
+                  void resolvePinnedArtistNamesToIds(names, user?.id).then((ids) => {
                     const serialized = serializeHeaderPinnedArtistIds(ids);
                     setSettings((s) => {
                       const next = { ...s, header_pinned_artists: serialized };
