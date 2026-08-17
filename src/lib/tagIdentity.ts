@@ -129,6 +129,26 @@ export async function searchTagIdentities(query: string): Promise<TagIdentityRec
   return out.slice(0, 20).map((row) => toRecord(row));
 }
 
+/** Fetch tag identities by primary key, preserving caller order where possible. */
+export async function fetchIdentitiesByIds(ids: string[]): Promise<TagIdentityRecord[]> {
+  const unique = [...new Set(ids.filter((id) => id?.trim()))];
+  if (unique.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('tag_identities')
+    .select('id, tag_type, canonical_name')
+    .in('id', unique);
+
+  if (error || !data) return [];
+
+  const byId = new Map<string, TagIdentityRecord>();
+  for (const row of data as IdentityNameRow[]) {
+    byId.set(row.id, toRecord(row));
+  }
+
+  return unique.map((id) => byId.get(id)).filter((r): r is TagIdentityRecord => !!r);
+}
+
 const EVENT_TAG_COLUMNS: { key: keyof EventTagSource; tagType: TagType }[] = [
   { key: 'producers', tagType: 'producer' },
   { key: 'featured_designers', tagType: 'designer' },

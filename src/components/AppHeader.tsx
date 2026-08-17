@@ -28,6 +28,7 @@ interface AppHeaderProps {
   onSignIn: () => void;
   onSignOut: () => void;
   searchBar?: ReactNode;
+  pinnedArtistBar?: ReactNode;
 }
 
 /** Icon tools: no border or card — hover wash only. */
@@ -49,6 +50,7 @@ export default function AppHeader({
   onSignIn,
   onSignOut,
   searchBar,
+  pinnedArtistBar,
 }: AppHeaderProps) {
   const t = useT();
   const menuId = useId();
@@ -208,6 +210,7 @@ export default function AppHeader({
               </div>
             </div>
           </div>
+          {pinnedArtistBar ? <div className="min-w-0">{pinnedArtistBar}</div> : null}
         </div>
       </header>
 
