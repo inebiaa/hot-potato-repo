@@ -4,13 +4,10 @@ import { Sparkles, Search } from 'lucide-react';
 import AppHeader, { type AppHeaderActiveView } from './components/AppHeader';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, Event, Rating } from './lib/supabase';
-import { eventDateMatchesSearch, formatEventDateDisplay } from './lib/formatEventDate';
-import { getSeasonFromDate } from './lib/season';
+import { eventDateMatchesSearch } from './lib/formatEventDate';
 import { isEventUpcoming, isUpcomingBeyondHorizon } from './lib/eventDates';
-import { effectiveHeaderTags } from './lib/eventHeaderTags';
 import { normalizeForSearch } from './lib/normalize';
-import { normalizeShowType, showTypeLabel } from './lib/showType';
-import { getSpecialGuests, isSpecialGuestsSlug } from './lib/specialGuests';
+import { isSpecialGuestsSlug } from './lib/specialGuests';
 import { readableTextForBg } from './lib/colorUtils';
 import EventCard from './components/EventCard';
 import AuthModal from './components/AuthModal';
@@ -30,7 +27,6 @@ import { overridesFromSettings, t as copyT } from './copy';
 import {
   displayLabelForTagFilter,
   fetchTagResolutionForEvents,
-  tagResolutionKey,
   type TagResolutionMap,
 } from './lib/tagDisplayResolution';
 import {
@@ -38,15 +34,9 @@ import {
   searchTagIdentities,
   type TagIdentityRecord,
 } from './lib/tagIdentity';
-import { filterEventsBySelectedTags } from './lib/eventTagFilter';
-import {
-  cityMatchesRegionQuery,
-  regionSuggestionMatchesQuery,
-} from './lib/cityPlaces';
-import {
-  collectSearchableTagsFromEvents,
-  identityIdsFromSearchableTags,
-} from './lib/searchableTagsFromEvents';
+import { eventMatchesTextQuery, filterEventsBySelectedTags } from './lib/eventTagFilter';
+import { regionSuggestionMatchesQuery } from './lib/cityPlaces';
+import { collectSearchableTagsFromEvents } from './lib/searchableTagsFromEvents';
 import PrimarySearchBar from './components/PrimarySearchBar';
 import HeaderPinnedArtistsBar from './components/HeaderPinnedArtistsBar';
 import MasonryLaneFeed, { type MasonryLaneItem } from './components/MasonryLaneFeed';
@@ -629,8 +619,7 @@ function App() {
       `${t.type}:${t.value}\x00${normalizeTagName(t.label)}`;
     const seen = new Set(fromEvents.map(suggestionKey));
     const out: { type: string; value: string; label: string }[] = [...fromEvents];
-    const identityAllowlist =
-      selectedTags.length > 0 ? identityIdsFromSearchableTags(sourceTags) : identityIdsInUse;
+    const identityAllowlist = identityIdsInUse;
     for (const id of identitySearchHits) {
       if (!identityAllowlist.has(id.clusterId)) continue;
       const customSlug = id.tag_type.startsWith('custom:') ? id.tag_type.slice(7) : null;
@@ -713,6 +702,12 @@ function App() {
   const selectTagFilter = (type: string, value: string, explicitLabel?: string) => {
     const label = displayLabelForTagFilter(type, value, tagResolutionMap, explicitLabel);
     setSelectedTags((prev) => {
+      if (type === 'query') {
+        const n = normalizeForSearch(value);
+        if (!n) return prev;
+        if (prev.some((t) => t.type === 'query' && normalizeForSearch(t.value) === n)) return prev;
+        return [...prev, { type, value: value.trim(), label: (label || value).trim() }];
+      }
       const key = `${type}:${value}`;
       const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
       if (alreadySelected) return prev;
@@ -951,64 +946,9 @@ function App() {
     }
 
     if (searchQuery.trim()) {
-      const queryNorm = normalizeForSearch(searchQuery);
-      if (queryNorm) {
-        const map = tagResolutionMap;
-        const tagLineMatch = (tagType: string, raw: string) => {
-          if (normalizeForSearch(raw).includes(queryNorm)) return true;
-          const entry = map?.get(tagResolutionKey(tagType, raw));
-          return entry?.searchable.some((s) => normalizeForSearch(s).includes(queryNorm)) ?? false;
-        };
-        const customLineMatch = (slug: string, raw: string) => {
-          if (normalizeForSearch(raw).includes(queryNorm)) return true;
-          const entry = map?.get(tagResolutionKey(`custom:${slug}`, raw));
-          return entry?.searchable.some((s) => normalizeForSearch(s).includes(queryNorm)) ?? false;
-        };
-        filtered = filtered.filter((event) => {
-          const nameMatch = normalizeForSearch(event.name || '').includes(queryNorm);
-          const cityMatch =
-            normalizeForSearch(event.city || '').includes(queryNorm) ||
-            cityMatchesRegionQuery(event.city, queryNorm);
-          const locationMatch = normalizeForSearch(event.location || '').includes(queryNorm);
-          const venueMatch = event.location ? tagLineMatch('venue', event.location) : false;
-          const designersMatch = event.featured_designers?.some((d) => tagLineMatch('designer', d)) || false;
-          const artistsMatch =
-            event.featured_artists?.some((a) => tagLineMatch('artist', a)) ||
-            getSpecialGuests(event.custom_tags).some((a) => tagLineMatch('artist', a)) ||
-            false;
-          const producersMatch = event.producers?.some((p) => tagLineMatch('producer', p)) || false;
-          const headerTagsMatch = effectiveHeaderTags(event).some((t) => tagLineMatch('header_tags', t)) || false;
-          const footerTagsMatch = event.footer_tags?.some((t) => tagLineMatch('footer_tags', t)) || false;
-          const customTagsMatch =
-            event.custom_tags && typeof event.custom_tags === 'object'
-              ? Object.entries(event.custom_tags).some(([slug, vals]) =>
-                  isSpecialGuestsSlug(slug)
-                    ? false
-                    : (vals || []).some((v: string) => customLineMatch(slug, v))
-                )
-              : false;
-          const hairMakeupMatch = event.hair_makeup?.some((h) => tagLineMatch('hair_makeup', h)) || false;
-          const dateMatch = eventDateMatchesSearch(event.date || '', queryNorm);
-          const seasonMatch = normalizeForSearch(getSeasonFromDate(event.date || '')).includes(queryNorm);
-          const showTypeMatch = normalizeForSearch(showTypeLabel(event.show_type)).includes(queryNorm);
-          return (
-            nameMatch ||
-            cityMatch ||
-            locationMatch ||
-            venueMatch ||
-            designersMatch ||
-            artistsMatch ||
-            producersMatch ||
-            headerTagsMatch ||
-            footerTagsMatch ||
-            customTagsMatch ||
-            hairMakeupMatch ||
-            dateMatch ||
-            seasonMatch ||
-            showTypeMatch
-          );
-        });
-      }
+      filtered = filtered.filter((event) =>
+        eventMatchesTextQuery(event, searchQuery, tagResolutionMap),
+      );
     }
 
     filtered = filterEventsBySelectedTags(filtered, selectedTags, tagResolutionMap);
