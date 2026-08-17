@@ -721,17 +721,6 @@ function App() {
     setSelectedTags((prev) => prev.filter((t) => !(t.type === type && t.value === value)));
   };
 
-  const toggleTagFilter = useCallback((type: string, value: string, explicitLabel?: string) => {
-    const key = `${type}:${value}`;
-    setSelectedTags((prev) => {
-      const exists = prev.some((t) => `${t.type}:${t.value}` === key);
-      if (exists) return prev.filter((t) => !(t.type === type && t.value === value));
-      const label = displayLabelForTagFilter(type, value, tagResolutionMap, explicitLabel);
-      return [...prev, { type, value, label }];
-    });
-    scrollFeedToTop();
-  }, [tagResolutionMap, scrollFeedToTop]);
-
   const clearFilters = () => {
     setSearchQuery('');
     setSelectedTags([]);
@@ -1095,9 +1084,15 @@ function App() {
     }
     const key = `artist:${id}`;
     const exists = selectedTags.some((t) => `${t.type}:${t.value}` === key);
-    toggleTagFilter('artist', id, label);
+    setSelectedTags((prev) => {
+      const withoutArtists = prev.filter((t) => t.type !== 'artist');
+      if (exists) return withoutArtists;
+      const resolvedLabel = displayLabelForTagFilter('artist', id, tagResolutionMap, label);
+      return [...withoutArtists, { type: 'artist', value: id, label: resolvedLabel }];
+    });
     if (!exists) setSearchQuery('');
-  }, [overlayEventId, location.pathname, searchParams, selectedTags, toggleTagFilter, navigate, closeEventOverlay]);
+    scrollFeedToTop();
+  }, [overlayEventId, location.pathname, searchParams, selectedTags, tagResolutionMap, navigate, closeEventOverlay, scrollFeedToTop]);
 
   const headerPinnedArtistBar = useMemo(() => {
     if (!appSettings || pinnedArtists.length === 0) return null;
