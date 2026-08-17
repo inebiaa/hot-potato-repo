@@ -40,4 +40,6 @@ export interface AppSettings {
   optional_tags_text_color?: string;
   special_guests_bg_color?: string;
   special_guests_text_color?: string;
+  /** JSON array of tag_identities.id for header pinned artist pills. */
+  header_pinned_artists?: string;
 }

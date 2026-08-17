@@ -17,6 +17,14 @@ import {
   deleteStoredBrandImage,
   ensureBrandImageStored,
 } from '../lib/brandImageUpload';
+import {
+  fetchIdentitiesByIds,
+} from '../lib/tagIdentity';
+import {
+  parseHeaderPinnedArtistIds,
+  resolvePinnedArtistNamesToIds,
+  serializeHeaderPinnedArtistIds,
+} from '../lib/headerPinnedArtists';
 
 const PALETTE_STORAGE_KEY = 'tag_settings_palette_v1';
 const COLLECTIONS_STORAGE_KEY = 'tag_color_collections_v1';
@@ -124,7 +132,9 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
     optional_tags_text_color: '#881337',
     special_guests_bg_color: '#e0e7ff',
     special_guests_text_color: '#3730a3',
+    header_pinned_artists: '',
   }));
+  const [pinnedArtistNames, setPinnedArtistNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -593,7 +603,17 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
         optional_tags_text_color: settingsObj.optional_tags_text_color || '#881337',
         special_guests_bg_color: settingsObj.special_guests_bg_color || '#e0e7ff',
         special_guests_text_color: settingsObj.special_guests_text_color || '#3730a3',
+        header_pinned_artists: settingsObj.header_pinned_artists || '',
       });
+      const pinnedIds = parseHeaderPinnedArtistIds(settingsObj.header_pinned_artists);
+      if (pinnedIds.length > 0) {
+        void fetchIdentitiesByIds(pinnedIds).then((rows) => {
+          const byId = new Map(rows.map((r) => [r.id, r.canonical_name]));
+          setPinnedArtistNames(pinnedIds.map((id) => byId.get(id)).filter((n): n is string => !!n));
+        });
+      } else {
+        setPinnedArtistNames([]);
+      }
       savedBrandingImagesRef.current = {
         app_icon_url: settingsObj.app_icon_url || '',
         app_logo_url: settingsObj.app_logo_url || '',
@@ -744,6 +764,9 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
         void deleteStoredBrandImage(prev.app_favicon_url);
       }
 
+      const pinnedArtistIds = await resolvePinnedArtistNamesToIds(pinnedArtistNames);
+      const headerPinnedArtists = serializeHeaderPinnedArtistIds(pinnedArtistIds);
+
       const updates = [
         { key: 'app_name', value: settings.app_name },
         { key: 'app_icon_url', value: nextIcon },
@@ -784,6 +807,7 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
         { key: 'optional_tags_text_color', value: settings.optional_tags_text_color },
         { key: 'special_guests_bg_color', value: settings.special_guests_bg_color },
         { key: 'special_guests_text_color', value: settings.special_guests_text_color },
+        { key: 'header_pinned_artists', value: headerPinnedArtists },
       ];
 
       for (const u of updates) {
@@ -841,6 +865,18 @@ export default function SettingsPage({ onSettingsUpdated, onSettingsPreview, onA
             {activeTab === 'branding' && (
               <BrandingTab
                 settings={settings}
+                pinnedArtistNames={pinnedArtistNames}
+                onPinnedArtistsChange={(names) => {
+                  setPinnedArtistNames(names);
+                  void resolvePinnedArtistNamesToIds(names).then((ids) => {
+                    const serialized = serializeHeaderPinnedArtistIds(ids);
+                    setSettings((s) => {
+                      const next = { ...s, header_pinned_artists: serialized };
+                      onSettingsPreview?.(next);
+                      return next;
+                    });
+                  });
+                }}
                 onChange={(patch) => {
                   setSettings((s) => ({ ...s, ...patch }));
                   onSettingsPreview?.({ ...settings, ...patch });
