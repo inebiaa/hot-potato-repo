@@ -25,7 +25,7 @@ import { formatEventDateDisplay } from '../lib/formatEventDate';
 import { canonicalEventUrl } from '../lib/siteBase';
 import { clearAppModalParams, parseAppModal, setAppModalParams } from '../lib/searchParamsModal';
 import { normalizeShowType, starringColumn, starringTagType } from '../lib/showType';
-import { useT } from '../contexts/CopyContext';
+import { useT } from '../hooks/useCopy';
 import {
   getSpecialGuests,
   isSpecialGuestsSlug,
@@ -409,14 +409,7 @@ export default function EventCard({
     hair_makeup: coalesceTagList(event.hair_makeup),
     header_tags: effectiveHeaderTags(event),
     footer_tags: coalesceTagList(event.footer_tags),
-  }), [
-    event.producers,
-    event.featured_designers,
-    event.featured_artists,
-    event.hair_makeup,
-    event.header_tags,
-    event.footer_tags,
-  ]);
+  }), [event]);
 
   const customTags = useMemo(
     () =>

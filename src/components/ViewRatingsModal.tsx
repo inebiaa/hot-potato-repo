@@ -7,7 +7,7 @@ import RatingModal from './RatingModal';
 import CommentWithTags from './CommentWithTags';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
-import { useT } from '../contexts/CopyContext';
+import { useT } from '../hooks/useCopy';
 import { setAppModalParams } from '../lib/searchParamsModal';
 
 interface Rating {

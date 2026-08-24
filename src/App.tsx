@@ -187,7 +187,7 @@ function App() {
     setSearchDragOver(false);
   };
 
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('app_settings')
@@ -266,9 +266,9 @@ function App() {
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
-  };
+  }, []);
 
-  const fetchEvents = async (opts?: { append?: boolean }) => {
+  const fetchEvents = useCallback(async (opts?: { append?: boolean }) => {
     const append = opts?.append ?? false;
     const silent = hasLoadedEventsRef.current;
     if (!append && !silent) setLoading(true);
@@ -376,7 +376,7 @@ function App() {
         setLoading(false);
       }
     }
-  };
+  }, [user?.id]);
 
   const loadMoreEvents = () => {
     void fetchEvents({ append: true });
@@ -507,16 +507,11 @@ function App() {
 
   useEffect(() => {
     void fetchSettings();
-    // Settings are global — load once per App mount, not on every auth tick.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchSettings]);
 
   useEffect(() => {
     void fetchEvents();
-    // Refetch when identity changes (login/logout) so user_rating stays correct.
-    // Use user?.id so token/object churn does not retrigger; silent after first load.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [fetchEvents]);
 
   useEffect(() => {
     const needsFullCatalog =
@@ -685,48 +680,6 @@ function App() {
     };
   }, [appSettings?.header_pinned_artists, tagResolutionMap, appSettings]);
 
-  const handleTagClick = (type: string, value: string, explicitLabel?: string) => {
-    if (overlayEventId) closeEventOverlay();
-    else navigate({ pathname: '/', search: '' });
-    const label = displayLabelForTagFilter(type, value, tagResolutionMap, explicitLabel);
-    setSelectedTags((prev) => {
-      const key = `${type}:${value}`;
-      const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
-      if (alreadySelected) return prev;
-      return [...prev, { type, value, label }];
-    });
-    setSearchQuery('');
-    scrollFeedToTop();
-  };
-
-  const selectTagFilter = (type: string, value: string, explicitLabel?: string) => {
-    const label = displayLabelForTagFilter(type, value, tagResolutionMap, explicitLabel);
-    setSelectedTags((prev) => {
-      if (type === 'query') {
-        const n = normalizeForSearch(value);
-        if (!n) return prev;
-        if (prev.some((t) => t.type === 'query' && normalizeForSearch(t.value) === n)) return prev;
-        return [...prev, { type, value: value.trim(), label: (label || value).trim() }];
-      }
-      const key = `${type}:${value}`;
-      const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
-      if (alreadySelected) return prev;
-      return [...prev, { type, value, label }];
-    });
-    setSearchQuery('');
-    scrollFeedToTop();
-  };
-
-  const removeTagFilter = (type: string, value: string) => {
-    setSelectedTags((prev) => prev.filter((t) => !(t.type === type && t.value === value)));
-  };
-
-  const clearFilters = () => {
-    setSearchQuery('');
-    setSelectedTags([]);
-    scrollFeedToTop();
-  };
-
   // Legacy URLs: /?event=uuid → /event/uuid (keeps embed, stats, etc.)
   useEffect(() => {
     const q = searchParams.get('event');
@@ -768,6 +721,88 @@ function App() {
   const showStats = searchParams.get('stats') === '1';
   const showSettings = searchParams.get('settings') === '1';
   const pathname = location.pathname;
+
+  const closeEventOverlay = useCallback(() => {
+    setOverlayEventId(null);
+    setOverlaySource(null);
+    setTagModalRefreshTrigger((t) => t + 1);
+    if (showProfileView) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('event');
+      if (profileHandle) {
+        const qs = next.toString();
+        navigate(qs ? { pathname: profilePagePath(profileHandle), search: qs } : profilePagePath(profileHandle));
+      } else {
+        next.set('profile', '1');
+        navigate({ pathname: '/', search: next.toString() });
+      }
+    } else {
+      navigate('/');
+    }
+  }, [showProfileView, searchParams, profileHandle, navigate]);
+
+  const openEventOverlay = useCallback((
+    eventId: string,
+    source?: 'tagModal' | 'viewRatings',
+  ) => {
+    setOverlayEventId(eventId);
+    setOverlaySource(source ?? null);
+    if (showProfileView) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('profile');
+      next.set('event', eventId);
+      if (profileHandle) {
+        navigate({ pathname: profilePagePath(profileHandle), search: next.toString() });
+      } else {
+        next.set('profile', '1');
+        navigate({ pathname: '/', search: next.toString() });
+      }
+    } else {
+      navigate(`/event/${eventId}`);
+    }
+  }, [showProfileView, profileHandle, searchParams, navigate]);
+
+  const handleTagClick = useCallback((type: string, value: string, explicitLabel?: string) => {
+    if (overlayEventId) closeEventOverlay();
+    else navigate({ pathname: '/', search: '' });
+    const label = displayLabelForTagFilter(type, value, tagResolutionMap, explicitLabel);
+    setSelectedTags((prev) => {
+      const key = `${type}:${value}`;
+      const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
+      if (alreadySelected) return prev;
+      return [...prev, { type, value, label }];
+    });
+    setSearchQuery('');
+    scrollFeedToTop();
+  }, [overlayEventId, closeEventOverlay, navigate, tagResolutionMap, scrollFeedToTop]);
+
+  const selectTagFilter = useCallback((type: string, value: string, explicitLabel?: string) => {
+    const label = displayLabelForTagFilter(type, value, tagResolutionMap, explicitLabel);
+    setSelectedTags((prev) => {
+      if (type === 'query') {
+        const n = normalizeForSearch(value);
+        if (!n) return prev;
+        if (prev.some((t) => t.type === 'query' && normalizeForSearch(t.value) === n)) return prev;
+        return [...prev, { type, value: value.trim(), label: (label || value).trim() }];
+      }
+      const key = `${type}:${value}`;
+      const alreadySelected = prev.some((t) => `${t.type}:${t.value}` === key);
+      if (alreadySelected) return prev;
+      return [...prev, { type, value, label }];
+    });
+    setSearchQuery('');
+    scrollFeedToTop();
+  }, [tagResolutionMap, scrollFeedToTop]);
+
+  const removeTagFilter = useCallback((type: string, value: string) => {
+    setSelectedTags((prev) => prev.filter((t) => !(t.type === type && t.value === value)));
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setSearchQuery('');
+    setSelectedTags([]);
+    scrollFeedToTop();
+  }, [scrollFeedToTop]);
 
   const isAddEventModalOpen = modalRoute.modal === 'add-event';
   const isAuthModalOpen = modalRoute.modal === 'auth';
@@ -853,7 +888,7 @@ function App() {
       return;
     }
     setProfileResolving(false);
-    if (user) {
+    if (user?.id) {
       setProfileUserId(user.id);
       setProfileNotFound(false);
     } else {
@@ -877,7 +912,7 @@ function App() {
         hasClearedFiltersForSharedLink.current = true;
       }
     }
-  }, [embedMode, eventIdFromUrl, loading, events, filteredEvents]);
+  }, [embedMode, eventIdFromUrl, loading, events, filteredEvents, clearFilters]);
 
   // Sync URL ?event=id to overlay (shared links open overlay)
   useEffect(() => {
@@ -893,9 +928,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-    // closeEventOverlay is stable in behavior for Escape handling
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overlayEventId]);
+  }, [overlayEventId, closeEventOverlay]);
 
   useEffect(() => {
     if (overlayEventId && overlayCardWrapperRef.current) {
@@ -978,8 +1011,6 @@ function App() {
       setEvents((prev) => mergeEventsByFeedOrder(prev, [mapped]));
     })();
     return () => { cancelled = true; };
-    // user referenced for user_rating; including full user would over-fetch on profile edits
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlayEventId, overlayEventFromCache, user?.id]);
 
   // Embed / shared links: pull a missing show by id without downloading the whole catalog.
@@ -1024,51 +1055,9 @@ function App() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventIdFromUrl, loading, hasDeepLinkedEvent, user?.id, overlayEventId]);
 
   const overlayEvent = overlayEventFromCache ?? overlayEventFetched;
-
-  const openEventOverlay = (
-    eventId: string,
-    source?: 'tagModal' | 'viewRatings',
-  ) => {
-    setOverlayEventId(eventId);
-    setOverlaySource(source ?? null);
-    // Stay on profile when opening a review from My reviews (don’t navigate to /event/:id).
-    if (showProfileView) {
-      const next = new URLSearchParams(searchParams);
-      next.delete('profile');
-      next.set('event', eventId);
-      if (profileHandle) {
-        navigate({ pathname: profilePagePath(profileHandle), search: next.toString() });
-      } else {
-        next.set('profile', '1');
-        navigate({ pathname: '/', search: next.toString() });
-      }
-    } else {
-      navigate(`/event/${eventId}`);
-    }
-  };
-
-  const closeEventOverlay = () => {
-    setOverlayEventId(null);
-    setOverlaySource(null);
-    setTagModalRefreshTrigger((t) => t + 1);
-    if (showProfileView) {
-      const next = new URLSearchParams(searchParams);
-      next.delete('event');
-      if (profileHandle) {
-        const qs = next.toString();
-        navigate(qs ? { pathname: profilePagePath(profileHandle), search: qs } : profilePagePath(profileHandle));
-      } else {
-        next.set('profile', '1');
-        navigate({ pathname: '/', search: next.toString() });
-      }
-    } else {
-      navigate('/');
-    }
-  };
 
   const goBack = () => {
     clearFilters();
@@ -1530,8 +1519,6 @@ function App() {
           />
           <ProfilePage
             userId={profileUserId}
-            pathname={pathname}
-            onClose={goBack}
             onTagClick={handleTagClick}
             onOpenEvent={(id) => openEventOverlay(id, 'viewRatings')}
             onClearSearch={clearFilters}

@@ -8,9 +8,10 @@ import { fetchTagResolutionForEvents, type TagResolutionMap } from '../lib/tagDi
 import { normalizeEventTagArrays } from '../lib/eventTagArray';
 import { fetchEventRatingStats } from '../lib/eventRatingStats';
 import { useAuth } from '../contexts/AuthContext';
-import { useT } from '../contexts/CopyContext';
+import { useT } from '../hooks/useCopy';
 import { listPagePath } from '../lib/siteBase';
-import { ListCover, pickListCollageUrls } from './ListCoverCollage';
+import { ListCover } from './ListCoverCollage';
+import { pickListCollageUrls } from '../lib/listCoverCollage';
 import ListSocialMeta from './ListSocialMeta';
 
 type BoardRow = {
@@ -87,7 +88,7 @@ export default function SharedLibraryListPage({
         return;
       }
       const listRow = listRes.data as UserList;
-      const isOwner = !!user && user.id === listRow.user_id;
+      const isOwner = user?.id === listRow.user_id;
       if (!listRow.is_public && !isOwner) {
         setError('This list is private');
         setList(listRow);
@@ -155,7 +156,7 @@ export default function SharedLibraryListPage({
         );
         const [statsRes, viewerRatingsRes] = await Promise.all([
           fetchEventRatingStats(ids),
-          user && ids.length > 0
+          user?.id && ids.length > 0
             ? supabase.from('ratings').select('*').eq('user_id', user.id).in('event_id', ids)
             : Promise.resolve({ data: [] as Rating[] }),
         ]);

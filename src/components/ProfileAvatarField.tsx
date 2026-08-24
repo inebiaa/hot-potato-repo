@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { User } from 'lucide-react';
 import { Input, Label, Button } from './ui';
 import { uploadProfileImageFile } from '../lib/profileImageUpload';
-import { useT } from '../contexts/CopyContext';
+import { useT } from '../hooks/useCopy';
 
 type ProfileAvatarFieldProps = {
   avatarUrl: string;

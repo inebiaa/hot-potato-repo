@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { supabase, Event } from '../lib/supabase';
 import { getSeasonFromDate, sortSeasonsByDate } from '../lib/season';
@@ -211,7 +211,7 @@ export default function StatisticsPage({
   const allSeasons = sortSeasonsByDate(Array.from(new Set(events.map(e => getSeasonFromDate(e.date)))));
   const tagStats = calculateTagStats();
 
-  const matchEventForTag = (e: Event, type: string, value: string) => {
+  const matchEventForTag = useCallback((e: Event, type: string, value: string) => {
     switch (type) {
       case 'producer': return eventArrayMatchesFilter(tagResolutionMap, 'producer', e.producers, value);
       case 'designer': return eventArrayMatchesFilter(tagResolutionMap, 'designer', e.featured_designers, value);
@@ -227,7 +227,7 @@ export default function StatisticsPage({
       case 'footer_tags': return eventArrayMatchesFilter(tagResolutionMap, 'footer_tags', e.footer_tags, value);
       default: return false;
     }
-  };
+  }, [tagResolutionMap]);
 
   const eventsForTag = useMemo(() => {
     if (!selectedTag?.type || !selectedTag?.value) return [];
@@ -235,7 +235,7 @@ export default function StatisticsPage({
     if (selectedCity) filtered = filtered.filter((e) => sameTagSpelling(e.city, selectedCity));
     if (selectedSeason) filtered = filtered.filter(e => (e.season || getSeasonFromDate(e.date)) === selectedSeason);
     return filtered.filter(e => matchEventForTag(e, selectedTag.type, selectedTag.value));
-  }, [events, selectedTag, selectedCity, selectedSeason, tagResolutionMap]);
+  }, [events, selectedTag, selectedCity, selectedSeason, matchEventForTag]);
 
   if (!isOpen && !asPage) return null;
 

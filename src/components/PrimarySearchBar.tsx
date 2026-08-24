@@ -4,7 +4,7 @@ import type { AppSettings } from '../types/appSettings';
 import { showTypePillColors } from '../lib/showType';
 import { getPillColors } from './tagCards/getPillColors';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
-import { useT } from '../contexts/CopyContext';
+import { useT } from '../hooks/useCopy';
 import { regionKindFromCode } from '../lib/cityPlaces';
 
 export type CustomPerformerTagDef = { slug: string; bg_color: string; text_color: string };

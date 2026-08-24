@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { Plus, LogOut, LogIn, Sparkles, BarChart3, User, Settings, Home, MoreVertical } from 'lucide-react';
 import type { AppSettings } from '../types/appSettings';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
-import { useT } from '../contexts/CopyContext';
+import { useT } from '../hooks/useCopy';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
 

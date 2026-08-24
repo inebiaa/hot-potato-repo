@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Input, Label, Button } from './ui';
 import { uploadProfileCoverFile } from '../lib/profileImageUpload';
-import { useT } from '../contexts/CopyContext';
+import { useT } from '../hooks/useCopy';
 
 type ProfileCoverFieldProps = {
   coverUrl: string;

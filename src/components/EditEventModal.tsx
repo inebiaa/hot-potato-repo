@@ -23,7 +23,7 @@ import {
   withSpecialGuests,
   withSpecialGuestsMeta,
 } from '../lib/specialGuests';
-import { useT } from '../contexts/CopyContext';
+import { useT } from '../hooks/useCopy';
 import { deleteStoredEventImage, ensureEventImageStored } from '../lib/eventImageUpload';
 import TagInput from './TagInput';
 import IconPicker from './IconPicker';

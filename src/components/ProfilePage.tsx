@@ -23,18 +23,17 @@ import { normalizeForSearch } from '../lib/normalize';
 import { fetchEventRatingStats } from '../lib/eventRatingStats';
 import { canonicalListUrl } from '../lib/siteBase';
 import { Button, Input, Label } from './ui';
-import { useT } from '../contexts/CopyContext';
+import { useT } from '../hooks/useCopy';
 import {
   deleteStoredListCover,
   uploadListCoverFile,
 } from '../lib/listCoverUpload';
 import { compareEventsForFeed, type EventWithStats } from '../lib/eventsFeed';
-import { ListCover, pickListCollageUrls } from './ListCoverCollage';
+import { ListCover } from './ListCoverCollage';
+import { pickListCollageUrls } from '../lib/listCoverCollage';
 
 interface ProfilePageProps {
   userId: string;
-  pathname: string;
-  onClose: () => void;
   onTagClick?: (type: string, value: string, displayLabel?: string) => void;
   onOpenEvent?: (eventId: string) => void;
   onClearSearch?: () => void;
@@ -101,8 +100,6 @@ type BoardRow = {
 
 export default function ProfilePage({
   userId,
-  pathname,
-  onClose: _onClose,
   onTagClick,
   onOpenEvent,
   onClearSearch,

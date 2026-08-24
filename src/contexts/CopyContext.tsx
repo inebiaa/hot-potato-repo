@@ -1,21 +1,7 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import {
-  overridesFromSettings,
-  t as resolveT,
-  type CopyKey,
-  type CopyOverrides,
-} from '../copy';
+import { useMemo, type ReactNode } from 'react';
+import { parseCopyOverrides, t as resolveT, type CopyKey } from '../copy';
 import type { AppSettings } from '../types/appSettings';
-
-type CopyContextValue = {
-  overrides: CopyOverrides;
-  t: (key: CopyKey) => string;
-};
-
-const CopyContext = createContext<CopyContextValue>({
-  overrides: {},
-  t: (key) => resolveT(key),
-});
+import { CopyContext } from './copyContextState';
 
 export function CopyProvider({
   settings,
@@ -24,21 +10,15 @@ export function CopyProvider({
   settings: AppSettings | null | undefined;
   children: ReactNode;
 }) {
+  const copyOverridesRaw = settings?.copy_overrides;
+
   const value = useMemo(() => {
-    const overrides = overridesFromSettings(settings);
+    const overrides = parseCopyOverrides(copyOverridesRaw);
     return {
       overrides,
       t: (key: CopyKey) => resolveT(key, overrides),
     };
-  }, [settings?.copy_overrides]);
+  }, [copyOverridesRaw]);
 
   return <CopyContext.Provider value={value}>{children}</CopyContext.Provider>;
-}
-
-export function useT(): (key: CopyKey) => string {
-  return useContext(CopyContext).t;
-}
-
-export function useCopyOverrides(): CopyOverrides {
-  return useContext(CopyContext).overrides;
 }

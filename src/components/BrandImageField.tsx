@@ -6,7 +6,7 @@ import {
   uploadBrandImageFile,
   type BrandImageSlot,
 } from '../lib/brandImageUpload';
-import { useT } from '../contexts/CopyContext';
+import { useT } from '../hooks/useCopy';
 
 type BrandImageFieldProps = {
   label: string;

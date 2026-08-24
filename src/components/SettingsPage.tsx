@@ -9,7 +9,7 @@ import BrandingTab from './settings/BrandingTab';
 import CopyTab from './settings/CopyTab';
 import AccountTab from './settings/AccountTab';
 import AdminsTab from './settings/AdminsTab';
-import TagsTab, { BRIGHT_TAG_DEFAULTS, FADED_TAG_DEFAULTS } from './settings/TagsTab';
+import TagsTab from './settings/TagsTab';
 import { Button } from './ui';
 import { deleteStoredProfileImage } from '../lib/profileImageUpload';
 import { COPY_OVERRIDES_SETTING_KEY } from '../copy';

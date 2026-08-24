@@ -5,7 +5,7 @@ import {
   eventImageStoragePathFromUrl,
   uploadEventImageFile,
 } from '../lib/eventImageUpload';
-import { useT } from '../contexts/CopyContext';
+import { useT } from '../hooks/useCopy';
 
 type EventImageFieldProps = {
   imageUrl: string;
