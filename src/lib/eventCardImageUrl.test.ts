@@ -44,3 +44,17 @@ test('passes through Supabase storage URLs unchanged', () => {
     'https://uhljagzmwnsqpkasqfyn.supabase.co/storage/v1/object/public/event-images/user/photo.jpg';
   assert.equal(eventCardImageUrl(src), src);
 });
+
+test('rewrites CDN event photos to the .card. sibling', () => {
+  const src = 'https://images.secretblogger.app/event/user/photo.jpg';
+  assert.equal(eventCardImageUrl(src), 'https://images.secretblogger.app/event/user/photo.card.jpg');
+});
+
+test('leaves CDN card URLs and non-event CDN photos alone', () => {
+  assert.equal(
+    eventCardImageUrl('https://images.secretblogger.app/event/user/photo.card.jpg'),
+    'https://images.secretblogger.app/event/user/photo.card.jpg',
+  );
+  const profile = 'https://images.secretblogger.app/profile/user/avatar.jpg';
+  assert.equal(eventCardImageUrl(profile), profile);
+});

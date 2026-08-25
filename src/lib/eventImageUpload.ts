@@ -1,16 +1,11 @@
+import { isCdnImageUrl, legacySupabaseStorageRef } from './imageCdn';
+import { deletePublicImage, storePublicImageFile } from './storePublicImage';
 import { supabase } from './supabase';
 
 export const EVENT_IMAGES_BUCKET = 'event-images';
 
 const MAX_EDGE_PX = 1200;
 const JPEG_QUALITY = 0.82;
-
-function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 /** Resize / recompress for card + OG use; returns a JPEG blob. */
 export async function compressImageForEvent(file: Blob): Promise<Blob> {
@@ -40,8 +35,8 @@ export async function compressImageForEvent(file: Blob): Promise<Blob> {
 }
 
 /**
- * Upload a user-picked image into the public `event-images` bucket.
- * Path: `{userId}/{uuid}.jpg`
+ * Upload a user-picked image to the public image CDN.
+ * Path: `event/{userId}/{uuid}.jpg` plus a `.card.jpg` feed variant.
  */
 export async function uploadEventImageFile(
   file: File,
@@ -57,53 +52,31 @@ export async function uploadEventImageFile(
     body = file;
   }
 
-  const path = `${userId}/${randomId()}.jpg`;
-  const { error } = await supabase.storage.from(EVENT_IMAGES_BUCKET).upload(path, body, {
-    contentType: 'image/jpeg',
-    upsert: false,
-    cacheControl: '31536000',
-  });
-
-  if (error) return { error: error.message || 'Upload failed.' };
-
-  const { data } = supabase.storage.from(EVENT_IMAGES_BUCKET).getPublicUrl(path);
-  if (!data?.publicUrl) return { error: 'Upload succeeded but no public URL.' };
-  return { url: data.publicUrl };
+  return storePublicImageFile({ blob: body, kind: 'event' });
 }
 
-/** Object path inside `event-images`, or null if URL is not from our bucket. */
+/** Object path inside legacy `event-images`, or null. */
 export function eventImageStoragePathFromUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    const marker = `/storage/v1/object/public/${EVENT_IMAGES_BUCKET}/`;
-    const idx = u.pathname.indexOf(marker);
-    if (idx === -1) return null;
-    const path = decodeURIComponent(u.pathname.slice(idx + marker.length));
-    return path || null;
-  } catch {
-    return null;
-  }
+  const ref = legacySupabaseStorageRef(url);
+  if (ref?.bucket !== EVENT_IMAGES_BUCKET) return null;
+  return ref.path;
 }
 
 /** Best-effort remove of a file we host; no-op for external/hotlinked URLs. */
 export async function deleteStoredEventImage(url: string | null | undefined): Promise<void> {
-  const path = eventImageStoragePathFromUrl(url);
-  if (!path) return;
-  const { error } = await supabase.storage.from(EVENT_IMAGES_BUCKET).remove([path]);
-  if (error) console.warn('Failed to delete event image from storage:', error.message);
+  await deletePublicImage(url);
 }
 
 /**
- * Download an external image URL via Edge Function and store a durable copy in `event-images`.
- * No-op (returns same URL) if already hosted in our bucket.
+ * Download an external image URL and store a durable CDN copy.
+ * No-op if already on the public image CDN.
  */
 export async function ensureEventImageStored(
   url: string | null | undefined,
 ): Promise<{ url: string | null } | { error: string }> {
   const trimmed = (url || '').trim();
   if (!trimmed) return { url: null };
-  if (eventImageStoragePathFromUrl(trimmed)) return { url: trimmed };
+  if (isCdnImageUrl(trimmed)) return { url: trimmed };
 
   const { data, error } = await supabase.functions.invoke('ingest-event-image', {
     body: { url: trimmed },
@@ -111,7 +84,6 @@ export async function ensureEventImageStored(
 
   if (error) {
     const msg = error.message || 'Could not save image from URL.';
-    // Functions often put JSON `{ error }` in the body on non-2xx; surface that when present.
     const bodyError =
       data && typeof data === 'object' && 'error' in data
         ? String((data as { error: unknown }).error)

@@ -21,7 +21,7 @@ When the user asks to **admin / add / update / insert / fix event info**, do not
 | `header_tags` | Genres + `Festival` on festival cards (genres alone is not enough) |
 | `producers` | Only with explicit presenter credit (producers-accuracy) |
 | `countdown_link` | **Future events only.** If the event date is still ahead, set official tickets / event page (artist Ticketmaster hub, fest site, venue). Not StubHub/SeatGeek unless nothing else exists. If the event is already past, leave `countdown_link` null / empty (do not backfill ticket links onto past shows). The app clears the link automatically when the countdown pill hits zero (`clear_expired_countdown_link`) and via a daily DB sweep. |
-| `image_url` | Must end as a **Supabase `event-images` public URL**. Source may be an external promo/press link, but always rehost via `ingest-event-image` / `ensureEventImageStored` (or `scripts/backfill-event-images.mjs`) before saving. Never leave hotlinks in `image_url`. |
+| `image_url` | Must be a **Cloudflare R2 public CDN URL** (`https://images.secretblogger.app/event/…`). Source may be an external promo/press link, but always rehost via `ingest-event-image` / `ensureEventImageStored` (or `scripts/backfill-event-images.mjs`) before saving. Never leave hotlinks, and never write `*.supabase.co/storage/…` URLs. |
 | `custom_tags` | All billed openers / special guests / supporting acts as `special-guests` (see below) |
 | `created_by` | Admin `9ab4f944-acce-463b-8f0d-a1a12b52a24c` on inserts |
 
@@ -66,7 +66,10 @@ When the user asks to admin an **artist** and that leads to adding or updating a
 
 ## Images
 
-- **Host on Supabase only.** External URLs are source material for ingest, never the stored `image_url`. Use `ensureEventImageStored` / `ingest-event-image`, or `node scripts/backfill-event-images.mjs` after a SQL batch.
+- **Host on the Cloudflare R2 image CDN only.** External URLs are source material for ingest, never the stored `image_url`. Use `ensureEventImageStored` / `ingest-event-image`, or `node scripts/backfill-event-images.mjs` after a SQL batch.
+- Do **not** upload event photos to Supabase Storage. That path is what blew cached egress on the free plan.
+- Uploads must set `Cache-Control: public, max-age=31536000, immutable` and use a new UUID path (never overwrite).
+- Feed cards load the sibling `.card.jpg` (640px). Keep `image_url` on the full object for OG/share.
 - Must be wider than tall (card-friendly landscape). Reject square/vertical-only assets when a horizontal exists.
 - Must be connected to the event: that festival’s grounds/crowd/stage, that tour’s official promo, or that night’s billed art. Not a random artist headshot, Unsplash crowd, or decade-old Wikimedia of a different year.
 - Festivals: prefer recent press from **that** fest. Tours: official tour poster / press still used for that run.
@@ -84,3 +87,4 @@ When the user asks to admin an **artist** and that leads to adding or updating a
 - Add or keep a `countdown_link` on a **past** event (clear it when touching past rows if it’s still set)
 - Use vertical posters, generic stock, or old photos from a different edition when a current horizontal promo exists
 - Write hotlinked `image_url` values straight into the DB and skip rehost
+- Write `image_url` to Supabase Storage (`/storage/v1/object/public/`)

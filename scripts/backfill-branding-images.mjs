@@ -1,7 +1,7 @@
 /**
- * Rehost app branding image URLs (icon/logo/favicon) into `branding-images`.
+ * Rehost app branding image URLs (icon/logo/favicon) onto the Cloudflare R2 image CDN.
  *
- * Requires SUPABASE_SERVICE_ROLE_KEY + VITE_SUPABASE_URL (or SUPABASE_URL).
+ * Requires SUPABASE_SERVICE_ROLE_KEY + VITE_SUPABASE_URL (or SUPABASE_URL) + R2_*.
  * Run: node scripts/backfill-branding-images.mjs
  */
 import { createClient } from '@supabase/supabase-js';
@@ -9,14 +9,13 @@ import { config } from 'dotenv';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { isCdnUrl, r2Put } from './lib/r2.mjs';
 
 const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 config({ path: resolve(repoRoot, '.env') });
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const BUCKET = 'branding-images';
-const MARKER = `/storage/v1/object/public/${BUCKET}/`;
 const MAX_BYTES = 5 * 1024 * 1024;
 const KEY_TO_SLOT = {
   app_icon_url: 'icon',
@@ -104,35 +103,28 @@ async function main() {
     const slot = KEY_TO_SLOT[row.key];
     const source = String(row.value || '').trim();
     if (!source) {
-      console.log(`${row.key}: empty — skip`);
+      console.log(`${row.key}: empty, skip`);
       skip++;
       continue;
     }
-    if (source.includes(MARKER)) {
-      console.log(`${row.key}: already stored — skip`);
+    if (isCdnUrl(source)) {
+      console.log(`${row.key}: already on CDN, skip`);
       skip++;
       continue;
     }
 
     try {
       const { bytes, contentType, ext } = await fetchImage(source);
-      const path = `${slot}/${randomUUID()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, bytes, {
-        contentType,
-        upsert: false,
-        cacheControl: '31536000',
-      });
-      if (uploadError) throw new Error(uploadError.message || 'upload failed');
-      const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
-      if (!pub?.publicUrl) throw new Error('no public url');
+      const key = `brand/${slot}/${randomUUID()}.${ext}`;
+      const publicUrl = await r2Put(key, bytes, contentType);
       const { error: updateError } = await supabase
         .from('app_settings')
         .upsert(
-          { key: row.key, value: pub.publicUrl, updated_at: new Date().toISOString() },
+          { key: row.key, value: publicUrl, updated_at: new Date().toISOString() },
           { onConflict: 'key' },
         );
       if (updateError) throw new Error(updateError.message || 'db update failed');
-      console.log(`${row.key}: ok → ${path}`);
+      console.log(`${row.key}: ok -> ${key}`);
       ok++;
     } catch (err) {
       console.log(`${row.key}: ERROR ${err instanceof Error ? err.message : String(err)}`);
@@ -140,7 +132,7 @@ async function main() {
     }
   }
 
-  console.log(`Done — ok=${ok} skip=${skip} error=${fail}`);
+  console.log(`Done, ok=${ok} skip=${skip} error=${fail}`);
 }
 
 main().catch((err) => {

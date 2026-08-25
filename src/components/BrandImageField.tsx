@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
 import { Input, Label } from './ui';
 import {
-  brandImageStoragePathFromUrl,
   ensureBrandImageStored,
   uploadBrandImageFile,
   type BrandImageSlot,
 } from '../lib/brandImageUpload';
+import { isCdnImageUrl } from '../lib/imageCdn';
 import { useT } from '../hooks/useCopy';
 
 type BrandImageFieldProps = {
@@ -18,7 +18,7 @@ type BrandImageFieldProps = {
   urlInputId: string;
 };
 
-/** Admin branding asset: file upload or URL paste → durable copy in branding-images. */
+/** Admin branding asset: file upload or URL paste → durable copy on the image CDN. */
 export default function BrandImageField({
   label,
   slot,
@@ -52,7 +52,7 @@ export default function BrandImageField({
 
   const rehostUrl = async (raw: string) => {
     const trimmed = raw.trim();
-    if (!trimmed || brandImageStoragePathFromUrl(trimmed)) return;
+    if (!trimmed || isCdnImageUrl(trimmed)) return;
     setUploadError(null);
     setUploading(true);
     try {

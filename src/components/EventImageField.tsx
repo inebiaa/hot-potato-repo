@@ -1,10 +1,7 @@
 import { useRef, useState } from 'react';
 import { Input, Label } from './ui';
-import {
-  ensureEventImageStored,
-  eventImageStoragePathFromUrl,
-  uploadEventImageFile,
-} from '../lib/eventImageUpload';
+import { isCdnImageUrl } from '../lib/imageCdn';
+import { ensureEventImageStored, uploadEventImageFile } from '../lib/eventImageUpload';
 import { useT } from '../hooks/useCopy';
 
 type EventImageFieldProps = {
@@ -13,7 +10,7 @@ type EventImageFieldProps = {
   userId: string | undefined;
 };
 
-/** File upload or paste URL — both end up as a durable copy in Supabase Storage. */
+/** File upload or paste URL — both end up as a durable copy on the image CDN. */
 export default function EventImageField({
   imageUrl,
   onImageUrlChange,
@@ -47,7 +44,7 @@ export default function EventImageField({
 
   const rehostUrl = async (raw: string) => {
     const trimmed = raw.trim();
-    if (!trimmed || eventImageStoragePathFromUrl(trimmed)) return;
+    if (!trimmed || isCdnImageUrl(trimmed)) return;
     if (!userId) {
       setUploadError(t('form.imageUploadSignIn'));
       return;

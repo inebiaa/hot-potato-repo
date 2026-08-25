@@ -1,31 +1,31 @@
 /**
- * Rehost external event image_url values into the `event-images` Storage bucket.
+ * Rehost external event image_url values onto the Cloudflare R2 image CDN.
  *
  * Requires:
  *   VITE_SUPABASE_URL (or SUPABASE_URL)
  *   SUPABASE_SERVICE_ROLE_KEY
+ *   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_BASE_URL
  *
  * Run:
  *   node scripts/backfill-event-images.mjs
  *
  * Optional:
- *   LIMIT=50          — max events this run
- *   CONCURRENCY=4     — parallel downloads
- *   DRY_RUN=1         — list only, no writes
+ *   LIMIT=50          max events this run
+ *   CONCURRENCY=4     parallel downloads
+ *   DRY_RUN=1         list only, no writes
  */
 import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { compressEventPhoto } from './compress-event-photo.mjs';
+import { compressEventPhoto, encodeEventCardJpeg } from './compress-event-photo.mjs';
+import { isCdnUrl, pairedCardKey, r2Put } from './lib/r2.mjs';
 
 const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 config({ path: resolve(repoRoot, '.env') });
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const BUCKET = 'event-images';
-const MARKER = `/storage/v1/object/public/${BUCKET}/`;
 const MAX_BYTES = 5 * 1024 * 1024;
 const LIMIT = Math.max(0, Number(process.env.LIMIT || 0) || 0);
 const CONCURRENCY = Math.max(1, Math.min(8, Number(process.env.CONCURRENCY || 4) || 4));
@@ -41,7 +41,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
 });
 
 function isAlreadyStored(url) {
-  return typeof url === 'string' && url.includes(MARKER);
+  return typeof url === 'string' && isCdnUrl(url);
 }
 
 function extForContentType(ct) {
@@ -131,18 +131,10 @@ async function backfillOne(row) {
   const contentType = compressed?.contentType ?? fetched.contentType;
   const ext = compressed?.ext ?? fetched.ext;
   const owner = row.created_by || 'backfill';
-  const path = `${owner}/${row.id}.${ext}`;
-
-  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, bytes, {
-    contentType,
-    upsert: true,
-    cacheControl: '31536000',
-  });
-  if (uploadError) throw new Error(uploadError.message || 'upload failed');
-
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  const publicUrl = data?.publicUrl;
-  if (!publicUrl) throw new Error('no public url');
+  const key = `event/${owner}/${crypto.randomUUID()}.${ext}`;
+  const publicUrl = await r2Put(key, bytes, contentType);
+  const card = await encodeEventCardJpeg(bytes);
+  await r2Put(pairedCardKey(key), card?.bytes ?? bytes, card?.contentType ?? contentType);
 
   const { error: updateError } = await supabase
     .from('events')
@@ -150,7 +142,7 @@ async function backfillOne(row) {
     .eq('id', row.id);
   if (updateError) throw new Error(updateError.message || 'db update failed');
 
-  return { id: row.id, status: 'ok', path, bytes: bytes.byteLength };
+  return { id: row.id, status: 'ok', path: key, bytes: bytes.byteLength };
 }
 
 async function mapPool(items, concurrency, fn) {

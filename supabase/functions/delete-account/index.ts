@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { isOurPublicImageUrl, keyFromPublicUrl, r2DeleteKeyAndCard } from "../_shared/r2.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -35,6 +36,18 @@ function listCoverPathFromUrl(url: string): string | null {
     return decodeURIComponent(u.pathname.slice(idx + marker.length)) || null;
   } catch {
     return null;
+  }
+}
+
+async function deleteCdnUrl(url: string): Promise<void> {
+  const trimmed = url.trim();
+  if (!trimmed || !isOurPublicImageUrl(trimmed)) return;
+  const key = keyFromPublicUrl(trimmed);
+  if (!key) return;
+  try {
+    await r2DeleteKeyAndCard(key);
+  } catch (err) {
+    console.warn("CDN delete failed:", err);
   }
 }
 
@@ -123,7 +136,9 @@ Deno.serve(async (req) => {
 
   const coverPaths: string[] = [];
   for (const row of lists || []) {
-    const path = listCoverPathFromUrl(String(row.cover_image_url || ""));
+    const coverUrl = String(row.cover_image_url || "");
+    await deleteCdnUrl(coverUrl);
+    const path = listCoverPathFromUrl(coverUrl);
     if (path) coverPaths.push(path);
   }
   if (coverPaths.length > 0) {
@@ -131,8 +146,12 @@ Deno.serve(async (req) => {
   }
 
   const profilePaths: string[] = [];
-  const avatarPath = profileImagePathFromUrl(String(profile?.avatar_url || ""));
-  const coverPath = profileImagePathFromUrl(String(profile?.cover_image_url || ""));
+  const avatarUrl = String(profile?.avatar_url || "");
+  const coverUrl = String(profile?.cover_image_url || "");
+  await deleteCdnUrl(avatarUrl);
+  await deleteCdnUrl(coverUrl);
+  const avatarPath = profileImagePathFromUrl(avatarUrl);
+  const coverPath = profileImagePathFromUrl(coverUrl);
   if (avatarPath) profilePaths.push(avatarPath);
   if (coverPath) profilePaths.push(coverPath);
   if (profilePaths.length > 0) {

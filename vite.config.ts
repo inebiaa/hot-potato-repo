@@ -504,6 +504,19 @@ function pwaStartUrlAndScope(): { start_url: string; scope: string } {
 
 const { start_url: pwaStartUrl, scope: pwaScope } = pwaStartUrlAndScope()
 
+function imageCdnUrlPattern(): RegExp {
+  const base = (process.env.VITE_IMAGE_CDN_URL || 'https://images.secretblogger.app').replace(
+    /\/$/,
+    '',
+  )
+  try {
+    const host = new URL(base).hostname.replace(/\./g, '\\.')
+    return new RegExp(`^https://${host}/`, 'i')
+  } catch {
+    return /^https:\/\/images\.secretblogger\.app\//i
+  }
+}
+
 export default defineConfig({
   base: viteBase,
   plugins: [
@@ -549,17 +562,30 @@ export default defineConfig({
         // Share mirrors are for crawlers only: do not precache hundreds of event posters.
         globIgnores: ['**/share/**'],
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [
           {
-            // Storage gateway sends Cache-Control: no-cache, so the SW is the
-            // durable browser cache for event / profile / branding photos.
+            // R2 custom domain sends long Cache-Control. CacheFirst avoids
+            // re-downloading on every visit (SWR was burning CDN reads).
+            urlPattern: imageCdnUrlPattern(),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'cdn-public-images',
+              expiration: {
+                maxEntries: 400,
+                maxAgeSeconds: 365 * 24 * 60 * 60,
+                purgeOnQuotaError: true,
+              },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+          {
+            // Legacy Supabase Storage objects during the cutover.
             urlPattern: /\/storage\/v1\/object\/public\//i,
-            handler: 'StaleWhileRevalidate',
+            handler: 'CacheFirst',
             options: {
               cacheName: 'supabase-public-images',
               expiration: {
-                maxEntries: 400,
+                maxEntries: 200,
                 maxAgeSeconds: 30 * 24 * 60 * 60,
                 purgeOnQuotaError: true,
               },
@@ -574,23 +600,5 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     strictPort: true,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        secure: false,
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, _req, _res) => {
-            console.log('proxy error', err);
-          });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
-          });
-          proxy.on('proxyRes', (proxyRes, req, _res) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
-          });
-        },
-      }
-    }
-  }
+  },
 })

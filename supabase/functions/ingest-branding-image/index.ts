@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { isOurPublicImageUrl, r2Put } from "../_shared/r2.ts";
 
-const BUCKET = "branding-images";
 const MAX_BYTES = 5 * 1024 * 1024;
 const SLOTS = new Set(["icon", "logo", "favicon", "misc"]);
 
@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
     return json({ error: "Image URL must be http or https" }, 400);
   }
 
-  if (parsed.pathname.includes(`/storage/v1/object/public/${BUCKET}/`)) {
+  if (isOurPublicImageUrl(sourceUrl)) {
     return json({ url: sourceUrl });
   }
 
@@ -136,31 +136,19 @@ Deno.serve(async (req) => {
     return json({ error: "Unsupported image type." }, 400);
   }
   if (finalType === "application/octet-stream") {
-    // Prefer png for unknown branding assets
     finalType = "image/png";
   }
 
   const ext = extForContentType(finalType);
-  const path = `${slot}/${crypto.randomUUID()}.${ext}`;
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(path, bytes, {
-      contentType: finalType,
-      upsert: false,
-      cacheControl: "31536000",
-    });
+  const key = `brand/${slot}/${crypto.randomUUID()}.${ext}`;
 
-  if (uploadError) {
+  try {
+    const publicUrl = await r2Put(key, bytes, finalType);
+    return json({ url: publicUrl });
+  } catch (err) {
     return json(
-      { error: uploadError.message || "Upload to storage failed." },
-      400,
+      { error: err instanceof Error ? err.message : "Upload to CDN failed." },
+      500,
     );
   }
-
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  if (!data?.publicUrl) {
-    return json({ error: "Upload succeeded but no public URL." }, 500);
-  }
-
-  return json({ url: data.publicUrl });
 });

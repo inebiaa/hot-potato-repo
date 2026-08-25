@@ -1,11 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { Image } from "npm:imagescript@1.3.0";
+import { compressEventPhoto, encodeEventCardJpeg } from "../_shared/compressImage.ts";
+import { isOurPublicImageUrl, pairedCardKey, r2Put } from "../_shared/r2.ts";
 
-const BUCKET = "event-images";
 const MAX_BYTES = 5 * 1024 * 1024;
-const MAX_EDGE_PX = 1200;
-const JPEG_QUALITY = 82;
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -25,31 +23,6 @@ function extForContentType(ct: string): string {
   if (ct.includes("webp")) return "webp";
   if (ct.includes("gif")) return "gif";
   return "jpg";
-}
-
-/** Resize / JPEG-recompress to match client uploads. Null = keep original bytes. */
-async function compressEventPhoto(
-  bytes: Uint8Array,
-): Promise<{ bytes: Uint8Array; contentType: string; ext: string } | null> {
-  try {
-    const image = await Image.decode(bytes);
-    const maxEdge = Math.max(image.width, image.height);
-    if (maxEdge > MAX_EDGE_PX) {
-      if (image.width >= image.height) {
-        image.resize(MAX_EDGE_PX, Image.RESIZE_AUTO);
-      } else {
-        image.resize(Image.RESIZE_AUTO, MAX_EDGE_PX);
-      }
-    }
-    const encoded = await image.encodeJPEG(JPEG_QUALITY);
-    if (!encoded.byteLength) return null;
-    if (maxEdge <= MAX_EDGE_PX && encoded.byteLength >= bytes.byteLength) {
-      return null;
-    }
-    return { bytes: encoded, contentType: "image/jpeg", ext: "jpg" };
-  } catch {
-    return null;
-  }
 }
 
 Deno.serve(async (req) => {
@@ -102,8 +75,7 @@ Deno.serve(async (req) => {
     return json({ error: "Image URL must be http or https" }, 400);
   }
 
-  // Already our public object: nothing to ingest.
-  if (parsed.pathname.includes(`/storage/v1/object/public/${BUCKET}/`)) {
+  if (isOurPublicImageUrl(sourceUrl)) {
     return json({ url: sourceUrl });
   }
 
@@ -153,26 +125,21 @@ Deno.serve(async (req) => {
   const uploadBytes = compressed?.bytes ?? bytes;
   const uploadType = compressed?.contentType ?? contentType;
   const ext = compressed?.ext ?? extForContentType(contentType);
-  const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(path, uploadBytes, {
-      contentType: uploadType,
-      upsert: false,
-      cacheControl: "31536000",
-    });
+  const key = `event/${user.id}/${crypto.randomUUID()}.${ext}`;
 
-  if (uploadError) {
+  try {
+    const publicUrl = await r2Put(key, uploadBytes, uploadType);
+    const card = await encodeEventCardJpeg(uploadBytes);
+    await r2Put(
+      pairedCardKey(key),
+      card?.bytes ?? uploadBytes,
+      card?.contentType ?? uploadType,
+    );
+    return json({ url: publicUrl });
+  } catch (err) {
     return json(
-      { error: uploadError.message || "Upload to storage failed." },
-      400,
+      { error: err instanceof Error ? err.message : "Upload to CDN failed." },
+      500,
     );
   }
-
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  if (!data?.publicUrl) {
-    return json({ error: "Upload succeeded but no public URL." }, 500);
-  }
-
-  return json({ url: data.publicUrl });
 });

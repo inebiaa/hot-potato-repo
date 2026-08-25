@@ -3,6 +3,8 @@
  * Keeps DB / OG / JSON-LD on the original; only the on-screen card img should use this.
  */
 
+import { cdnCardImageUrl } from './imageCdn';
+
 const CARD_MAX_WIDTH = 960;
 
 function rewritePinimg(url: string): string | null {
@@ -50,6 +52,7 @@ export function eventCardImageUrl(imageUrl: string | null | undefined): string |
   if (!raw) return undefined;
 
   return (
+    cdnCardImageUrl(raw) ||
     rewritePinimg(raw) ||
     rewriteTicketmaster(raw) ||
     rewriteCloudflareImage(raw) ||
