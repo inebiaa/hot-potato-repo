@@ -4,13 +4,13 @@ import PrimarySearchBar from '../PrimarySearchBar';
 import { useAppChrome } from '../../contexts/AppChromeContext';
 import { useHomeCatalog } from '../../contexts/HomeCatalogContext';
 import { useAppSettings } from '../../hooks/useAppSettings';
-import { headerSearchOpensHome } from '../../lib/homeCatalogRoute';
+import { headerSearchOpensHome, isListPageRoute, isProfilePageRoute } from '../../lib/homeCatalogRoute';
 
 /** Header search. Opens home, except on stats, profile, and lists. */
 export default function HomeHeaderSearch() {
   const { appSettings } = useAppSettings();
   const { pathname } = useLocation();
-  const { overlayEventId, closeEventOverlay } = useAppChrome();
+  const { overlayEventId, closeEventOverlay, headerSearchCounts } = useAppChrome();
   const {
     events,
     filteredEvents,
@@ -29,6 +29,19 @@ export default function HomeHeaderSearch() {
   } = useHomeCatalog();
 
   const searchGoesHome = headerSearchOpensHome(pathname);
+  const pageScopedCounts = isProfilePageRoute(pathname) || isListPageRoute(pathname);
+  const hasFilterActivity = Boolean(searchQuery.trim()) || selectedTags.length > 0;
+
+  const filteredCount = pageScopedCounts
+    ? headerSearchCounts?.filtered
+    : hasFilterActivity
+      ? filteredEvents.length
+      : undefined;
+  const totalCount = pageScopedCounts
+    ? headerSearchCounts?.total
+    : hasFilterActivity
+      ? events.length
+      : undefined;
 
   const onSelectTagFilter = useCallback(
     (type: string, value: string, explicitLabel?: string) => {
@@ -66,8 +79,8 @@ export default function HomeHeaderSearch() {
       selectedTags={selectedTags}
       searchQuery={searchQuery}
       tagSuggestions={tagSuggestions}
-      filteredCount={filteredEvents.length}
-      totalCount={events.length}
+      filteredCount={filteredCount}
+      totalCount={totalCount}
       onSearchDrop={onSearchDrop}
       onSearchDragOver={handleSearchDragOver}
       onSearchDragLeave={handleSearchDragLeave}

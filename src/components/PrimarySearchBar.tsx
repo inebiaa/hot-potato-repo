@@ -181,10 +181,20 @@ export default function PrimarySearchBar({
 
   const hasFilterActivity = Boolean(searchQuery) || selectedTags.length > 0;
   const showCounts =
-    !embeddedInHeader &&
     hasFilterActivity &&
     typeof filteredCount === 'number' &&
     typeof totalCount === 'number';
+
+  const unitLabel =
+    totalCount === 1
+      ? summaryLabelSingular ?? t('search.showSingular')
+      : summaryLabelPlural ?? t('search.showPlural');
+  const countSummary =
+    summaryOverride ||
+    t('search.summary')
+      .replace('{filtered}', String(filteredCount))
+      .replace('{total}', String(totalCount))
+      .replace('{unit}', unitLabel);
 
   const showTagSuggestions = fieldFocused && tagSuggestions.length > 0;
   const activeOptionId =
@@ -375,8 +385,12 @@ export default function PrimarySearchBar({
       </div>
 
       {showCounts ? (
-        <div className="mt-3 text-sm text-gray-600">
-          {summaryOverride || `Showing ${filteredCount} of ${totalCount} ${totalCount === 1 ? summaryLabelSingular : summaryLabelPlural}`}
+        <div
+          className={
+            embeddedInHeader ? 'mt-1 text-xs text-gray-500' : 'mt-3 text-sm text-gray-600'
+          }
+        >
+          {countSummary}
         </div>
       ) : null}
     </div>

@@ -6,7 +6,7 @@ import { supabase, Event } from '../lib/supabase';
 import RatingModal from './RatingModal';
 import CommentWithTags from './CommentWithTags';
 import ModalShell from './ModalShell';
-import { Button } from './ui';
+import { Button, LoadingSpinner } from './ui';
 import { useT } from '../hooks/useCopy';
 import { setAppModalParams } from '../lib/searchParamsModal';
 
@@ -229,7 +229,7 @@ export default function ViewRatingsModal({
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900"></div>
+            <LoadingSpinner />
           </div>
         ) : ratings.length === 0 ? (
           <div className="p-8 text-center">

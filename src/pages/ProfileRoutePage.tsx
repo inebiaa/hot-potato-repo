@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
-import ProfilePage from '../components/ProfilePage';
-import PageBack from '../components/layout/PageBack';
+import ProfilePage from '../components/profile/ProfilePage';
+import RouteLoading from '../components/layout/RouteLoading';
+import RouteMessage from '../components/layout/RouteMessage';
+import { routePageShellClass } from '../components/layout/routePageShell';
 import { useAppChrome } from '../contexts/AppChromeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppSettings } from '../hooks/useAppSettings';
@@ -71,49 +73,31 @@ export default function ProfileRoutePage() {
   }, [setProfileBoardEvents]);
 
   if (!appSettings || resolving || (showOwnProfile && authLoading && !handle)) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
-      </div>
-    );
+    return <RouteLoading width="wide" />;
   }
 
   if (notFound) {
     return (
-      <div className="mx-auto min-w-0 max-w-[2400px] px-4 py-6 sm:px-6 lg:px-8">
-        <PageBack className="mb-6" />
-        <div className="flex min-h-[40vh] items-center justify-center">
-          <div className="text-center">
-            <p className="mb-4 text-gray-700">{t('profile.notFound')}</p>
-          </div>
-        </div>
-      </div>
+      <RouteMessage width="wide">
+        <p className="mb-4 text-gray-700">{t('profile.notFound')}</p>
+      </RouteMessage>
     );
   }
 
   if (showOwnProfile && !user && !handle) {
     return (
-      <div className="mx-auto min-w-0 max-w-[2400px] px-4 py-6 sm:px-6 lg:px-8">
-        <PageBack className="mb-6" />
-        <div className="flex min-h-[40vh] items-center justify-center">
-          <div className="text-center">
-            <p className="mb-4 text-gray-700">{t('profile.signInToView')}</p>
-          </div>
-        </div>
-      </div>
+      <RouteMessage width="wide">
+        <p className="mb-4 text-gray-700">{t('profile.signInToView')}</p>
+      </RouteMessage>
     );
   }
 
   if (!profileUserId) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
-      </div>
-    );
+    return <RouteLoading width="wide" />;
   }
 
   return (
-    <div className="mx-auto min-w-0 max-w-[2400px] px-4 py-6 sm:px-6 lg:px-8">
+    <div className={routePageShellClass('wide')}>
       <ProfilePage
         userId={profileUserId}
         onTagClick={onTagClick}

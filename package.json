@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "check": "tsc --noEmit",
-    "test": "tsx --test src/lib/feedImageAttrs.test.ts src/lib/eventCardImageUrl.test.ts src/lib/eventsFeed.test.ts src/lib/eventTagFilter.test.ts src/lib/searchParamsModal.test.ts src/lib/homeCatalogRoute.test.ts",
+    "test": "tsx --test src/lib/feedImageAttrs.test.ts src/lib/eventCardImageUrl.test.ts src/lib/eventsFeed.test.ts src/lib/eventTagFilter.test.ts src/lib/searchParamsModal.test.ts src/lib/homeCatalogRoute.test.ts src/lib/appModalState.test.ts",
     "verify:jsonld": "node scripts/verify-event-jsonld.mjs",
     "backfill:event-images": "node scripts/backfill-event-images.mjs",
     "recompress:event-images": "node scripts/recompress-event-images-local.mjs",

@@ -1,5 +1,4 @@
 import type { Event, Rating, UserList, UserListEvent } from '../../lib/supabase';
-import type { EventWithStats } from '../../lib/eventsFeed';
 
 export interface ProfilePageProps {
   userId: string;

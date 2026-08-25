@@ -3,7 +3,7 @@
  * Add keys here, then render with `useT()` / `t(key)`.
  */
 
-export type CopyGroup = 'home' | 'search' | 'nav' | 'event' | 'form' | 'empty' | 'modals' | 'auth' | 'settings';
+export type CopyGroup = 'home' | 'search' | 'nav' | 'event' | 'form' | 'empty' | 'auth' | 'settings' | 'stats';
 
 export type CopyKey =
   | 'home.title'
@@ -14,6 +14,9 @@ export type CopyKey =
   | 'home.loadErrorDismiss'
   | 'auth.prompt.leaveReview'
   | 'search.placeholder'
+  | 'search.summary'
+  | 'search.showSingular'
+  | 'search.showPlural'
   | 'nav.home'
   | 'nav.stats'
   | 'nav.profile'
@@ -31,8 +34,6 @@ export type CopyKey =
   | 'event.specialGuest'
   | 'event.producedBy'
   | 'event.hairMakeup'
-  | 'event.genre'
-  | 'event.collection'
   | 'event.likedListName'
   | 'event.likedListNameForUser'
   | 'event.ratedListName'
@@ -100,9 +101,26 @@ export type CopyKey =
   | 'empty.noMatch.title'
   | 'empty.noMatch.body'
   | 'empty.noMatch.cta'
-  | 'modals.backToShows'
   | 'nav.back'
-  | 'nav.backToLibrary';
+  | 'stats.title'
+  | 'stats.filterAll'
+  | 'stats.filterDesigners'
+  | 'stats.filterArtists'
+  | 'stats.filterProducers'
+  | 'stats.filterHairMakeup'
+  | 'stats.allCities'
+  | 'stats.allSeasons'
+  | 'stats.sortByCount'
+  | 'stats.sortByName'
+  | 'stats.filteredBy'
+  | 'stats.clear'
+  | 'stats.noTagsTitle'
+  | 'stats.noTagsBody'
+  | 'stats.footer'
+  | 'stats.tagSingular'
+  | 'stats.tagPlural'
+  | 'stats.showSingular'
+  | 'stats.showPlural';
 
 export type CopyEntry = {
   default: string;
@@ -163,6 +181,21 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     group: 'search',
 
   },
+  'search.summary': {
+    default: 'Showing {filtered} of {total} {unit}',
+    label: 'Search result summary',
+    group: 'search',
+  },
+  'search.showSingular': {
+    default: 'show',
+    label: 'Search summary: show (singular)',
+    group: 'search',
+  },
+  'search.showPlural': {
+    default: 'shows',
+    label: 'Search summary: shows (plural)',
+    group: 'search',
+  },
   'nav.home': { default: 'Home', label: 'Nav: Home', group: 'nav' },
   'nav.stats': { default: 'Stats', label: 'Nav: Stats', group: 'nav' },
   'nav.profile': { default: 'Profile', label: 'Nav: Profile', group: 'nav' },
@@ -213,11 +246,6 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
   'event.hairMakeup': {
     default: 'Hair & Makeup',
     label: 'Card: Hair & Makeup',
-    group: 'event',
-  },
-  'event.genre': {
-    default: 'Genre',
-    label: 'Card/form: Genre',
     group: 'event',
   },
   'event.likedListName': {
@@ -349,11 +377,6 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     default: 'Sign in to add shows to a list',
     label: 'Auth prompt: add to list',
     group: 'auth',
-  },
-  'event.collection': {
-    default: 'Collection',
-    label: 'Card/form: Collection',
-    group: 'event',
   },
   'form.createTitle': {
     default: 'Create New Show',
@@ -492,20 +515,105 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     label: 'Empty: no match button',
     group: 'empty',
   },
-  'modals.backToShows': {
-    default: 'Back to shows',
-    label: 'Back to shows link',
-    group: 'modals',
-  },
   'nav.back': {
     default: 'Back',
     label: 'Back button',
     group: 'nav',
   },
-  'nav.backToLibrary': {
-    default: 'Back to library',
-    label: 'Back to library button',
-    group: 'nav',
+  'stats.title': {
+    default: 'Tag Statistics',
+    label: 'Stats page title',
+    group: 'stats',
+  },
+  'stats.filterAll': {
+    default: 'All',
+    label: 'Stats filter: all types',
+    group: 'stats',
+  },
+  'stats.filterDesigners': {
+    default: 'Designers',
+    label: 'Stats filter: designers',
+    group: 'stats',
+  },
+  'stats.filterArtists': {
+    default: 'Artists',
+    label: 'Stats filter: artists',
+    group: 'stats',
+  },
+  'stats.filterProducers': {
+    default: 'Producers',
+    label: 'Stats filter: producers',
+    group: 'stats',
+  },
+  'stats.filterHairMakeup': {
+    default: 'Hair & Makeup',
+    label: 'Stats filter: hair & makeup',
+    group: 'stats',
+  },
+  'stats.allCities': {
+    default: 'All Cities',
+    label: 'Stats city filter default',
+    group: 'stats',
+  },
+  'stats.allSeasons': {
+    default: 'All Seasons',
+    label: 'Stats season filter default',
+    group: 'stats',
+  },
+  'stats.sortByCount': {
+    default: 'Sort by Count',
+    label: 'Stats sort: count',
+    group: 'stats',
+  },
+  'stats.sortByName': {
+    default: 'Sort by Name',
+    label: 'Stats sort: name',
+    group: 'stats',
+  },
+  'stats.filteredBy': {
+    default: 'Filtered by:',
+    label: 'Stats active filter label',
+    group: 'stats',
+  },
+  'stats.clear': {
+    default: 'Clear',
+    label: 'Stats clear filter',
+    group: 'stats',
+  },
+  'stats.noTagsTitle': {
+    default: 'No tags found',
+    label: 'Stats empty title',
+    group: 'stats',
+  },
+  'stats.noTagsBody': {
+    default: 'Try adjusting your filters',
+    label: 'Stats empty body',
+    group: 'stats',
+  },
+  'stats.footer': {
+    default: 'Showing {tagCount} {tagsUnit} across {showCount} {showsUnit}',
+    label: 'Stats footer summary',
+    group: 'stats',
+  },
+  'stats.tagSingular': {
+    default: 'tag',
+    label: 'Stats footer: tag (singular)',
+    group: 'stats',
+  },
+  'stats.tagPlural': {
+    default: 'tags',
+    label: 'Stats footer: tags (plural)',
+    group: 'stats',
+  },
+  'stats.showSingular': {
+    default: 'show',
+    label: 'Stats footer: show (singular)',
+    group: 'stats',
+  },
+  'stats.showPlural': {
+    default: 'shows',
+    label: 'Stats footer: shows (plural)',
+    group: 'stats',
   },
 };
 
@@ -516,9 +624,9 @@ export const COPY_GROUP_LABELS: Record<CopyGroup, string> = {
   event: 'Event cards',
   form: 'Add / Edit forms',
   empty: 'Empty states',
-  modals: 'Other',
   auth: 'Auth',
   settings: 'Settings',
+  stats: 'Statistics',
 };
 
 /**

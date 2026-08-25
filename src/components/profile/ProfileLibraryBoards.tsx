@@ -1,5 +1,5 @@
 import { ChevronRight, Copy, Pin, Plus, RefreshCw } from 'lucide-react';
-import EventCard from '../EventCard';
+import EventCard from '../EventCard/EventCard';
 import MasonryLaneFeed, { type MasonryLaneItem } from '../MasonryLaneFeed';
 import { ListCover } from '../ListCoverCollage';
 import { useT } from '../../hooks/useCopy';

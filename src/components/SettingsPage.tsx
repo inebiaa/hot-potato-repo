@@ -30,7 +30,6 @@ import {
   BUILT_IN_TAG_DEFAULTS,
   COLLECTIONS_STORAGE_KEY,
   type ColorCollection,
-  type CoreTagKey,
   DEFAULT_TAG_SETTINGS_KEY,
   PALETTE_STORAGE_KEY,
   type SwatchColorKey,

@@ -35,7 +35,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`}</pre>
     </div>
   );
 } else {
-  import('./AppRoutes.tsx').then(({ default: AppRoutes }) => {
+  import('./routes/AppRoutes.tsx').then(({ default: AppRoutes }) => {
     import('./contexts/AuthContext').then(({ AuthProvider }) => {
       import('react-router-dom').then(({ BrowserRouter }) => {
         const raw = import.meta.env.BASE_URL || '/';

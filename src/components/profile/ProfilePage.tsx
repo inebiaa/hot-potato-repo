@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, UserList, Rating, Event } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppChrome } from '../../contexts/AppChromeContext';
 import { USER_LISTS_SETUP_SQL, getSupabaseSqlEditorUrl } from '../../lib/userListsSetupSql';
 import {
   addEventToListAndLiked,
@@ -34,6 +35,7 @@ import ProfileLibraryBoards from './ProfileLibraryBoards';
 import ProfileBoardView from './ProfileBoardView';
 import CreateListModal from './CreateListModal';
 import PageBack from '../layout/PageBack';
+import { LoadingSpinner } from '../ui';
 
 export type { ProfilePageProps } from './types';
 
@@ -50,6 +52,7 @@ export default function ProfilePage({
   cachedEvents,
 }: ProfilePageProps) {
   const { user: currentUser } = useAuth();
+  const { setHeaderSearchCounts } = useAppChrome();
   const t = useT();
   const home = useHomeCatalogOptional();
   const isOwnProfile = !!currentUser && currentUser.id === userId;
@@ -254,6 +257,37 @@ export default function ProfilePage({
       toEventWithStats(event),
     );
   }, [savedLibraryEvents, searchActive, searchQuery, selectedTags, libraryTagMap]);
+
+  useEffect(() => {
+    if (!searchActive) {
+      setHeaderSearchCounts(null);
+      return;
+    }
+    if (manageListId) {
+      const total = listEvents.filter((row) => row.event?.id).length;
+      const matchIds = new Set(searchEvents.map((event) => event.id));
+      const filtered = listEvents.filter(
+        (row) => row.event?.id && matchIds.has(row.event.id),
+      ).length;
+      setHeaderSearchCounts({ filtered, total });
+      return;
+    }
+    setHeaderSearchCounts({
+      filtered: searchEvents.length,
+      total: savedLibraryEvents.length,
+    });
+  }, [
+    searchActive,
+    manageListId,
+    listEvents,
+    searchEvents,
+    savedLibraryEvents,
+    setHeaderSearchCounts,
+  ]);
+
+  useEffect(() => {
+    return () => setHeaderSearchCounts(null);
+  }, [setHeaderSearchCounts]);
 
   useEffect(() => {
     if (manageListId) {
@@ -705,9 +739,12 @@ export default function ProfilePage({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900" />
-      </div>
+      <>
+        <PageBack className="mb-6" />
+        <div className="flex items-center justify-center py-24">
+          <LoadingSpinner />
+        </div>
+      </>
     );
   }
 

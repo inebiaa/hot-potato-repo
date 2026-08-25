@@ -1,5 +1,5 @@
 import { Link2, Lock, MoreVertical, Pencil, Plus, Trash2, Unlock } from 'lucide-react';
-import EventCard from '../EventCard';
+import EventCard from '../EventCard/EventCard';
 import MasonryLaneFeed, { type MasonryLaneItem } from '../MasonryLaneFeed';
 import { TagDisplayProvider } from '../../contexts/TagDisplayContext';
 import type { TagResolutionMap } from '../../lib/tagDisplayResolution';

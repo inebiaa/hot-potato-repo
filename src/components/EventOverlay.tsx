@@ -2,7 +2,8 @@ import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 import type { Event, Rating } from '../lib/supabase';
 import type { AppSettings } from '../types/appSettings';
-import EventCard from './EventCard';
+import EventCard from './EventCard/EventCard';
+import { LoadingSpinner } from './ui';
 
 type EventOverlayProps = {
   eventId: string;
@@ -143,7 +144,7 @@ export default function EventOverlay({
           className="flex items-center justify-center py-16 outline-none"
           aria-busy="true"
         >
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-white border-t-transparent" />
+          <LoadingSpinner className="text-white" />
         </div>
       )}
     </div>

@@ -39,35 +39,6 @@
   background: #94a3b8;
 }
 
-/* Profile “My reviews” list: scrollport matches card (neutral, soft thumb) */
-.profile-reviews-playlist-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(212 212 212 / 0.95) rgb(245 245 245 / 0.65);
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-}
-.profile-reviews-playlist-scroll::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
-}
-.profile-reviews-playlist-scroll::-webkit-scrollbar-track {
-  background: rgb(245 245 245 / 0.55);
-  border-radius: 9999px;
-  margin: 8px 0;
-}
-.profile-reviews-playlist-scroll::-webkit-scrollbar-thumb {
-  background-color: rgb(212 212 212 / 0.95);
-  border-radius: 9999px;
-  border: 2px solid rgb(250 250 250 / 0.9);
-  background-clip: padding-box;
-}
-.profile-reviews-playlist-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(163 163 163);
-}
-.profile-reviews-playlist-scroll::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
 :root {
   /* Black / white / grey app chrome (no blue accent) */
   --background: 250 250 250;

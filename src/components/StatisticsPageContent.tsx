@@ -1,6 +1,8 @@
 import { BarChart3 } from 'lucide-react';
 import type { TagStats } from './StatisticsPage';
 import TagPillSplitLabel, { tagPillSplitContainerClass, tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
+import { LoadingSpinner } from './ui';
+import { useT } from '../hooks/useCopy';
 
 interface StatisticsPageContentProps {
   tagStats: TagStats[];
@@ -37,7 +39,15 @@ export default function StatisticsPageContent({
   setSortBy,
   handleTagClick,
 }: StatisticsPageContentProps) {
-  const footerText = `Showing ${tagStats.length} ${tagStats.length === 1 ? 'tag' : 'tags'} across ${events.length} ${events.length === 1 ? 'show' : 'shows'}`;
+  const t = useT();
+  const showCount = events.length;
+  const tagsUnit = tagStats.length === 1 ? t('stats.tagSingular') : t('stats.tagPlural');
+  const showsUnit = showCount === 1 ? t('stats.showSingular') : t('stats.showPlural');
+  const footerText = t('stats.footer')
+    .replace('{tagCount}', String(tagStats.length))
+    .replace('{tagsUnit}', tagsUnit)
+    .replace('{showCount}', String(showCount))
+    .replace('{showsUnit}', showsUnit);
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -47,7 +57,7 @@ export default function StatisticsPageContent({
             <BarChart3 className="text-neutral-600" size={20} />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Tag Statistics</h2>
+            <h2 className="text-xl font-bold text-gray-900">{t('stats.title')}</h2>
           </div>
         </div>
 
@@ -62,7 +72,7 @@ export default function StatisticsPageContent({
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                All
+                {t('stats.filterAll')}
               </button>
               <button
                 onClick={() => setSelectedType('designer')}
@@ -72,7 +82,7 @@ export default function StatisticsPageContent({
                   color: selectedType === 'designer' ? getTagColors('designer').text : '#374151',
                 }}
               >
-                Designers
+                {t('stats.filterDesigners')}
               </button>
               <button
                 onClick={() => setSelectedType('artist')}
@@ -82,7 +92,7 @@ export default function StatisticsPageContent({
                   color: selectedType === 'artist' ? getTagColors('artist').text : '#374151',
                 }}
               >
-                Artists
+                {t('stats.filterArtists')}
               </button>
               <button
                 onClick={() => setSelectedType('producer')}
@@ -92,7 +102,7 @@ export default function StatisticsPageContent({
                   color: selectedType === 'producer' ? getTagColors('producer').text : '#374151',
                 }}
               >
-                Producers
+                {t('stats.filterProducers')}
               </button>
               <button
                 onClick={() => setSelectedType('hair_makeup')}
@@ -102,7 +112,7 @@ export default function StatisticsPageContent({
                   color: selectedType === 'hair_makeup' ? getTagColors('hair_makeup').text : '#374151',
                 }}
               >
-                Hair & Makeup
+                {t('stats.filterHairMakeup')}
               </button>
             </div>
 
@@ -112,7 +122,7 @@ export default function StatisticsPageContent({
                 onChange={(e) => setSelectedCity(e.target.value)}
                 className="px-3 py-2 rounded-lg text-sm border border-input focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-card"
               >
-                <option value="">All Cities</option>
+                <option value="">{t('stats.allCities')}</option>
                 {allCities.map((city) => (
                   <option key={city} value={city}>
                     {city}
@@ -125,7 +135,7 @@ export default function StatisticsPageContent({
                 onChange={(e) => setSelectedSeason(e.target.value)}
                 className="px-3 py-2 rounded-lg text-sm border border-input focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-card"
               >
-                <option value="">All Seasons</option>
+                <option value="">{t('stats.allSeasons')}</option>
                 {allSeasons.map((season) => (
                   <option key={season} value={season}>
                     {season}
@@ -138,15 +148,15 @@ export default function StatisticsPageContent({
                 onChange={(e) => setSortBy(e.target.value as 'count' | 'name')}
                 className="px-3 py-2 rounded-lg text-sm border border-input focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-card"
               >
-                <option value="count">Sort by Count</option>
-                <option value="name">Sort by Name</option>
+                <option value="count">{t('stats.sortByCount')}</option>
+                <option value="name">{t('stats.sortByName')}</option>
               </select>
             </div>
           </div>
 
           {(selectedCity || selectedSeason) && (
             <div className="mt-3 flex items-center gap-2">
-              <span className="text-sm text-gray-600">Filtered by:</span>
+              <span className="text-sm text-gray-600">{t('stats.filteredBy')}</span>
               {selectedCity && (
                 <span className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                   <span className={`${tagPillSplitSegmentGroupClass} p-0`}>
@@ -159,7 +169,7 @@ export default function StatisticsPageContent({
                     />
                   </span>
                   <button onClick={() => setSelectedCity('')} className="text-xs opacity-80 hover:opacity-100 shrink-0">
-                    Clear
+                    {t('stats.clear')}
                   </button>
                 </span>
               )}
@@ -175,7 +185,7 @@ export default function StatisticsPageContent({
                     />
                   </span>
                   <button onClick={() => setSelectedSeason('')} className="text-xs opacity-80 hover:opacity-100 shrink-0">
-                    Clear
+                    {t('stats.clear')}
                   </button>
                 </span>
               )}
@@ -186,13 +196,13 @@ export default function StatisticsPageContent({
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900"></div>
+              <LoadingSpinner />
             </div>
           ) : tagStats.length === 0 ? (
             <div className="text-center py-12">
               <BarChart3 size={48} className="mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No tags found</h3>
-              <p className="text-gray-600">Try adjusting your filters</p>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">{t('stats.noTagsTitle')}</h3>
+              <p className="text-gray-600">{t('stats.noTagsBody')}</p>
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">

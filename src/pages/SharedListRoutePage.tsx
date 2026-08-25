@@ -1,6 +1,7 @@
 import { useParams, useSearchParams } from 'react-router-dom';
 import SharedLibraryListPage from '../components/SharedLibraryListPage';
 import PageBack from '../components/layout/PageBack';
+import { routePageShellClass } from '../components/layout/routePageShell';
 import { useAppChrome } from '../contexts/AppChromeContext';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { isProfileHandlePathSegment } from '../lib/userProfile';
@@ -18,7 +19,7 @@ export default function SharedListRoutePage() {
   if (!appSettings || !listId) return null;
 
   return (
-    <div className="mx-auto min-w-0 max-w-[2400px] px-4 py-6 sm:px-6 lg:px-8">
+    <div className={routePageShellClass('wide')}>
       <PageBack className="mb-6" />
       <SharedLibraryListPage
         listId={listId}

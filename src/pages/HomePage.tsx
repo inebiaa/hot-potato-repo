@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Sparkles, Search } from 'lucide-react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import EventCard from '../components/EventCard';
+import EventCard from '../components/EventCard/EventCard';
 import MasonryLaneFeed, { type MasonryLaneItem } from '../components/MasonryLaneFeed';
 import { useAppChrome } from '../contexts/AppChromeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,6 +11,7 @@ import { useT } from '../hooks/useCopy';
 import { compareEventsForFeed } from '../lib/eventsFeed';
 import { isEventUpcoming } from '../lib/eventDates';
 import { eventPagePath } from '../lib/siteBase';
+import { LoadingSpinner } from '../components/ui';
 
 const PRIORITY_FEED_IMAGES = 6;
 
@@ -152,7 +153,7 @@ export default function HomePage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
+          <LoadingSpinner />
         </div>
       ) : events.length === 0 && !eventsError ? (
         <div className="text-center py-12">
@@ -172,7 +173,7 @@ export default function HomePage() {
         </div>
       ) : filtering && catalogStillLoading && filteredEvents.length === 0 ? (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
+          <LoadingSpinner />
         </div>
       ) : filteredEvents.length === 0 ? (
         <div className="text-center py-12">

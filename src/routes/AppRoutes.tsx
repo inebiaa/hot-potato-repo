@@ -1,10 +1,10 @@
 import { Routes, Route } from 'react-router-dom';
-import App from './App';
-import HomePage from './pages/HomePage';
-import SettingsRoutePage from './pages/SettingsRoutePage';
-import StatsRoutePage from './pages/StatsRoutePage';
-import ProfileRoutePage from './pages/ProfileRoutePage';
-import SharedListRoutePage from './pages/SharedListRoutePage';
+import App from '../App';
+import HomePage from '../pages/HomePage';
+import SettingsRoutePage from '../pages/SettingsRoutePage';
+import StatsRoutePage from '../pages/StatsRoutePage';
+import ProfileRoutePage from '../pages/ProfileRoutePage';
+import SharedListRoutePage from '../pages/SharedListRoutePage';
 
 /**
  * Layout route (`App`) is chrome. Home catalog lives with home search/feed.

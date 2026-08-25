@@ -1,13 +1,8 @@
-import {
-  addCalendarMonthsYmd,
-  isEventUpcoming,
-  localCalendarYmd,
-} from './eventDates';
+import { addCalendarMonthsYmd, localCalendarYmd } from './eventDates';
 import { normalizeEventTagArrays } from './eventTagArray';
 import type { Event } from './eventTypes';
 import { fetchRatingBundleForEvent, type EventRatingStatRow } from './eventRatingStats';
 import { supabase, type Rating } from './supabase';
-import { compareEventsForFeed, mergeEventsByFeedOrder } from './eventsFeedOrder';
 
 export { compareEventsForFeed, mergeEventsByFeedOrder } from './eventsFeedOrder';
 

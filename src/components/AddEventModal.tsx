@@ -403,9 +403,6 @@ export default function AddEventModal({ isOpen, onClose, onEventAdded }: AddEven
                   setInlineCustomTypes((prev) => [...prev, { slug, label, icon: 'Tag' }]);
                 }}
               />
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                e.g. Presented By — choose existing or type a new name, then Add
-              </p>
             </div>
             <Button
               type="button"

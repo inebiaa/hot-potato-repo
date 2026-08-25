@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import EventCard from '../EventCard';
+import EventCard from '../EventCard/EventCard';
 import EventJsonLd from '../EventJsonLd';
 import { useHomeCatalogOptional } from '../../contexts/HomeCatalogContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { fetchEventWithStats, type EventWithStats } from '../../lib/eventsFeed';
+import { LoadingSpinner } from '../ui';
 
 type EmbedEventViewProps = {
   eventId: string;
@@ -42,7 +43,7 @@ export default function EmbedEventView({ eventId, onTagClick, children }: EmbedE
   if (!appSettings || (!event && !failed)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800" />
+        <LoadingSpinner />
       </div>
     );
   }

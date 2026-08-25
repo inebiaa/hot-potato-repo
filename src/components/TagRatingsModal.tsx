@@ -9,6 +9,7 @@ import { getSpecialGuests } from '../lib/specialGuests';
 import { sameTagSpelling } from '../lib/tagIdentity';
 import TagCardRouter from './tagCards/TagCardRouter';
 import ModalShell from './ModalShell';
+import { LoadingSpinner } from './ui';
 import type { EventRating, TagRatingEventSlice } from './tagCards/types';
 import { useTagDisplayMap } from '../contexts/TagDisplayContext';
 
@@ -76,7 +77,8 @@ export default function TagRatingsModal({
   eventOverlayOpen = false,
   onCloseEventOverlay,
 }: TagRatingsModalProps) {
-  const tagResolutionMap = tagResolutionMapProp ?? useTagDisplayMap();
+  const tagResolutionMapFromContext = useTagDisplayMap();
+  const tagResolutionMap = tagResolutionMapProp ?? tagResolutionMapFromContext;
   const [eventRatings, setEventRatings] = useState<EventRating[]>([]);
   const [totalShows, setTotalShows] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -283,7 +285,7 @@ export default function TagRatingsModal({
       <div className={eventOverlayOpen ? 'pointer-events-none' : ''}>
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12 px-6">
-            <div className="w-8 h-8 border-2 border-gray-300 border-t-neutral-800 rounded-full animate-spin mb-3" />
+            <LoadingSpinner className="mb-3" />
             <p className="text-sm text-gray-500">Loading…</p>
           </div>
         ) : (

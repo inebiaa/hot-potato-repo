@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, type Event, type Rating, type UserList } from '../lib/supabase';
-import EventCard from './EventCard';
+import EventCard from './EventCard/EventCard';
 import MasonryLaneFeed, { type MasonryLaneItem } from './MasonryLaneFeed';
 import { TagDisplayProvider } from '../contexts/TagDisplayContext';
 import { useHomeCatalogOptional } from '../contexts/HomeCatalogContext';
@@ -16,6 +16,7 @@ import { listPagePath } from '../lib/siteBase';
 import { ListCover } from './ListCoverCollage';
 import { pickListCollageUrls } from '../lib/listCoverCollage';
 import ListSocialMeta from './ListSocialMeta';
+import { LoadingSpinner } from './ui';
 
 type BoardRow = {
   event: Event;
@@ -67,7 +68,7 @@ export default function SharedLibraryListPage({
   const t = useT();
   const navigate = useNavigate();
   const home = useHomeCatalogOptional();
-  const { setProfileBoardEvents } = useAppChrome();
+  const { setProfileBoardEvents, setHeaderSearchCounts } = useAppChrome();
   const [list, setList] = useState<UserList | null>(null);
   const [ownerUsername, setOwnerUsername] = useState('');
   const [ownerHandle, setOwnerHandle] = useState('');
@@ -233,6 +234,18 @@ export default function SharedLibraryListPage({
     });
   }, [rows, searchActive, searchQuery, selectedTags, tagMap]);
 
+  useEffect(() => {
+    if (!searchActive) {
+      setHeaderSearchCounts(null);
+      return;
+    }
+    setHeaderSearchCounts({ filtered: visibleRows.length, total: rows.length });
+  }, [searchActive, visibleRows.length, rows.length, setHeaderSearchCounts]);
+
+  useEffect(() => {
+    return () => setHeaderSearchCounts(null);
+  }, [setHeaderSearchCounts]);
+
   const title = useMemo(() => {
     if (!list) return '';
     if (list.is_rated_list) {
@@ -284,7 +297,7 @@ export default function SharedLibraryListPage({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900" />
+        <LoadingSpinner />
       </div>
     );
   }
