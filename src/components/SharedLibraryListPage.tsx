@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Flag, MoreVertical } from 'lucide-react';
 import { supabase, type Event, type Rating, type UserList } from '../lib/supabase';
 import EventCard from './EventCard/EventCard';
 import MasonryLaneFeed, { type MasonryLaneItem } from './MasonryLaneFeed';
@@ -16,7 +17,9 @@ import { listPagePath } from '../lib/siteBase';
 import { ListCover } from './ListCoverCollage';
 import { pickListCollageUrls } from '../lib/listCoverCollage';
 import ListSocialMeta from './ListSocialMeta';
+import ReportContentModal from './ReportContentModal';
 import { LoadingSpinner } from './ui';
+import { useAppSettings } from '../hooks/useAppSettings';
 
 type BoardRow = {
   event: Event;
@@ -66,6 +69,7 @@ export default function SharedLibraryListPage({
 }: SharedLibraryListPageProps) {
   const { user } = useAuth();
   const t = useT();
+  const { appSettings } = useAppSettings();
   const navigate = useNavigate();
   const home = useHomeCatalogOptional();
   const { setProfileBoardEvents, setHeaderSearchCounts } = useAppChrome();
@@ -76,6 +80,20 @@ export default function SharedLibraryListPage({
   const [tagMap, setTagMap] = useState<TagResolutionMap | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [listMenuOpen, setListMenuOpen] = useState(false);
+  const listMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!listMenuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (listMenuRef.current && !listMenuRef.current.contains(e.target as Node)) {
+        setListMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [listMenuOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -329,6 +347,8 @@ export default function SharedLibraryListPage({
     ),
   }));
 
+  const canReportList = !!user && !!list && list.user_id !== user.id;
+
   return (
     <div className="min-w-0">
       {sharePayload ? <ListSocialMeta list={sharePayload} /> : null}
@@ -337,7 +357,36 @@ export default function SharedLibraryListPage({
         collageUrls={collageUrls}
         className="mb-6 h-40 w-full rounded-xl sm:h-52"
       />
-      <h1 className="text-xl font-semibold text-neutral-900 tracking-tight mb-6">{title}</h1>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <h1 className="text-xl font-semibold text-neutral-900 tracking-tight">{title}</h1>
+        {canReportList ? (
+          <div ref={listMenuRef} className="relative shrink-0">
+            <button
+              type="button"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+              aria-label="List options"
+              onClick={() => setListMenuOpen((v) => !v)}
+            >
+              <MoreVertical size={18} />
+            </button>
+            {listMenuOpen ? (
+              <div className="absolute right-0 z-20 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-border bg-white py-1 shadow-lg">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                  onClick={() => {
+                    setListMenuOpen(false);
+                    setReportOpen(true);
+                  }}
+                >
+                  <Flag size={14} className="shrink-0 text-gray-500" />
+                  <span>{t('safety.report.action')}</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
       {rows.length === 0 ? (
         <div className="rounded-2xl bg-white/80 py-16 px-6 text-center">
           <p className="text-neutral-500 text-sm">No shows in this list yet.</p>
@@ -351,6 +400,18 @@ export default function SharedLibraryListPage({
           <MasonryLaneFeed items={laneItems} columnMinWidthPx={220} gapPx={24} />
         </TagDisplayProvider>
       )}
+      {list && reportOpen ? (
+        <ReportContentModal
+          isOpen={reportOpen}
+          onClose={() => setReportOpen(false)}
+          targetType="list"
+          targetId={list.id}
+          targetUserId={list.user_id}
+          supportEmail={appSettings?.support_email}
+          privacyUrl={appSettings?.privacy_policy_url}
+          termsUrl={appSettings?.terms_of_service_url}
+        />
+      ) : null}
     </div>
   );
 }

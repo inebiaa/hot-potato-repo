@@ -36,6 +36,9 @@ import ProfileBoardView from './ProfileBoardView';
 import CreateListModal from './CreateListModal';
 import PageBack from '../layout/PageBack';
 import { LoadingSpinner } from '../ui';
+import ReportContentModal from '../ReportContentModal';
+import { useAppSettings } from '../../hooks/useAppSettings';
+import { isUserBlocked } from '../../lib/ugcSafety';
 
 export type { ProfilePageProps } from './types';
 
@@ -51,11 +54,13 @@ export default function ProfilePage({
   refreshTrigger = 0,
   cachedEvents,
 }: ProfilePageProps) {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, blockedUserIds, blockUser, unblockUser } = useAuth();
+  const { appSettings } = useAppSettings();
   const { setHeaderSearchCounts } = useAppChrome();
   const t = useT();
   const home = useHomeCatalogOptional();
   const isOwnProfile = !!currentUser && currentUser.id === userId;
+  const viewerBlockedProfile = isUserBlocked(blockedUserIds, userId) && !isOwnProfile;
   const [username, setUsername] = useState<string>('');
   const [userIdPublic, setUserIdPublic] = useState<string>('');
   const [avatarUrl, setAvatarUrl] = useState<string>('');
@@ -81,6 +86,7 @@ export default function ProfilePage({
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [listLinkCopied, setListLinkCopied] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
+  const [reportProfileOpen, setReportProfileOpen] = useState(false);
   const [showBoardMenu, setShowBoardMenu] = useState(false);
   const [isEditListOpen, setIsEditListOpen] = useState(false);
   const [editListName, setEditListName] = useState('');
@@ -820,6 +826,22 @@ export default function ProfilePage({
         currentUserFullName={currentUser?.user_metadata?.full_name as string | undefined}
         currentUserEmailPrefix={currentUser?.email?.split('@')[0]}
         tagColors={tagColors}
+        showSafetyMenu={!!currentUser && !isOwnProfile}
+        isBlocked={viewerBlockedProfile}
+        onReport={() => setReportProfileOpen(true)}
+        onBlock={() => void blockUser(userId)}
+        onUnblock={() => void unblockUser(userId)}
+      />
+
+      <ReportContentModal
+        isOpen={reportProfileOpen}
+        onClose={() => setReportProfileOpen(false)}
+        targetType="profile"
+        targetId={userId}
+        targetUserId={userId}
+        supportEmail={appSettings?.support_email}
+        privacyUrl={appSettings?.privacy_policy_url}
+        termsUrl={appSettings?.terms_of_service_url}
       />
 
       <ProfileLibraryBoards

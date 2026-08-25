@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { Edit, Trash2, Share2, Mail, MoreVertical, ListPlus, ListMinus, Check, Plus } from 'lucide-react';
+import { Edit, Trash2, Share2, Mail, MoreVertical, ListPlus, ListMinus, Check, Plus, Flag } from 'lucide-react';
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Event, supabase, type UserList } from '../../lib/supabase';
@@ -16,6 +16,8 @@ import {
   removeEventFromList,
 } from '../../lib/userLists';
 import { BackIconButton } from '../ui';
+import ReportContentModal from '../ReportContentModal';
+import { useAppSettings } from '../../hooks/useAppSettings';
 import { formControlClass, formControlPaddingClass, formControlTextClass } from '../ui/field';
 
 interface EventCardActionsMenuProps {
@@ -43,6 +45,7 @@ export default function EventCardActionsMenu({
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user, isAdmin } = useAuth();
+  const { appSettings } = useAppSettings();
 
   const [isDeleting, setIsDeleting] = useState(false);
   const [shareCopied, setShareCopied] = useState<'link' | 'embed' | 'embedcode' | 'email' | null>(null);
@@ -58,6 +61,7 @@ export default function EventCardActionsMenu({
   const [createListBusy, setCreateListBusy] = useState(false);
   const [createListError, setCreateListError] = useState('');
   const [removeFromListBusy, setRemoveFromListBusy] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const actionsMenuBtnRef = useRef<HTMLButtonElement | null>(null);
   const playlistsFetchGen = useRef(0);
@@ -269,6 +273,7 @@ export default function EventCardActionsMenu({
   };
 
   const canEdit = user && (isAdmin || event.created_by === user.id);
+  const canReport = user && event.created_by !== user.id;
 
   const handleDelete = async () => {
     if (!user || !canEdit) return;
@@ -513,6 +518,23 @@ export default function EventCardActionsMenu({
                   <span className="min-w-0 flex-1">Copy for email</span>
                   {shareCopied === 'email' && <span className="shrink-0 text-green-600 text-xs">Copied!</span>}
                 </button>
+                {canReport ? (
+                  <>
+                    <div className="border-t border-gray-100 my-1" />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setReportOpen(true);
+                        setShowActionsMenu(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <Flag size={14} className="shrink-0 text-gray-500" />
+                      <span>{t('safety.report.action')}</span>
+                    </button>
+                  </>
+                ) : null}
                 {canEdit && (
                   <>
                     <div className="border-t border-gray-100 my-1" />
@@ -542,6 +564,18 @@ export default function EventCardActionsMenu({
         </>,
         document.body,
       )}
+      {reportOpen ? (
+        <ReportContentModal
+          isOpen={reportOpen}
+          onClose={() => setReportOpen(false)}
+          targetType="event"
+          targetId={event.id}
+          targetUserId={event.created_by}
+          supportEmail={appSettings?.support_email}
+          privacyUrl={appSettings?.privacy_policy_url}
+          termsUrl={appSettings?.terms_of_service_url}
+        />
+      ) : null}
     </>
   );
 }

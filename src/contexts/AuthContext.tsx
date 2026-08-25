@@ -1,12 +1,17 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { User, AuthError, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { validateProfileDisplayName, validateProfileHandle } from '../lib/userProfile';
+import { blockUser as blockUserRequest, fetchBlockedUserIds, unblockUser as unblockUserRequest } from '../lib/ugcSafety';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
+  blockedUserIds: ReadonlySet<string>;
+  refreshBlocks: () => Promise<void>;
+  blockUser: (userId: string) => Promise<{ error: string | null }>;
+  unblockUser: (userId: string) => Promise<{ error: string | null }>;
   signUp: (
     email: string,
     password: string,
@@ -27,6 +32,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [blockedUserIds, setBlockedUserIds] = useState<ReadonlySet<string>>(new Set());
+
+  const refreshBlocks = useCallback(async () => {
+    if (!user?.id) {
+      setBlockedUserIds(new Set());
+      return;
+    }
+    const ids = await fetchBlockedUserIds();
+    setBlockedUserIds(new Set(ids));
+  }, [user?.id]);
+
+  useEffect(() => {
+    void refreshBlocks();
+  }, [refreshBlocks]);
+
+  const blockUser = useCallback(
+    async (userId: string) => {
+      const { error } = await blockUserRequest(userId);
+      if (!error) await refreshBlocks();
+      return { error };
+    },
+    [refreshBlocks],
+  );
+
+  const unblockUser = useCallback(
+    async (userId: string) => {
+      const { error } = await unblockUserRequest(userId);
+      if (!error) await refreshBlocks();
+      return { error };
+    },
+    [refreshBlocks],
+  );
 
   const checkAdmin = async (userId: string | undefined) => {
     if (!userId) {
@@ -127,7 +164,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin, signUp, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        isAdmin,
+        blockedUserIds,
+        refreshBlocks,
+        blockUser,
+        unblockUser,
+        signUp,
+        signIn,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

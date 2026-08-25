@@ -50,188 +50,187 @@ export default function StatisticsPageContent({
     .replace('{showsUnit}', showsUnit);
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="bg-transparent w-full overflow-hidden flex flex-col">
-        <div className="px-6 py-4 border-b flex items-center gap-3 bg-white rounded-t-xl">
-          <div className="bg-neutral-100 p-2 rounded-lg">
-            <BarChart3 className="text-neutral-600" size={20} />
+    <div className="space-y-8">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedType('all')}
+              className={`text-xs px-2 py-1 rounded-md transition-colors ${
+                selectedType === 'all'
+                  ? 'bg-neutral-200 text-neutral-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {t('stats.filterAll')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedType('designer')}
+              className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: selectedType === 'designer' ? getTagColors('designer').bg : '#f3f4f6',
+                color: selectedType === 'designer' ? getTagColors('designer').text : '#374151',
+              }}
+            >
+              {t('stats.filterDesigners')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedType('artist')}
+              className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: selectedType === 'artist' ? getTagColors('artist').bg : '#f3f4f6',
+                color: selectedType === 'artist' ? getTagColors('artist').text : '#374151',
+              }}
+            >
+              {t('stats.filterArtists')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedType('producer')}
+              className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: selectedType === 'producer' ? getTagColors('producer').bg : '#f3f4f6',
+                color: selectedType === 'producer' ? getTagColors('producer').text : '#374151',
+              }}
+            >
+              {t('stats.filterProducers')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedType('hair_makeup')}
+              className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: selectedType === 'hair_makeup' ? getTagColors('hair_makeup').bg : '#f3f4f6',
+                color: selectedType === 'hair_makeup' ? getTagColors('hair_makeup').text : '#374151',
+              }}
+            >
+              {t('stats.filterHairMakeup')}
+            </button>
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">{t('stats.title')}</h2>
+
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={selectedCity}
+              onChange={(e) => setSelectedCity(e.target.value)}
+              className="px-3 py-2 rounded-lg text-sm border border-input focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-card"
+            >
+              <option value="">{t('stats.allCities')}</option>
+              {allCities.map((city) => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={selectedSeason}
+              onChange={(e) => setSelectedSeason(e.target.value)}
+              className="px-3 py-2 rounded-lg text-sm border border-input focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-card"
+            >
+              <option value="">{t('stats.allSeasons')}</option>
+              {allSeasons.map((season) => (
+                <option key={season} value={season}>
+                  {season}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'count' | 'name')}
+              className="px-3 py-2 rounded-lg text-sm border border-input focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-card"
+            >
+              <option value="count">{t('stats.sortByCount')}</option>
+              <option value="name">{t('stats.sortByName')}</option>
+            </select>
           </div>
         </div>
 
-        <div className="p-6 border-b bg-gray-50 space-y-4">
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setSelectedType('all')}
-                className={`text-xs px-2 py-1 rounded-md transition-colors ${
-                  selectedType === 'all'
-                    ? 'bg-neutral-200 text-neutral-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {t('stats.filterAll')}
-              </button>
-              <button
-                onClick={() => setSelectedType('designer')}
-                className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
-                style={{
-                  backgroundColor: selectedType === 'designer' ? getTagColors('designer').bg : '#f3f4f6',
-                  color: selectedType === 'designer' ? getTagColors('designer').text : '#374151',
-                }}
-              >
-                {t('stats.filterDesigners')}
-              </button>
-              <button
-                onClick={() => setSelectedType('artist')}
-                className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
-                style={{
-                  backgroundColor: selectedType === 'artist' ? getTagColors('artist').bg : '#f3f4f6',
-                  color: selectedType === 'artist' ? getTagColors('artist').text : '#374151',
-                }}
-              >
-                {t('stats.filterArtists')}
-              </button>
-              <button
-                onClick={() => setSelectedType('producer')}
-                className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
-                style={{
-                  backgroundColor: selectedType === 'producer' ? getTagColors('producer').bg : '#f3f4f6',
-                  color: selectedType === 'producer' ? getTagColors('producer').text : '#374151',
-                }}
-              >
-                {t('stats.filterProducers')}
-              </button>
-              <button
-                onClick={() => setSelectedType('hair_makeup')}
-                className="text-xs px-2 py-1 rounded-md transition-colors hover:opacity-80"
-                style={{
-                  backgroundColor: selectedType === 'hair_makeup' ? getTagColors('hair_makeup').bg : '#f3f4f6',
-                  color: selectedType === 'hair_makeup' ? getTagColors('hair_makeup').text : '#374151',
-                }}
-              >
-                {t('stats.filterHairMakeup')}
-              </button>
-            </div>
-
-            <div className="flex gap-2">
-              <select
-                value={selectedCity}
-                onChange={(e) => setSelectedCity(e.target.value)}
-                className="px-3 py-2 rounded-lg text-sm border border-input focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-card"
-              >
-                <option value="">{t('stats.allCities')}</option>
-                {allCities.map((city) => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={selectedSeason}
-                onChange={(e) => setSelectedSeason(e.target.value)}
-                className="px-3 py-2 rounded-lg text-sm border border-input focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-card"
-              >
-                <option value="">{t('stats.allSeasons')}</option>
-                {allSeasons.map((season) => (
-                  <option key={season} value={season}>
-                    {season}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'count' | 'name')}
-                className="px-3 py-2 rounded-lg text-sm border border-input focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring bg-card"
-              >
-                <option value="count">{t('stats.sortByCount')}</option>
-                <option value="name">{t('stats.sortByName')}</option>
-              </select>
-            </div>
-          </div>
-
-          {(selectedCity || selectedSeason) && (
-            <div className="mt-3 flex items-center gap-2">
-              <span className="text-sm text-gray-600">{t('stats.filteredBy')}</span>
-              {selectedCity && (
-                <span className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-                  <span className={`${tagPillSplitSegmentGroupClass} p-0`}>
-                    <TagPillSplitLabel
-                      text={selectedCity}
-                      segmentColors={{
-                        backgroundColor: getTagColors('city').bg,
-                        color: getTagColors('city').text,
-                      }}
-                    />
-                  </span>
-                  <button onClick={() => setSelectedCity('')} className="text-xs opacity-80 hover:opacity-100 shrink-0">
-                    {t('stats.clear')}
-                  </button>
+        {(selectedCity || selectedSeason) && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-gray-600">{t('stats.filteredBy')}</span>
+            {selectedCity && (
+              <span className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                <span className={`${tagPillSplitSegmentGroupClass} p-0`}>
+                  <TagPillSplitLabel
+                    text={selectedCity}
+                    segmentColors={{
+                      backgroundColor: getTagColors('city').bg,
+                      color: getTagColors('city').text,
+                    }}
+                  />
                 </span>
-              )}
-              {selectedSeason && (
-                <span className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-                  <span className={`${tagPillSplitSegmentGroupClass} p-0`}>
-                    <TagPillSplitLabel
-                      text={selectedSeason}
-                      segmentColors={{
-                        backgroundColor: getTagColors('season').bg,
-                        color: getTagColors('season').text,
-                      }}
-                    />
-                  </span>
-                  <button onClick={() => setSelectedSeason('')} className="text-xs opacity-80 hover:opacity-100 shrink-0">
-                    {t('stats.clear')}
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCity('')}
+                  className="text-xs opacity-80 hover:opacity-100 shrink-0"
+                >
+                  {t('stats.clear')}
+                </button>
+              </span>
+            )}
+            {selectedSeason && (
+              <span className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                <span className={`${tagPillSplitSegmentGroupClass} p-0`}>
+                  <TagPillSplitLabel
+                    text={selectedSeason}
+                    segmentColors={{
+                      backgroundColor: getTagColors('season').bg,
+                      color: getTagColors('season').text,
+                    }}
+                  />
                 </span>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <LoadingSpinner />
-            </div>
-          ) : tagStats.length === 0 ? (
-            <div className="text-center py-12">
-              <BarChart3 size={48} className="mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">{t('stats.noTagsTitle')}</h3>
-              <p className="text-gray-600">{t('stats.noTagsBody')}</p>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {tagStats.map((stat, idx) => {
-                const colors = getTagColors(stat.type);
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => handleTagClick(stat)}
-                    className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md px-2 py-1 text-xs text-left transition-colors hover:opacity-80"
-                    style={{ backgroundColor: colors.bg, color: colors.text }}
-                  >
-                    <span className={`${tagPillSplitContainerClass} min-w-0`}>
-                      <TagPillSplitLabel text={stat.name} />
-                    </span>
-                    <span className="font-semibold tabular-nums whitespace-nowrap shrink-0">{stat.count}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="border-t bg-gray-50 px-6 py-4">
-          <div className="flex items-center justify-between text-sm text-gray-600">
-            <div>{footerText}</div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSeason('')}
+                  className="text-xs opacity-80 hover:opacity-100 shrink-0"
+                >
+                  {t('stats.clear')}
+                </button>
+              </span>
+            )}
           </div>
-        </div>
+        )}
       </div>
+
+      <div>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <LoadingSpinner />
+          </div>
+        ) : tagStats.length === 0 ? (
+          <div className="text-center py-12">
+            <BarChart3 size={48} className="mx-auto text-gray-400 mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">{t('stats.noTagsTitle')}</h3>
+            <p className="text-gray-600">{t('stats.noTagsBody')}</p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {tagStats.map((stat, idx) => {
+              const colors = getTagColors(stat.type);
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleTagClick(stat)}
+                  className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md px-2 py-1 text-xs text-left transition-colors hover:opacity-80"
+                  style={{ backgroundColor: colors.bg, color: colors.text }}
+                >
+                  <span className={`${tagPillSplitContainerClass} min-w-0`}>
+                    <TagPillSplitLabel text={stat.name} />
+                  </span>
+                  <span className="font-semibold tabular-nums whitespace-nowrap shrink-0">{stat.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <p className="text-sm text-gray-600">{footerText}</p>
     </div>
   );
 }

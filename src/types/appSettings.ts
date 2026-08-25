@@ -42,4 +42,7 @@ export interface AppSettings {
   special_guests_text_color?: string;
   /** JSON array of tag_identities.id for header pinned artist pills. */
   header_pinned_artists?: string;
+  support_email?: string;
+  privacy_policy_url?: string;
+  terms_of_service_url?: string;
 }

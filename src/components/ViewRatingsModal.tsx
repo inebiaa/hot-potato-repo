@@ -1,24 +1,20 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Star, ChevronDown, ChevronUp } from 'lucide-react';
-import { supabase, Event } from '../lib/supabase';
+import { Star, ChevronDown, ChevronUp, Flag } from 'lucide-react';
+import { supabase, Event, type Rating as DbRating } from '../lib/supabase';
 import RatingModal from './RatingModal';
 import CommentWithTags from './CommentWithTags';
+import ReportContentModal from './ReportContentModal';
 import ModalShell from './ModalShell';
 import { Button, LoadingSpinner } from './ui';
 import { useT } from '../hooks/useCopy';
+import { useAuth } from '../contexts/AuthContext';
+import { useAppSettings } from '../hooks/useAppSettings';
+import { isUserBlocked, ratingAuthorLabel } from '../lib/ugcSafety';
 import { setAppModalParams } from '../lib/searchParamsModal';
 
-interface Rating {
-  id: string;
-  user_id: string;
-  event_id: string;
-  rating: number;
-  comment: string | null;
-  created_at: string;
-  username?: string;
-}
+type Rating = DbRating & { username?: string };
 
 interface ViewRatingsModalProps {
   isOpen: boolean;
@@ -76,11 +72,14 @@ export default function ViewRatingsModal({
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { blockedUserIds } = useAuth();
+  const { appSettings } = useAppSettings();
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedRatingId, setExpandedRatingId] = useState<string | null>(null);
   const [editingRating, setEditingRating] = useState<Rating | null>(null);
   const [isCreatingRating, setIsCreatingRating] = useState(false);
+  const [reportRating, setReportRating] = useState<Rating | null>(null);
 
   const promptSignInToReview = () => {
     navigate({
@@ -119,12 +118,16 @@ export default function ViewRatingsModal({
 
       const ratingsWithUsernames = (ratingsData || []).map((rating) => ({
         ...rating,
-        username: profilesByUserId.get(rating.user_id) || 'Unknown User',
+        username: rating.user_id ? profilesByUserId.get(rating.user_id) || undefined : undefined,
       }));
 
-      const filteredRatings = singleUserId
+      let filteredRatings = singleUserId
         ? ratingsWithUsernames.filter((rating) => rating.user_id === singleUserId)
         : ratingsWithUsernames;
+
+      filteredRatings = filteredRatings.filter(
+        (rating) => !isUserBlocked(blockedUserIds, rating.user_id),
+      );
 
       setRatings(filteredRatings);
     } catch (error) {
@@ -132,7 +135,7 @@ export default function ViewRatingsModal({
     } finally {
       setLoading(false);
     }
-  }, [eventId, singleUserId]);
+  }, [eventId, singleUserId, blockedUserIds]);
 
   useEffect(() => {
     if (isOpen) {
@@ -260,7 +263,7 @@ export default function ViewRatingsModal({
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="inline-block text-xs px-2 py-1 rounded-md transition-colors bg-gray-100 text-gray-700">
-                            {rating.username}
+                            {ratingAuthorLabel(rating)}
                           </span>
                           {singleUserId ? (
                             <span className="inline-block text-xs px-2 py-1 rounded-md transition-colors bg-gray-100 text-gray-700">
@@ -274,6 +277,19 @@ export default function ViewRatingsModal({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        {currentUserId && rating.user_id && rating.user_id !== currentUserId ? (
+                          <button
+                            type="button"
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
+                            aria-label={t('safety.report.action')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReportRating(rating);
+                            }}
+                          >
+                            <Flag size={14} />
+                          </button>
+                        ) : null}
                         {!singleUserId ? (
                           <div className="flex items-center gap-1">
                             <Star className="text-yellow-400 fill-yellow-400" size={20} />
@@ -380,6 +396,18 @@ export default function ViewRatingsModal({
           zClass="z-[110]"
         />
       )}
+      {reportRating ? (
+        <ReportContentModal
+          isOpen={!!reportRating}
+          onClose={() => setReportRating(null)}
+          targetType="rating"
+          targetId={reportRating.id}
+          targetUserId={reportRating.user_id}
+          supportEmail={appSettings?.support_email}
+          privacyUrl={appSettings?.privacy_policy_url}
+          termsUrl={appSettings?.terms_of_service_url}
+        />
+      ) : null}
     </>,
     document.body
   );

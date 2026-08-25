@@ -36,7 +36,8 @@ export interface EditSuggestion {
 export interface Rating {
   id: string;
   event_id: string;
-  user_id: string;
+  user_id: string | null;
+  author_display_name: string;
   rating: number;
   comment: string | null;
   created_at: string;

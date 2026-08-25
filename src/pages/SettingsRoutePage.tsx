@@ -34,11 +34,9 @@ export default function SettingsRoutePage() {
   }
 
   return (
-    <div className={routePageShellClass('narrow')}>
+    <div className={`${routePageShellClass('wide')} py-8`}>
       <PageBack className="mb-6" />
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight text-foreground">
-        {t('settings.title')}
-      </h1>
+      <h1 className="mb-8 text-3xl font-bold tracking-tight text-gray-900">{t('settings.title')}</h1>
       <SettingsPage
         onSettingsUpdated={() => {
           void fetchSettings();

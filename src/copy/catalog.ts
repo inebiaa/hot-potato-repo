@@ -3,7 +3,7 @@
  * Add keys here, then render with `useT()` / `t(key)`.
  */
 
-export type CopyGroup = 'home' | 'search' | 'nav' | 'event' | 'form' | 'empty' | 'auth' | 'settings' | 'stats';
+export type CopyGroup = 'home' | 'search' | 'nav' | 'event' | 'form' | 'empty' | 'auth' | 'settings' | 'stats' | 'safety';
 
 export type CopyKey =
   | 'home.title'
@@ -120,7 +120,32 @@ export type CopyKey =
   | 'stats.tagSingular'
   | 'stats.tagPlural'
   | 'stats.showSingular'
-  | 'stats.showPlural';
+  | 'stats.showPlural'
+  | 'safety.report.title'
+  | 'safety.report.reasonLabel'
+  | 'safety.report.reason.spam'
+  | 'safety.report.reason.harassment'
+  | 'safety.report.reason.inappropriate'
+  | 'safety.report.reason.other'
+  | 'safety.report.submit'
+  | 'safety.report.submitting'
+  | 'safety.report.cancel'
+  | 'safety.report.submitted'
+  | 'safety.report.contactPrefix'
+  | 'safety.report.action'
+  | 'safety.block.action'
+  | 'safety.block.unblock'
+  | 'safety.block.banner'
+  | 'safety.blocked.title'
+  | 'safety.blocked.empty'
+  | 'safety.blocked.loading'
+  | 'safety.delete.title'
+  | 'safety.delete.body'
+  | 'safety.delete.passwordLabel'
+  | 'safety.delete.submit'
+  | 'safety.delete.submitting'
+  | 'safety.legal.privacy'
+  | 'safety.legal.terms';
 
 export type CopyEntry = {
   default: string;
@@ -615,6 +640,44 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     label: 'Stats footer: shows (plural)',
     group: 'stats',
   },
+  'safety.report.title': { default: 'Report', label: 'Report modal title', group: 'safety' },
+  'safety.report.reasonLabel': { default: 'Reason', label: 'Report reason label', group: 'safety' },
+  'safety.report.reason.spam': { default: 'Spam', label: 'Report reason: spam', group: 'safety' },
+  'safety.report.reason.harassment': { default: 'Harassment', label: 'Report reason: harassment', group: 'safety' },
+  'safety.report.reason.inappropriate': {
+    default: 'Inappropriate content',
+    label: 'Report reason: inappropriate',
+    group: 'safety',
+  },
+  'safety.report.reason.other': { default: 'Other', label: 'Report reason: other', group: 'safety' },
+  'safety.report.submit': { default: 'Submit report', label: 'Report submit', group: 'safety' },
+  'safety.report.submitting': { default: 'Submitting…', label: 'Report submitting', group: 'safety' },
+  'safety.report.cancel': { default: 'Cancel', label: 'Report cancel', group: 'safety' },
+  'safety.report.submitted': { default: 'Report submitted.', label: 'Report success', group: 'safety' },
+  'safety.report.contactPrefix': { default: 'Questions:', label: 'Report contact prefix', group: 'safety' },
+  'safety.report.action': { default: 'Report', label: 'Report menu action', group: 'safety' },
+  'safety.block.action': { default: 'Block user', label: 'Block menu action', group: 'safety' },
+  'safety.block.unblock': { default: 'Unblock', label: 'Unblock action', group: 'safety' },
+  'safety.block.banner': {
+    default: 'You blocked this user.',
+    label: 'Blocked profile banner',
+    group: 'safety',
+  },
+  'safety.blocked.title': { default: 'Blocked users', label: 'Blocked users section', group: 'safety' },
+  'safety.blocked.empty': { default: 'No blocked users.', label: 'Blocked users empty', group: 'safety' },
+  'safety.blocked.loading': { default: 'Loading…', label: 'Blocked users loading', group: 'safety' },
+  'safety.delete.title': { default: 'Delete account', label: 'Delete account title', group: 'safety' },
+  'safety.delete.body': {
+    default:
+      'Your profile and lists will be removed. Public reviews you wrote will stay visible with your display name. Shows you added to the catalog will remain.',
+    label: 'Delete account body',
+    group: 'safety',
+  },
+  'safety.delete.passwordLabel': { default: 'Password', label: 'Delete account password', group: 'safety' },
+  'safety.delete.submit': { default: 'Delete my account', label: 'Delete account button', group: 'safety' },
+  'safety.delete.submitting': { default: 'Deleting…', label: 'Delete account busy', group: 'safety' },
+  'safety.legal.privacy': { default: 'Privacy', label: 'Privacy link', group: 'safety' },
+  'safety.legal.terms': { default: 'Terms', label: 'Terms link', group: 'safety' },
 };
 
 export const COPY_GROUP_LABELS: Record<CopyGroup, string> = {
@@ -627,6 +690,7 @@ export const COPY_GROUP_LABELS: Record<CopyGroup, string> = {
   auth: 'Auth',
   settings: 'Settings',
   stats: 'Statistics',
+  safety: 'Safety',
 };
 
 /**
