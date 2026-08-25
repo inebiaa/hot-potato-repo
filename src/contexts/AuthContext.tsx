@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { User, AuthError, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { validateProfileDisplayName, validateProfileHandle } from '../lib/userProfile';
+import { viteBasePath } from '../lib/siteBase';
 import { blockUser as blockUserRequest, fetchBlockedUserIds, unblockUser as unblockUserRequest } from '../lib/ugcSafety';
 
 interface AuthContextType {
@@ -19,6 +20,8 @@ interface AuthContextType {
     handle: string,
   ) => Promise<{ error: AuthError | null }>;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
+  updatePassword: (password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -159,6 +162,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
+  const resetPassword = async (email: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      return { error: validationError('Email is required') };
+    }
+    const base = viteBasePath();
+    const prefix = base === '/' ? '' : base.replace(/\/$/, '');
+    const redirectTo = `${window.location.origin}${prefix}/reset-password`;
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
+    return { error };
+  };
+
+  const updatePassword = async (password: string) => {
+    const trimmed = password.trim();
+    if (trimmed.length < 6) {
+      return { error: validationError('Password must be at least 6 characters.') };
+    }
+    const { error } = await supabase.auth.updateUser({ password: trimmed });
+    return { error };
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
@@ -175,6 +199,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         unblockUser,
         signUp,
         signIn,
+        resetPassword,
+        updatePassword,
         signOut,
       }}
     >

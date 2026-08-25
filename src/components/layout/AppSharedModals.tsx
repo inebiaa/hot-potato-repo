@@ -43,6 +43,8 @@ export default function AppSharedModals({
         onClose={onCloseAuthModal}
         initialMode={modalAuthMode}
         promptMessage={modalAuthPrompt}
+        privacyUrl={appSettings?.privacy_policy_url}
+        termsUrl={appSettings?.terms_of_service_url}
       />
       {isTagRatingsModalOpen && (
         <TagRatingsModal

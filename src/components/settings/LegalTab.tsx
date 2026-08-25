@@ -1,4 +1,5 @@
 import { Input, Label } from '../ui';
+import { Link } from 'react-router-dom';
 import type { AppSettings } from '../../types/appSettings';
 
 export type LegalTabProps = {
@@ -45,6 +46,15 @@ export default function LegalTab({ settings, onChange }: LegalTabProps) {
             placeholder="https://www.example.com/terms"
           />
         </div>
+      </section>
+      <section className="space-y-3">
+        <h3 className="border-b border-border pb-1 text-sm font-semibold text-foreground">Account deletion</h3>
+        <p className="text-sm text-muted-foreground">
+          Public web page for store listings:{' '}
+          <Link to="/account-deletion" className="underline underline-offset-2">
+            /account-deletion
+          </Link>
+        </p>
       </section>
     </div>
   );

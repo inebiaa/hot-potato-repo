@@ -17,6 +17,7 @@ import { listPagePath } from '../lib/siteBase';
 import { ListCover } from './ListCoverCollage';
 import { pickListCollageUrls } from '../lib/listCoverCollage';
 import ListSocialMeta from './ListSocialMeta';
+import { isUserBlocked } from '../lib/ugcSafety';
 import ReportContentModal from './ReportContentModal';
 import { LoadingSpinner } from './ui';
 import { useAppSettings } from '../hooks/useAppSettings';
@@ -67,7 +68,7 @@ export default function SharedLibraryListPage({
   tagColors,
   customPerformerTags = [],
 }: SharedLibraryListPageProps) {
-  const { user } = useAuth();
+  const { user, blockedUserIds } = useAuth();
   const t = useT();
   const { appSettings } = useAppSettings();
   const navigate = useNavigate();
@@ -348,6 +349,15 @@ export default function SharedLibraryListPage({
   }));
 
   const canReportList = !!user && !!list && list.user_id !== user.id;
+  const ownerBlocked = !!list && isUserBlocked(blockedUserIds, list.user_id) && list.user_id !== user?.id;
+
+  if (ownerBlocked) {
+    return (
+      <div className="rounded-2xl bg-white/80 py-16 px-6 text-center">
+        <p className="text-neutral-600 text-sm">{t('safety.block.hiddenBody')}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-w-0">

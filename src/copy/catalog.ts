@@ -13,6 +13,43 @@ export type CopyKey =
   | 'home.loadErrorRetry'
   | 'home.loadErrorDismiss'
   | 'auth.prompt.leaveReview'
+  | 'auth.prompt.saveShow'
+  | 'auth.prompt.addToList'
+  | 'auth.signIn.title'
+  | 'auth.signUp.title'
+  | 'auth.email'
+  | 'auth.password'
+  | 'auth.confirmPassword'
+  | 'auth.name'
+  | 'auth.username'
+  | 'auth.signIn.submit'
+  | 'auth.signUp.submit'
+  | 'auth.loading'
+  | 'auth.toggleSignUp'
+  | 'auth.toggleSignIn'
+  | 'auth.accountCreated'
+  | 'auth.forgotPassword'
+  | 'auth.forgot.title'
+  | 'auth.forgot.body'
+  | 'auth.forgot.submit'
+  | 'auth.forgot.sent'
+  | 'auth.forgot.back'
+  | 'auth.ageConfirm'
+  | 'auth.termsConfirm'
+  | 'auth.termsPrefix'
+  | 'auth.termsJoiner'
+  | 'auth.errors.passwordMismatch'
+  | 'auth.errors.ageRequired'
+  | 'auth.errors.termsRequired'
+  | 'auth.reset.title'
+  | 'auth.reset.password'
+  | 'auth.reset.confirmPassword'
+  | 'auth.reset.submit'
+  | 'auth.reset.success'
+  | 'auth.deleteAccountPage.title'
+  | 'auth.deleteAccountPage.body'
+  | 'auth.deleteAccountPage.stepApp'
+  | 'auth.deleteAccountPage.openSettings'
   | 'search.placeholder'
   | 'search.summary'
   | 'search.showSingular'
@@ -58,8 +95,6 @@ export type CopyKey =
   | 'profile.library'
   | 'profile.notFound'
   | 'profile.signInToView'
-  | 'auth.prompt.saveShow'
-  | 'auth.prompt.addToList'
   | 'form.createTitle'
   | 'form.editTitle'
   | 'form.showName'
@@ -144,6 +179,17 @@ export type CopyKey =
   | 'safety.delete.passwordLabel'
   | 'safety.delete.submit'
   | 'safety.delete.submitting'
+  | 'safety.delete.confirmTitle'
+  | 'safety.delete.confirmBody'
+  | 'safety.delete.confirmCancel'
+  | 'safety.delete.confirmAction'
+  | 'safety.block.hiddenBody'
+  | 'safety.moderation.loading'
+  | 'safety.moderation.empty'
+  | 'safety.moderation.reportedBy'
+  | 'safety.moderation.viewTarget'
+  | 'safety.moderation.remove'
+  | 'safety.moderation.dismiss'
   | 'safety.legal.privacy'
   | 'safety.legal.terms';
 
@@ -401,6 +447,106 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
   'auth.prompt.addToList': {
     default: 'Sign in to add shows to a list',
     label: 'Auth prompt: add to list',
+    group: 'auth',
+  },
+  'auth.signIn.title': { default: 'Sign In', label: 'Auth: sign in title', group: 'auth' },
+  'auth.signUp.title': { default: 'Create Account', label: 'Auth: sign up title', group: 'auth' },
+  'auth.email': { default: 'Email', label: 'Auth: email label', group: 'auth' },
+  'auth.password': { default: 'Password', label: 'Auth: password label', group: 'auth' },
+  'auth.confirmPassword': { default: 'Confirm Password', label: 'Auth: confirm password', group: 'auth' },
+  'auth.name': { default: 'Name', label: 'Auth: name label', group: 'auth' },
+  'auth.username': { default: 'Username', label: 'Auth: username label', group: 'auth' },
+  'auth.signIn.submit': { default: 'Sign In', label: 'Auth: sign in button', group: 'auth' },
+  'auth.signUp.submit': { default: 'Sign Up', label: 'Auth: sign up button', group: 'auth' },
+  'auth.loading': { default: 'Loading...', label: 'Auth: loading', group: 'auth' },
+  'auth.toggleSignUp': {
+    default: "Don't have an account? Sign up",
+    label: 'Auth: switch to sign up',
+    group: 'auth',
+  },
+  'auth.toggleSignIn': {
+    default: 'Already have an account? Sign in',
+    label: 'Auth: switch to sign in',
+    group: 'auth',
+  },
+  'auth.accountCreated': {
+    default: 'Account created! Please sign in.',
+    label: 'Auth: account created',
+    group: 'auth',
+  },
+  'auth.forgotPassword': { default: 'Forgot password?', label: 'Auth: forgot password link', group: 'auth' },
+  'auth.forgot.title': { default: 'Reset password', label: 'Auth: forgot title', group: 'auth' },
+  'auth.forgot.body': {
+    default: 'Enter your email and we will send a reset link.',
+    label: 'Auth: forgot body',
+    group: 'auth',
+  },
+  'auth.forgot.submit': { default: 'Send reset link', label: 'Auth: forgot submit', group: 'auth' },
+  'auth.forgot.sent': {
+    default: 'Check your email for a reset link.',
+    label: 'Auth: forgot sent',
+    group: 'auth',
+  },
+  'auth.forgot.back': { default: 'Back to sign in', label: 'Auth: forgot back', group: 'auth' },
+  'auth.ageConfirm': {
+    default: 'I am at least 13 years old',
+    label: 'Auth: age confirmation',
+    group: 'auth',
+  },
+  'auth.termsConfirm': {
+    default: 'I agree to the Terms and Privacy Policy',
+    label: 'Auth: terms confirmation',
+    group: 'auth',
+  },
+  'auth.termsPrefix': { default: 'I agree to the', label: 'Auth: terms prefix', group: 'auth' },
+  'auth.termsJoiner': { default: 'and', label: 'Auth: terms joiner', group: 'auth' },
+  'auth.errors.passwordMismatch': {
+    default: 'Passwords do not match.',
+    label: 'Auth error: password mismatch',
+    group: 'auth',
+  },
+  'auth.errors.ageRequired': {
+    default: 'Confirm you are at least 13 years old.',
+    label: 'Auth error: age required',
+    group: 'auth',
+  },
+  'auth.errors.termsRequired': {
+    default: 'Accept the Terms and Privacy Policy to continue.',
+    label: 'Auth error: terms required',
+    group: 'auth',
+  },
+  'auth.reset.title': { default: 'Choose a new password', label: 'Auth: reset title', group: 'auth' },
+  'auth.reset.password': { default: 'New password', label: 'Auth: reset password', group: 'auth' },
+  'auth.reset.confirmPassword': {
+    default: 'Confirm new password',
+    label: 'Auth: reset confirm password',
+    group: 'auth',
+  },
+  'auth.reset.submit': { default: 'Update password', label: 'Auth: reset submit', group: 'auth' },
+  'auth.reset.success': {
+    default: 'Password updated. You can sign in now.',
+    label: 'Auth: reset success',
+    group: 'auth',
+  },
+  'auth.deleteAccountPage.title': {
+    default: 'Delete your account',
+    label: 'Delete account page title',
+    group: 'auth',
+  },
+  'auth.deleteAccountPage.body': {
+    default:
+      'You can delete your account in the app. Your profile and lists are removed. Public reviews you wrote stay visible with your display name.',
+    label: 'Delete account page body',
+    group: 'auth',
+  },
+  'auth.deleteAccountPage.stepApp': {
+    default: 'Open Settings, go to Account, enter your password, and delete your account.',
+    label: 'Delete account page steps',
+    group: 'auth',
+  },
+  'auth.deleteAccountPage.openSettings': {
+    default: 'Open Settings',
+    label: 'Delete account page settings link',
     group: 'auth',
   },
   'form.createTitle': {
@@ -676,6 +822,37 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
   'safety.delete.passwordLabel': { default: 'Password', label: 'Delete account password', group: 'safety' },
   'safety.delete.submit': { default: 'Delete my account', label: 'Delete account button', group: 'safety' },
   'safety.delete.submitting': { default: 'Deleting…', label: 'Delete account busy', group: 'safety' },
+  'safety.delete.confirmTitle': {
+    default: 'Delete your account?',
+    label: 'Delete account confirm title',
+    group: 'safety',
+  },
+  'safety.delete.confirmBody': {
+    default: 'This cannot be undone. Your profile and lists will be removed.',
+    label: 'Delete account confirm body',
+    group: 'safety',
+  },
+  'safety.delete.confirmCancel': { default: 'Cancel', label: 'Delete account confirm cancel', group: 'safety' },
+  'safety.delete.confirmAction': {
+    default: 'Delete my account',
+    label: 'Delete account confirm action',
+    group: 'safety',
+  },
+  'safety.block.hiddenBody': {
+    default: 'You blocked this user. Unblock to see their lists and reviews.',
+    label: 'Blocked profile hidden body',
+    group: 'safety',
+  },
+  'safety.moderation.loading': { default: 'Loading reports…', label: 'Moderation loading', group: 'safety' },
+  'safety.moderation.empty': { default: 'No open reports.', label: 'Moderation empty', group: 'safety' },
+  'safety.moderation.reportedBy': {
+    default: 'Reported by {name}',
+    label: 'Moderation reported by',
+    group: 'safety',
+  },
+  'safety.moderation.viewTarget': { default: 'View', label: 'Moderation view target', group: 'safety' },
+  'safety.moderation.remove': { default: 'Remove content', label: 'Moderation remove', group: 'safety' },
+  'safety.moderation.dismiss': { default: 'Dismiss', label: 'Moderation dismiss', group: 'safety' },
   'safety.legal.privacy': { default: 'Privacy', label: 'Privacy link', group: 'safety' },
   'safety.legal.terms': { default: 'Terms', label: 'Terms link', group: 'safety' },
 };

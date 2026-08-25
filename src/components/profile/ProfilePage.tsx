@@ -844,36 +844,40 @@ export default function ProfilePage({
         termsUrl={appSettings?.terms_of_service_url}
       />
 
-      <ProfileLibraryBoards
-        isOwnProfile={isOwnProfile}
-        listsError={listsError}
-        reviewsCount={reviews.length}
-        visibleLibraryLists={visibleLibraryLists}
-        boardSavedSearchEvents={boardSavedSearchEvents}
-        searchActive={searchActive}
-        listDisplayName={listDisplayName}
-        onOpenList={(listId) => {
-          void openManageList(listId);
-        }}
-        onEnableLists={() => {
-          void enableLists();
-        }}
-        onRefresh={fetchProfile}
-        copyFeedback={copyFeedback}
-        onStartCreateList={() => {
-          setIsCreateListOpen(true);
-          setCreateError('');
-          setNewListName('');
-          setNewListDescription('');
-          setNewListPrivate(false);
-        }}
-        onTagClick={onTagClick}
-        onOpenEvent={onOpenEvent}
-        tagColors={tagColors}
-        customPerformerTags={customPerformerTags}
-        onSearchEventRatingSubmitted={onSearchEventRatingSubmitted}
-        onSearchEventUpdated={onSearchEventUpdated}
-      />
+      {viewerBlockedProfile ? (
+        <p className="text-sm text-muted-foreground">{t('safety.block.hiddenBody')}</p>
+      ) : (
+        <ProfileLibraryBoards
+          isOwnProfile={isOwnProfile}
+          listsError={listsError}
+          reviewsCount={reviews.length}
+          visibleLibraryLists={visibleLibraryLists}
+          boardSavedSearchEvents={boardSavedSearchEvents}
+          searchActive={searchActive}
+          listDisplayName={listDisplayName}
+          onOpenList={(listId) => {
+            void openManageList(listId);
+          }}
+          onEnableLists={() => {
+            void enableLists();
+          }}
+          onRefresh={fetchProfile}
+          copyFeedback={copyFeedback}
+          onStartCreateList={() => {
+            setIsCreateListOpen(true);
+            setCreateError('');
+            setNewListName('');
+            setNewListDescription('');
+            setNewListPrivate(false);
+          }}
+          onTagClick={onTagClick}
+          onOpenEvent={onOpenEvent}
+          tagColors={tagColors}
+          customPerformerTags={customPerformerTags}
+          onSearchEventRatingSubmitted={onSearchEventRatingSubmitted}
+          onSearchEventUpdated={onSearchEventUpdated}
+        />
+      )}
 
       {isCreateListOpen && (
         <CreateListModal

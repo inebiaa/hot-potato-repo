@@ -513,10 +513,10 @@ export default defineConfig({
     VitePWA({
       // Activate new builds promptly so clients don't stay on a stale precache forever.
       registerType: 'autoUpdate',
-      includeAssets: ['robots.txt', 'CNAME'],
+      includeAssets: ['robots.txt', 'CNAME', 'favicon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
       manifest: {
         name: APP_NAME,
-        short_name: APP_NAME,
+        short_name: 'SB',
         description: APP_DESCRIPTION,
         theme_color: '#f8fafc',
         background_color: '#f8fafc',
@@ -537,7 +537,7 @@ export default defineConfig({
             purpose: 'any',
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'pwa-512-maskable.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',

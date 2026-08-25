@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Trash2, User } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import ProfileAvatarField from '../ProfileAvatarField';
 import ProfileCoverField from '../ProfileCoverField';
-import { Button, Input, Label } from '../ui';
+import { Button, Input, Label, Modal } from '../ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { deleteOwnAccount } from '../../lib/deleteAccount';
 import { fetchBlockedUsersWithLabels, unblockUser } from '../../lib/ugcSafety';
@@ -49,6 +49,7 @@ export default function AccountTab(p: AccountTabProps) {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const loadBlocked = async () => {
     setBlockedLoading(true);
@@ -80,6 +81,7 @@ export default function AccountTab(p: AccountTabProps) {
       return;
     }
     await signOut();
+    setDeleteConfirmOpen(false);
     navigate('/');
   };
 
@@ -216,30 +218,66 @@ export default function AccountTab(p: AccountTabProps) {
           <Button
             type="button"
             variant="danger"
-            disabled={deleteBusy || !deletePassword.trim()}
-            onClick={() => void handleDeleteAccount()}
+            disabled={!deletePassword.trim()}
+            onClick={() => setDeleteConfirmOpen(true)}
           >
             <Trash2 size={16} />
-            {deleteBusy ? t('safety.delete.submitting') : t('safety.delete.submit')}
+            {t('safety.delete.submit')}
           </Button>
         </div>
       </section>
 
-      {(privacy || terms) && (
-        <p className="text-xs text-muted-foreground">
-          {privacy ? (
-            <a href={privacy} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
-              {t('safety.legal.privacy')}
-            </a>
-          ) : null}
-          {privacy && terms ? ' · ' : null}
-          {terms ? (
-            <a href={terms} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
-              {t('safety.legal.terms')}
-            </a>
-          ) : null}
-        </p>
-      )}
+      <p className="text-xs text-muted-foreground">
+        <Link to="/account-deletion" className="underline underline-offset-2">
+          {t('auth.deleteAccountPage.title')}
+        </Link>
+        {(privacy || terms) && ' · '}
+        {privacy ? (
+          <a href={privacy} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+            {t('safety.legal.privacy')}
+          </a>
+        ) : null}
+        {privacy && terms ? ' · ' : null}
+        {terms ? (
+          <a href={terms} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+            {t('safety.legal.terms')}
+          </a>
+        ) : null}
+      </p>
+
+      {deleteConfirmOpen ? (
+        <Modal
+          onClose={() => setDeleteConfirmOpen(false)}
+          title={t('safety.delete.confirmTitle')}
+          panelClassName="max-w-md sm:rounded-xl"
+        >
+          <div className="space-y-4 p-4 sm:p-6">
+            <p className="text-sm text-muted-foreground">{t('safety.delete.confirmBody')}</p>
+            {deleteError ? <p className="text-sm text-destructive">{deleteError}</p> : null}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="flex-1"
+                disabled={deleteBusy}
+                onClick={() => setDeleteConfirmOpen(false)}
+              >
+                {t('safety.delete.confirmCancel')}
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                className="flex-1"
+                disabled={deleteBusy || !deletePassword.trim()}
+                onClick={() => void handleDeleteAccount()}
+              >
+                <Trash2 size={16} />
+                {deleteBusy ? t('safety.delete.submitting') : t('safety.delete.confirmAction')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }

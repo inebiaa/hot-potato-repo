@@ -21,6 +21,7 @@ import {
   type TagResolutionMap,
 } from '../lib/tagDisplayResolution';
 import type { SelectedTagFilter } from '../lib/eventTagFilter';
+import { filterByBlockedCreators } from '../lib/ugcSafety';
 import { TagDisplayProvider } from './TagDisplayContext';
 
 /**
@@ -79,7 +80,7 @@ type HomeCatalogProviderProps = {
 };
 
 export function HomeCatalogProvider({ children, profileBoardEvents }: HomeCatalogProviderProps) {
-  const { user } = useAuth();
+  const { user, blockedUserIds } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -148,6 +149,11 @@ export function HomeCatalogProvider({ children, profileBoardEvents }: HomeCatalo
     window.scrollTo(0, 0);
   }, [navigate, location.pathname]);
 
+  const visibleFilteredEvents = useMemo(
+    () => filterByBlockedCreators(filters.filteredEvents, blockedUserIds),
+    [filters.filteredEvents, blockedUserIds],
+  );
+
   const value = useMemo<HomeCatalogValue>(
     () => ({
       events: feed.events,
@@ -171,7 +177,7 @@ export function HomeCatalogProvider({ children, profileBoardEvents }: HomeCatalo
       setSearchQuery: filters.setSearchQuery,
       selectedTags: filters.selectedTags,
       setSelectedTags: filters.setSelectedTags,
-      filteredEvents: filters.filteredEvents,
+      filteredEvents: visibleFilteredEvents,
       tagSuggestions: filters.tagSuggestions,
       browsing: filters.browsing,
       filtering: filters.filtering,
@@ -187,7 +193,7 @@ export function HomeCatalogProvider({ children, profileBoardEvents }: HomeCatalo
       goHome,
       showHomeFeed,
     }),
-    [feed, filters, tagResolutionMap, applyHomeTagFilter, goHome, showHomeFeed],
+    [feed, filters, tagResolutionMap, applyHomeTagFilter, goHome, showHomeFeed, visibleFilteredEvents],
   );
 
   return (
