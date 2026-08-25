@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import { User } from 'lucide-react';
 import { Input, Label, Button } from './ui';
+import ProfileAvatarCard from './profile/ProfileAvatarCard';
 import { uploadProfileImageFile } from '../lib/profileImageUpload';
 import { useT } from '../hooks/useCopy';
 
@@ -47,13 +47,7 @@ export default function ProfileAvatarField({
     <div className="space-y-3">
       <Label htmlFor="profile-avatar-file">{t('form.profilePicture')}</Label>
       <div className="flex items-center gap-4">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted">
-          {preview ? (
-            <img src={preview} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <User size={28} className="text-muted-foreground" strokeWidth={1.5} aria-hidden />
-          )}
-        </div>
+        <ProfileAvatarCard src={preview} preview />
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <Input
             ref={fileRef}
