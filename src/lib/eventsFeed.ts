@@ -1,13 +1,15 @@
 import {
   addCalendarMonthsYmd,
-  eventSortKey,
   isEventUpcoming,
   localCalendarYmd,
 } from './eventDates';
 import { normalizeEventTagArrays } from './eventTagArray';
 import type { Event } from './eventTypes';
-import type { EventRatingStatRow } from './eventRatingStats';
+import { fetchRatingBundleForEvent, type EventRatingStatRow } from './eventRatingStats';
 import { supabase, type Rating } from './supabase';
+import { compareEventsForFeed, mergeEventsByFeedOrder } from './eventsFeedOrder';
+
+export { compareEventsForFeed, mergeEventsByFeedOrder } from './eventsFeedOrder';
 
 /** How many past shows to pull per home-feed request. */
 export const FEED_PAGE_SIZE = 24;
@@ -48,39 +50,6 @@ export function upcomingFromYmd(now: Date = new Date()): string {
   return localYmd(start);
 }
 
-/**
- * Same order as the home masonry:
- * upcoming (soonest first), then past (newest past first).
- */
-export function compareEventsForFeed(
-  a: Pick<Event, 'id' | 'date'>,
-  b: Pick<Event, 'id' | 'date'>,
-  now: Date = new Date(),
-): number {
-  const aUp = isEventUpcoming(a.date, now);
-  const bUp = isEventUpcoming(b.date, now);
-  if (aUp !== bUp) return aUp ? -1 : 1;
-  if (aUp) {
-    const byDate = eventSortKey(a.date) - eventSortKey(b.date);
-    if (byDate !== 0) return byDate;
-    return a.id.localeCompare(b.id);
-  }
-  const byDate = eventSortKey(b.date) - eventSortKey(a.date);
-  if (byDate !== 0) return byDate;
-  return b.id.localeCompare(a.id);
-}
-
-export function mergeEventsByFeedOrder<T extends Pick<Event, 'id' | 'date'>>(
-  existing: T[],
-  incoming: T[],
-): T[] {
-  if (incoming.length === 0) return existing;
-  const byId = new Map<string, T>();
-  for (const row of existing) byId.set(row.id, row);
-  for (const row of incoming) byId.set(row.id, row);
-  return [...byId.values()].sort((a, b) => compareEventsForFeed(a, b));
-}
-
 function parseJsonObjectField<T extends object>(value: unknown, fallback: T): T {
   let parsed: unknown = value ?? null;
   if (typeof parsed === 'string') {
@@ -115,6 +84,34 @@ export function toEventWithStats(
     average_rating: stats?.average_rating ?? 0,
     rating_count: stats?.rating_count ?? 0,
     user_rating: userRating,
+  };
+}
+
+/** One show with ratings. Overlay, embed, and deep links use this instead of the home feed. */
+export async function fetchEventWithStats(
+  eventId: string,
+  userId?: string,
+): Promise<{ data: EventWithStats | null; error: Error | null }> {
+  const { data, error } = await supabase
+    .from('events')
+    .select(EVENT_FEED_COLUMNS)
+    .eq('id', eventId)
+    .maybeSingle();
+  if (error) return { data: null, error: new Error(error.message) };
+  if (!data) return { data: null, error: null };
+  const bundle = await fetchRatingBundleForEvent(data.id, userId);
+  if (bundle.error) return { data: null, error: bundle.error };
+  return {
+    data: toEventWithStats(
+      data as Event,
+      {
+        event_id: data.id,
+        average_rating: bundle.average_rating,
+        rating_count: bundle.rating_count,
+      },
+      bundle.user_rating,
+    ),
+    error: null,
   };
 }
 
@@ -191,6 +188,48 @@ export async function fetchBeyondHorizonUpcomingEvents(): Promise<FeedQueryResul
   }
 
   return { data: all, error: null };
+}
+
+/** Every event, paged. For stats and other pages that are not the home browse feed. */
+export async function fetchAllEvents(): Promise<FeedQueryResult> {
+  const pageSize = 100;
+  const all: Event[] = [];
+  let from = 0;
+
+  for (;;) {
+    const { data, error } = await supabase
+      .from('events')
+      .select(EVENT_FEED_COLUMNS)
+      .order('date', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    if (error) return { data: [], error: new Error(error.message) };
+    const rows = (data || []) as Event[];
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return { data: all.map((event) => normalizeEventTagArrays(event)), error: null };
+}
+
+/** Events by id, chunked. For profile library search (saved shows only). */
+export async function fetchEventsByIds(ids: string[]): Promise<FeedQueryResult> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return { data: [], error: null };
+  const pageSize = 100;
+  const all: Event[] = [];
+  for (let i = 0; i < unique.length; i += pageSize) {
+    const chunk = unique.slice(i, i + pageSize);
+    const { data, error } = await supabase
+      .from('events')
+      .select(EVENT_FEED_COLUMNS)
+      .in('id', chunk);
+    if (error) return { data: [], error: new Error(error.message) };
+    all.push(...((data || []) as Event[]));
+  }
+  return { data: all.map((event) => normalizeEventTagArrays(event)), error: null };
 }
 
 /** One page of past/today shows, newest first. */

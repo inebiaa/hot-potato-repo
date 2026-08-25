@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "check": "tsc --noEmit",
-    "test": "tsx --test src/lib/feedImageAttrs.test.ts src/lib/eventCardImageUrl.test.ts",
+    "test": "tsx --test src/lib/feedImageAttrs.test.ts src/lib/eventCardImageUrl.test.ts src/lib/eventsFeed.test.ts src/lib/eventTagFilter.test.ts src/lib/searchParamsModal.test.ts src/lib/homeCatalogRoute.test.ts",
     "verify:jsonld": "node scripts/verify-event-jsonld.mjs",
     "backfill:event-images": "node scripts/backfill-event-images.mjs",
     "recompress:event-images": "node scripts/recompress-event-images-local.mjs",
@@ -30,8 +30,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.3.0",
-    "tailwind-merge": "^3.0.2",
-    "zustand": "^5.0.3"
+    "tailwind-merge": "^3.0.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
@@ -48,10 +47,10 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
+    "imagescript": "^1.3.0",
     "nodemon": "^3.1.10",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
-    "imagescript": "^1.3.0",
     "tsx": "^4.20.3",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.30.1",

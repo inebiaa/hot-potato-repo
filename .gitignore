@@ -19,6 +19,9 @@ dist-ssr
 .tmp-*/
 .tmp*/
 
+# Local test runner output (never commit)
+test-results/
+
 # Supabase CLI local link/cache (never commit)
 supabase/.temp/
 

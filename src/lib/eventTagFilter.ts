@@ -1,4 +1,4 @@
-import type { Event } from './supabase';
+import type { Event } from './eventTypes';
 import { cityMatchesRegionCode, cityMatchesRegionQuery } from './cityPlaces';
 import { eventDateFilterValue, eventDateMatchesSearch } from './formatEventDate';
 import { effectiveHeaderTags } from './eventHeaderTags';

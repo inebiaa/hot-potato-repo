@@ -1,0 +1,40 @@
+import { createContext, useContext, type ReactNode } from 'react';
+import type { Event } from '../lib/supabase';
+
+export type OverlaySource = 'tagModal' | 'viewRatings';
+
+/** Navigation/chrome callbacks. Not page data. */
+export type AppChromeValue = {
+  openEvent: (eventId: string, source?: OverlaySource) => void;
+  closeEventOverlay: () => void;
+  overlayEventId: string | null;
+  tagModalRefreshTrigger: number;
+  onTagClick: (type: string, value: string, explicitLabel?: string) => void;
+  onAddEvent: () => void;
+  setProfileBoardEvents: (events: Event[] | null) => void;
+  /** Browser-style back; falls back to home when there is no history. */
+  goBack: () => void;
+  /** Invalidate the home feed after another page changes events or the account. */
+  refreshHomeCatalog: () => void;
+  refreshHomeEventRating: (eventId: string) => void;
+};
+
+const AppChromeContext = createContext<AppChromeValue | null>(null);
+
+export function AppChromeProvider({
+  value,
+  children,
+}: {
+  value: AppChromeValue;
+  children: ReactNode;
+}) {
+  return <AppChromeContext.Provider value={value}>{children}</AppChromeContext.Provider>;
+}
+
+export function useAppChrome(): AppChromeValue {
+  const ctx = useContext(AppChromeContext);
+  if (!ctx) {
+    throw new Error('useAppChrome must be used inside AppChromeProvider');
+  }
+  return ctx;
+}

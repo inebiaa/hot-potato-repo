@@ -10,6 +10,7 @@ import { sameTagSpelling } from '../lib/tagIdentity';
 import TagCardRouter from './tagCards/TagCardRouter';
 import ModalShell from './ModalShell';
 import type { EventRating, TagRatingEventSlice } from './tagCards/types';
+import { useTagDisplayMap } from '../contexts/TagDisplayContext';
 
 interface TagRatingsModalProps {
   isOpen: boolean;
@@ -71,10 +72,11 @@ export default function TagRatingsModal({
   tagColors,
   eventsForTag,
   cachedAllEvents,
-  tagResolutionMap,
+  tagResolutionMap: tagResolutionMapProp,
   eventOverlayOpen = false,
   onCloseEventOverlay,
 }: TagRatingsModalProps) {
+  const tagResolutionMap = tagResolutionMapProp ?? useTagDisplayMap();
   const [eventRatings, setEventRatings] = useState<EventRating[]>([]);
   const [totalShows, setTotalShows] = useState(0);
   const [loading, setLoading] = useState(true);

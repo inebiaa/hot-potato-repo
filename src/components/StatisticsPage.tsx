@@ -1,15 +1,22 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { supabase, Event } from '../lib/supabase';
+import type { Event } from '../lib/supabase';
 import { getSeasonFromDate, sortSeasonsByDate } from '../lib/season';
 import { sameTagSpelling } from '../lib/tagIdentity';
 import { effectiveHeaderTags } from '../lib/eventHeaderTags';
-import { eventArrayMatchesFilter, type TagResolutionMap } from '../lib/tagDisplayResolution';
+import {
+  eventArrayMatchesFilter,
+  fetchTagResolutionForEvents,
+  type TagResolutionMap,
+} from '../lib/tagDisplayResolution';
+import { fetchAllEvents } from '../lib/eventsFeed';
+import { eventMatchesTextQuery, filterEventsBySelectedTags } from '../lib/eventTagFilter';
 import { getSpecialGuests } from '../lib/specialGuests';
 import TagRatingsModal from './TagRatingsModal';
 import { clearAppModalParams, parseAppModal, setAppModalParams } from '../lib/searchParamsModal';
 import type { AppSettings } from '../types/appSettings';
 import StatisticsPageContent from './StatisticsPageContent';
+import { useHomeCatalogOptional } from '../contexts/HomeCatalogContext';
 
 export interface TagStats {
   name: string;
@@ -18,83 +25,68 @@ export interface TagStats {
 }
 
 interface StatisticsPageProps {
-  isOpen: boolean;
-  onClose: () => void;
   tagColors: Partial<AppSettings>;
-  /** Optional: open an event overlay from a tag (matches main page behavior). */
   onOpenEvent?: (eventId: string) => void;
-  /** Optional: when this changes, refresh the tag ratings modal so counts stay in sync. */
   tagModalRefreshTrigger?: number;
-  /** When true, render as full page instead of modal (e.g. at ?stats=1) */
-  asPage?: boolean;
-  /** When true, backdrop click on tag modal closes event overlay instead of closing modal. */
   eventOverlayOpen?: boolean;
   onCloseEventOverlay?: () => void;
-  /** Optional: preloaded events from shared cache; when provided, skips fetch */
-  events?: Event[];
-  tagResolutionMap?: TagResolutionMap | null;
 }
 
 export default function StatisticsPage({
-  isOpen,
-  onClose,
   tagColors,
   onOpenEvent,
   tagModalRefreshTrigger = 0,
-  asPage = false,
   eventOverlayOpen = false,
   onCloseEventOverlay,
-  events: eventsProp,
-  tagResolutionMap,
 }: StatisticsPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const [events, setEvents] = useState<Event[]>([]);
+  const [tagResolutionMap, setTagResolutionMap] = useState<TagResolutionMap | null>(null);
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedCity, setSelectedCity] = useState<string>('');
   const [selectedSeason, setSelectedSeason] = useState<string>('');
   const [sortBy, setSortBy] = useState<'count' | 'name'>('name');
   const [loading, setLoading] = useState(true);
-  const [localTagModal, setLocalTagModal] = useState<{ type: string; value: string } | null>(null);
+  const home = useHomeCatalogOptional();
 
   useEffect(() => {
-    if (!isOpen && !asPage) return;
-    if (eventsProp && eventsProp.length > 0) {
-      setEvents(eventsProp);
-      setLoading(false);
-      return;
-    }
-    fetchEvents();
-  }, [isOpen, asPage, eventsProp]);
-
-  useEffect(() => {
-    if (eventsProp && eventsProp.length > 0) {
-      setEvents(eventsProp);
-    }
-  }, [eventsProp]);
-
-  const fetchEvents = async () => {
+    let cancelled = false;
     setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-      setEvents(data || []);
-    } catch (error) {
-      console.error('Error fetching events:', error);
-    } finally {
+    void fetchAllEvents().then(async ({ data, error }) => {
+      if (cancelled) return;
+      if (error) {
+        console.error('Error fetching events:', error);
+        setEvents([]);
+        setLoading(false);
+        return;
+      }
+      setEvents(data);
       setLoading(false);
+      const map = await fetchTagResolutionForEvents(data);
+      if (!cancelled) setTagResolutionMap(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const eventsInView = useMemo(() => {
+    if (!home || home.browsing) return events;
+    let next = events;
+    if (home.searchQuery.trim()) {
+      next = next.filter((event) =>
+        eventMatchesTextQuery(event, home.searchQuery, tagResolutionMap),
+      );
     }
-  };
+    return filterEventsBySelectedTags(next, home.selectedTags, tagResolutionMap);
+  }, [events, home?.browsing, home?.searchQuery, home?.selectedTags, tagResolutionMap]);
 
   const calculateTagStats = (): TagStats[] => {
     const stats: Record<string, TagStats> = {};
 
-    let filteredEvents = [...events];
+    let filteredEvents = [...eventsInView];
 
     if (selectedCity) {
       filteredEvents = filteredEvents.filter((e) => sameTagSpelling(e.city, selectedCity));
@@ -187,28 +179,23 @@ export default function StatisticsPage({
   };
 
   const handleTagClick = (tag: TagStats) => {
-    if (asPage) {
-      navigate({
-        pathname: location.pathname,
-        search: setAppModalParams(searchParams, 'tag', { tagType: tag.type, tagValue: tag.name }),
-      });
-    } else {
-      setLocalTagModal({ type: tag.type, value: tag.name });
-    }
+    navigate({
+      pathname: location.pathname,
+      search: setAppModalParams(searchParams, 'tag', { tagType: tag.type, tagValue: tag.name }),
+    });
   };
 
   const urlModal = useMemo(() => parseAppModal(searchParams), [searchParams]);
   const selectedTag = useMemo(() => {
-    if (asPage && urlModal.modal === 'tag' && urlModal.tagType && urlModal.tagValue) {
+    if (urlModal.modal === 'tag' && urlModal.tagType && urlModal.tagValue) {
       return { type: urlModal.tagType, value: urlModal.tagValue };
     }
-    if (!asPage) return localTagModal;
     return null;
-  }, [asPage, urlModal.modal, urlModal.tagType, urlModal.tagValue, localTagModal]);
+  }, [urlModal.modal, urlModal.tagType, urlModal.tagValue]);
   const isTagRatingsModalOpen = !!selectedTag;
 
-  const allCities = Array.from(new Set(events.map(e => e.city).filter(Boolean))).sort();
-  const allSeasons = sortSeasonsByDate(Array.from(new Set(events.map(e => getSeasonFromDate(e.date)))));
+  const allCities = Array.from(new Set(eventsInView.map(e => e.city).filter(Boolean))).sort();
+  const allSeasons = sortSeasonsByDate(Array.from(new Set(eventsInView.map(e => getSeasonFromDate(e.date)))));
   const tagStats = calculateTagStats();
 
   const matchEventForTag = useCallback((e: Event, type: string, value: string) => {
@@ -231,18 +218,15 @@ export default function StatisticsPage({
 
   const eventsForTag = useMemo(() => {
     if (!selectedTag?.type || !selectedTag?.value) return [];
-    let filtered = [...events];
+    let filtered = [...eventsInView];
     if (selectedCity) filtered = filtered.filter((e) => sameTagSpelling(e.city, selectedCity));
     if (selectedSeason) filtered = filtered.filter(e => (e.season || getSeasonFromDate(e.date)) === selectedSeason);
     return filtered.filter(e => matchEventForTag(e, selectedTag.type, selectedTag.value));
-  }, [events, selectedTag, selectedCity, selectedSeason, matchEventForTag]);
-
-  if (!isOpen && !asPage) return null;
+  }, [eventsInView, selectedTag, selectedCity, selectedSeason, matchEventForTag]);
 
   const contentProps = {
-    asPage,
     tagStats,
-    events,
+    events: eventsInView,
     loading,
     selectedType,
     selectedCity,
@@ -258,50 +242,13 @@ export default function StatisticsPage({
     handleTagClick,
   };
 
-  if (asPage) {
-    return (
-      <>
-        <StatisticsPageContent {...contentProps} />
-        <TagRatingsModal
-          isOpen={isTagRatingsModalOpen}
-          onClose={() => {
-            if (asPage) {
-              navigate({ pathname: location.pathname, search: clearAppModalParams(searchParams) });
-            } else {
-              setLocalTagModal(null);
-            }
-          }}
-          tagType={selectedTag?.type || ''}
-          tagValue={selectedTag?.value || ''}
-          onEventClick={onOpenEvent}
-          refreshTrigger={tagModalRefreshTrigger}
-          tagColors={tagColors}
-          eventsForTag={eventsForTag}
-          tagResolutionMap={tagResolutionMap}
-        eventOverlayOpen={eventOverlayOpen}
-        onCloseEventOverlay={onCloseEventOverlay}
-      />
-      </>
-    );
-  }
-
   return (
     <>
-      <div
-        className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
-        onClick={(e) => e.target === e.currentTarget && onClose()}
-      >
-        <StatisticsPageContent {...contentProps} />
-      </div>
-
+      <StatisticsPageContent {...contentProps} />
       <TagRatingsModal
         isOpen={isTagRatingsModalOpen}
         onClose={() => {
-          if (asPage) {
-            navigate({ pathname: location.pathname, search: clearAppModalParams(searchParams) });
-          } else {
-            setLocalTagModal(null);
-          }
+          navigate({ pathname: location.pathname, search: clearAppModalParams(searchParams) });
         }}
         tagType={selectedTag?.type || ''}
         tagValue={selectedTag?.value || ''}

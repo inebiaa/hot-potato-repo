@@ -46,7 +46,7 @@ jobs:
 
       - name: Assert static site output (sitemap proves prerender ran)
         run: |
-          test -f dist/sitemap.xml || { echo "dist/sitemap.xml missing — set VITE_SUPABASE_* secrets"; exit 1; }
+          test -f dist/sitemap.xml || { echo "dist/sitemap.xml missing: set VITE_SUPABASE_* secrets"; exit 1; }
           echo "OK: dist/sitemap.xml present"
 
       - uses: actions/upload-pages-artifact@v3

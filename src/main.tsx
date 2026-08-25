@@ -4,7 +4,7 @@ import { registerSW } from 'virtual:pwa-register';
 import './index.css';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config';
 
-// Production only — a service worker in Vite dev fights HMR and can blank the tab.
+// Production only: a service worker in Vite dev fights HMR and can blank the tab.
 if (import.meta.env.PROD) {
   const updateSW = registerSW({
     immediate: true,

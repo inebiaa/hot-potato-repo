@@ -4,10 +4,13 @@ import { supabase, type Event, type Rating, type UserList } from '../lib/supabas
 import EventCard from './EventCard';
 import MasonryLaneFeed, { type MasonryLaneItem } from './MasonryLaneFeed';
 import { TagDisplayProvider } from '../contexts/TagDisplayContext';
+import { useHomeCatalogOptional } from '../contexts/HomeCatalogContext';
 import { fetchTagResolutionForEvents, type TagResolutionMap } from '../lib/tagDisplayResolution';
+import { eventMatchesTextQuery, filterEventsBySelectedTags } from '../lib/eventTagFilter';
 import { normalizeEventTagArrays } from '../lib/eventTagArray';
 import { fetchEventRatingStats } from '../lib/eventRatingStats';
 import { useAuth } from '../contexts/AuthContext';
+import { useAppChrome } from '../contexts/AppChromeContext';
 import { useT } from '../hooks/useCopy';
 import { listPagePath } from '../lib/siteBase';
 import { ListCover } from './ListCoverCollage';
@@ -63,6 +66,8 @@ export default function SharedLibraryListPage({
   const { user } = useAuth();
   const t = useT();
   const navigate = useNavigate();
+  const home = useHomeCatalogOptional();
+  const { setProfileBoardEvents } = useAppChrome();
   const [list, setList] = useState<UserList | null>(null);
   const [ownerUsername, setOwnerUsername] = useState('');
   const [ownerHandle, setOwnerHandle] = useState('');
@@ -210,6 +215,24 @@ export default function SharedLibraryListPage({
     };
   }, [rows]);
 
+  useEffect(() => {
+    setProfileBoardEvents(rows.map((r) => r.event).filter((e) => e?.id));
+    return () => setProfileBoardEvents(null);
+  }, [rows, setProfileBoardEvents]);
+
+  const searchQuery = home?.searchQuery ?? '';
+  const selectedTags = home?.selectedTags ?? [];
+  const searchActive = selectedTags.length > 0 || searchQuery.trim().length >= 2;
+  const visibleRows = useMemo(() => {
+    if (!searchActive) return rows;
+    return rows.filter((row) => {
+      const event = row.event;
+      if (!event?.id) return false;
+      if (!eventMatchesTextQuery(event, searchQuery, tagMap)) return false;
+      return filterEventsBySelectedTags([event], selectedTags, tagMap).length > 0;
+    });
+  }, [rows, searchActive, searchQuery, selectedTags, tagMap]);
+
   const title = useMemo(() => {
     if (!list) return '';
     if (list.is_rated_list) {
@@ -274,7 +297,7 @@ export default function SharedLibraryListPage({
     );
   }
 
-  const laneItems: MasonryLaneItem[] = rows.map(({ event, averageRating, ratingCount, userRating }, index) => ({
+  const laneItems: MasonryLaneItem[] = visibleRows.map(({ event, averageRating, ratingCount, userRating }, index) => ({
     id: event.id,
     children: (
       <EventCard
@@ -305,6 +328,10 @@ export default function SharedLibraryListPage({
       {rows.length === 0 ? (
         <div className="rounded-2xl bg-white/80 py-16 px-6 text-center">
           <p className="text-neutral-500 text-sm">No shows in this list yet.</p>
+        </div>
+      ) : visibleRows.length === 0 ? (
+        <div className="rounded-2xl bg-white/80 py-16 px-6 text-center">
+          <p className="text-neutral-500 text-sm">{t('empty.noMatch.title')}</p>
         </div>
       ) : (
         <TagDisplayProvider map={tagMap}>

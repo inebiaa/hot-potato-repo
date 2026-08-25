@@ -3,7 +3,6 @@ import type { TagStats } from './StatisticsPage';
 import TagPillSplitLabel, { tagPillSplitContainerClass, tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 
 interface StatisticsPageContentProps {
-  asPage: boolean;
   tagStats: TagStats[];
   events: unknown[];
   loading: boolean;
@@ -22,7 +21,6 @@ interface StatisticsPageContentProps {
 }
 
 export default function StatisticsPageContent({
-  asPage,
   tagStats,
   events,
   loading,
@@ -42,23 +40,14 @@ export default function StatisticsPageContent({
   const footerText = `Showing ${tagStats.length} ${tagStats.length === 1 ? 'tag' : 'tags'} across ${events.length} ${events.length === 1 ? 'show' : 'shows'}`;
 
   return (
-    <div
-      className={`${asPage ? 'max-w-6xl mx-auto' : 'w-full max-w-6xl'} ${asPage ? '' : 'my-8'}`}
-      onClick={(e) => {
-        if (!asPage) e.stopPropagation();
-      }}
-    >
-      <div
-        className={`${asPage ? 'bg-transparent' : 'bg-white rounded-xl shadow-2xl'} w-full overflow-hidden flex flex-col`}
-        style={asPage ? undefined : { maxHeight: '90vh' }}
-      >
-        <div className={`px-6 py-4 border-b flex items-center gap-3 ${asPage ? 'bg-white rounded-t-xl' : 'bg-white'}`}>
+    <div className="max-w-6xl mx-auto">
+      <div className="bg-transparent w-full overflow-hidden flex flex-col">
+        <div className="px-6 py-4 border-b flex items-center gap-3 bg-white rounded-t-xl">
           <div className="bg-neutral-100 p-2 rounded-lg">
             <BarChart3 className="text-neutral-600" size={20} />
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900">Tag Statistics</h2>
-            <p className="text-gray-500 text-sm">Click any tag to view shows and ratings</p>
           </div>
         </div>
 

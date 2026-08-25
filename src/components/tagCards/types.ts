@@ -56,6 +56,8 @@ export interface TagColorsForPills {
   optional_tags_text_color?: string;
   special_guests_bg_color?: string;
   special_guests_text_color?: string;
+  countdown_bg_color?: string;
+  countdown_text_color?: string;
 }
 
 export interface TagEntityCardSharedProps {

@@ -3,12 +3,15 @@
  * Add keys here, then render with `useT()` / `t(key)`.
  */
 
-export type CopyGroup = 'home' | 'search' | 'nav' | 'event' | 'form' | 'empty' | 'modals' | 'auth';
+export type CopyGroup = 'home' | 'search' | 'nav' | 'event' | 'form' | 'empty' | 'modals' | 'auth' | 'settings';
 
 export type CopyKey =
   | 'home.title'
   | 'home.subtitleSignedIn'
   | 'home.subtitleSignedOut'
+  | 'home.loadErrorTitle'
+  | 'home.loadErrorRetry'
+  | 'home.loadErrorDismiss'
   | 'auth.prompt.leaveReview'
   | 'search.placeholder'
   | 'nav.home'
@@ -21,6 +24,8 @@ export type CopyKey =
   | 'nav.signOutConfirmBody'
   | 'nav.signOutConfirmCancel'
   | 'nav.signOutConfirmAction'
+  | 'settings.title'
+  | 'settings.signInToOpen'
   | 'event.starring'
   | 'event.specialGuests'
   | 'event.specialGuest'
@@ -121,6 +126,31 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     default: 'Sign in to rate shows and add your own!',
     label: 'Home subtitle (signed out)',
     group: 'home',
+  },
+  'home.loadErrorTitle': {
+    default: 'Could not load events',
+    label: 'Home load error title',
+    group: 'home',
+  },
+  'home.loadErrorRetry': {
+    default: 'Retry',
+    label: 'Home load error retry',
+    group: 'home',
+  },
+  'home.loadErrorDismiss': {
+    default: 'Dismiss',
+    label: 'Home load error dismiss',
+    group: 'home',
+  },
+  'settings.title': {
+    default: 'Settings',
+    label: 'Settings page title',
+    group: 'settings',
+  },
+  'settings.signInToOpen': {
+    default: 'Sign in to open settings.',
+    label: 'Settings sign-in gate',
+    group: 'settings',
   },
   'auth.prompt.leaveReview': {
     default: 'Sign in to leave a review',
@@ -488,6 +518,7 @@ export const COPY_GROUP_LABELS: Record<CopyGroup, string> = {
   empty: 'Empty states',
   modals: 'Other',
   auth: 'Auth',
+  settings: 'Settings',
 };
 
 /**

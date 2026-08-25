@@ -7,6 +7,11 @@ import {
   type ReactNode,
 } from 'react';
 
+/**
+ * Shortest-column masonry for the home feed.
+ * Each card mounts a ResizeObserver; fine for typical catalogs.
+ * Past ~800–1000 visible cards, prefer virtualizing past shows or server search.
+ */
 export type MasonryLaneItem = { id: string; children: ReactNode };
 
 type MasonryLaneFeedProps = {
@@ -45,6 +50,14 @@ function distributeToLanes(
   return lanes;
 }
 
+const HEIGHT_EPSILON_PX = 2;
+
+/**
+ * Packs children into vertical lanes using a shortest-column heuristic so uneven
+ * card heights do not leave large empty row slabs.
+ * Items are taken in source order; each step picks the shortest lane.
+ * Height updates alone do not reshuffle (avoids mid-scroll column jumping).
+ */
 function ItemMeasure({
   id,
   onHeight,
@@ -55,20 +68,37 @@ function ItemMeasure({
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const lastReportedRef = useRef(0);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
 
+    let raf = 0;
     const report = () => {
       const h = el.getBoundingClientRect().height;
-      if (Number.isFinite(h) && h > 0) onHeight(id, Math.round(h * 4) / 4);
+      if (!Number.isFinite(h) || h <= 0) return;
+      const rounded = Math.round(h * 4) / 4;
+      if (Math.abs(rounded - lastReportedRef.current) < HEIGHT_EPSILON_PX) return;
+      lastReportedRef.current = rounded;
+      onHeight(id, rounded);
+    };
+
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        report();
+      });
     };
 
     report();
-    const ro = new ResizeObserver(report);
+    const ro = new ResizeObserver(schedule);
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [id, onHeight]);
 
   return (
@@ -77,14 +107,6 @@ function ItemMeasure({
     </div>
   );
 }
-
-/**
- * Packs children into vertical lanes using a shortest-column heuristic so uneven
- * card heights do not leave large empty “row slabs”.
- * Items are taken in source order; each step picks the shortest lane.
- * Height updates alone do not reshuffle (avoids mid-scroll column jumping).
- */
-const HEIGHT_EPSILON_PX = 2;
 
 export default function MasonryLaneFeed({
   items,
