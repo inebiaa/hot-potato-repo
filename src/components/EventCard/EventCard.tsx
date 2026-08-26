@@ -1,26 +1,21 @@
-import { useNavigate, useLocation, useParams, useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { Calendar, MapPin, Star, Heart } from 'lucide-react';
 import { Event, Rating } from '../../lib/supabase';
-import { useMemo, useState, useEffect } from 'react';
-import RatingModal from '../RatingModal';
-import EditEventModal from '../EditEventModal';
-import ViewRatingsModal from '../ViewRatingsModal';
+import { useState } from 'react';
 import CommentWithTags from '../CommentWithTags';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLikedEvents } from '../../contexts/LikedEventsContext';
 import { isEventUpcoming } from '../../lib/eventDates';
 import { formatEventDateDisplay } from '../../lib/formatEventDate';
-import { clearAppModalParams, parseAppModal, setAppModalParams } from '../../lib/searchParamsModal';
+import { setAppModalParams } from '../../lib/searchParamsModal';
 import { useT } from '../../hooks/useCopy';
 import { eventCardImageUrl } from '../../lib/eventCardImageUrl';
 import RemoteImg from '../RemoteImg';
-import {
-  fetchLikedEventIds,
-  toggleLikedEvent,
-} from '../../lib/userLists';
 import type { TagColorsForPills } from '../tagCards/types';
 import EventCardTitle from './EventCardTitle';
 import EventCardActionsMenu from './EventCardActionsMenu';
 import EventCardTags from './EventCardTags';
+import { shouldOpenShowFromCardBodyClick } from '../../lib/eventCardBodyClick';
 import { cn } from '../../lib/utils';
 
 interface EventCardProps {
@@ -67,22 +62,16 @@ export default function EventCard({
   imagePriority = false,
   listMembership,
 }: EventCardProps) {
+  void onRatingSubmitted;
   const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
-  const params = useParams();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const parsedModal = useMemo(() => parseAppModal(searchParams), [searchParams]);
-  const panelEventId = params.eventId ?? parsedModal.targetEventId ?? '';
-  const isRatingModalOpen = parsedModal.modal === 'rate' && panelEventId === event.id;
-  const isViewRatingsModalOpen = parsedModal.modal === 'view-ratings' && panelEventId === event.id;
-  const isEditModalOpen = parsedModal.modal === 'edit-event' && panelEventId === event.id;
+  const { isLiked, setLiked, toggleLiked } = useLikedEvents();
   const ratingAllowed = !isEventUpcoming(event.date);
-
-  const closeEventPanels = () => {
-    navigate({ pathname: location.pathname, search: clearAppModalParams(searchParams) });
-  };
+  const liked = isLiked(event.id);
+  const [likeBusy, setLikeBusy] = useState(false);
 
   const openEventPanel = (m: 'rate' | 'view-ratings' | 'edit-event') => {
     if (m === 'rate' && !user) {
@@ -101,40 +90,6 @@ export default function EventCard({
     });
   };
 
-  // Signed-out deep link ?modal=rate → auth (once; do not depend on searchParams or it loops).
-  useEffect(() => {
-    if (!isRatingModalOpen || user) return;
-    navigate({
-      pathname: location.pathname,
-      search: setAppModalParams(searchParams, 'auth', {
-        authMode: 'signin',
-        authPrompt: t('auth.prompt.leaveReview'),
-      }),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react when rate modal opens while signed out
-  }, [isRatingModalOpen, user]);
-
-  const [isLiked, setIsLiked] = useState(false);
-  const [likeBusy, setLikeBusy] = useState(false);
-
-  useEffect(() => {
-    if (!user?.id) {
-      setIsLiked(false);
-      return;
-    }
-    let cancelled = false;
-    void fetchLikedEventIds(user.id)
-      .then((ids) => {
-        if (!cancelled) setIsLiked(ids.has(event.id));
-      })
-      .catch(() => {
-        if (!cancelled) setIsLiked(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id, event.id]);
-
   const handleToggleLiked = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user) {
@@ -149,17 +104,18 @@ export default function EventCard({
     }
     if (likeBusy) return;
     setLikeBusy(true);
-    const prev = isLiked;
-    setIsLiked(!prev);
     try {
-      const { liked, error } = await toggleLikedEvent(user.id, event.id, prev);
-      if (error) setIsLiked(prev);
-      else setIsLiked(liked);
-    } catch {
-      setIsLiked(prev);
+      const { error } = await toggleLiked(event.id);
+      if (error) setLiked(event.id, liked);
     } finally {
       setLikeBusy(false);
     }
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (!onViewClick) return;
+    if (!shouldOpenShowFromCardBodyClick(e.target)) return;
+    onViewClick(event.id);
   };
 
   const cardImageSrc = eventCardImageUrl(event.image_url);
@@ -226,13 +182,17 @@ export default function EventCard({
   }
 
   return (
-    <>
-      <div
-        className={`${imageOpacity !== undefined ? 'bg-transparent' : 'bg-card'} rounded-lg shadow-md relative`}
+    <article
+        className={cn(
+          imageOpacity !== undefined ? 'bg-transparent' : 'bg-card',
+          'rounded-lg shadow-md relative',
+          onViewClick && 'cursor-pointer',
+        )}
+        onClick={onViewClick ? handleCardClick : undefined}
       >
         {cardImageSrc ? renderCardPhoto() : null}
         <div className={`min-w-0 p-6 ${imageOpacity !== undefined ? 'bg-card' : ''}`}>
-          <div className="mb-2 min-w-0 after:block after:clear-both after:content-['']">
+          <div className="mb-2 min-w-0 type-headline leading-snug after:block after:clear-both after:content-['']">
             <div
               className="float-right -mr-0.5 flex h-[1.375em] shrink-0 items-center gap-0.5 [shape-outside:margin-box]"
               data-event-actions
@@ -241,23 +201,23 @@ export default function EventCard({
                 type="button"
                 onClick={(e) => { void handleToggleLiked(e); }}
                 disabled={likeBusy}
-                className={`rounded p-0.5 transition-colors ${
-                  isLiked
+                className={`inline-flex shrink-0 items-center rounded p-0.5 leading-none transition-colors ${
+                  liked
                     ? 'text-foreground hover:text-muted-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
-                title={isLiked ? t('event.removeFromLiked') : t('event.saveToLiked')}
-                aria-label={isLiked ? t('event.removeFromLiked') : t('event.saveToLiked')}
-                aria-pressed={isLiked}
+                title={liked ? t('event.removeFromLiked') : t('event.saveToLiked')}
+                aria-label={liked ? t('event.removeFromLiked') : t('event.saveToLiked')}
+                aria-pressed={liked}
               >
-                <Heart size={16} fill={isLiked ? 'currentColor' : 'none'} />
+                <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
               </button>
               <EventCardActionsMenu
                 event={event}
                 listMembership={listMembership}
                 onEventUpdated={onEventUpdated}
                 onOpenEdit={() => openEventPanel('edit-event')}
-                onLikedChange={setIsLiked}
+                onLikedChange={(next) => setLiked(event.id, next)}
               />
             </div>
             <EventCardTitle
@@ -307,7 +267,7 @@ export default function EventCard({
                         ))}
                       </div>
                       <span className="ml-2 type-callout text-muted-foreground transition-colors group-hover:text-foreground">
-                        {averageRating > 0 ? averageRating.toFixed(1) : 'No ratings'} ({ratingCount})
+                        {averageRating > 0 ? averageRating.toFixed(1) : t('event.noRatings')} ({ratingCount})
                       </span>
                     </button>
                   </div>
@@ -316,7 +276,7 @@ export default function EventCard({
                 {ratingAllowed && userRating && (
                   <div className="mt-3 border-t border-border pt-3">
                     <p className="type-callout font-medium text-muted-foreground">
-                      Your rating: {userRating.rating} stars
+                      {t('event.yourRatingStars').replace('{count}', String(userRating.rating))}
                     </p>
                     {userRating.comment && (
                       <p className="mt-1 type-callout italic text-muted-foreground">
@@ -336,39 +296,6 @@ export default function EventCard({
             }
           />
         </div>
-      </div>
-
-      <RatingModal
-        isOpen={isRatingModalOpen && ratingAllowed && !!user}
-        onClose={closeEventPanels}
-        event={event}
-        existingRating={userRating}
-        onRatingSubmitted={onRatingSubmitted}
-        tagColors={tagColors}
-        customPerformerTags={customPerformerTags}
-      />
-
-      <ViewRatingsModal
-        isOpen={isViewRatingsModalOpen && ratingAllowed}
-        onClose={closeEventPanels}
-        eventId={event.id}
-        eventName={event.name}
-        event={event}
-        currentUserId={user?.id}
-        onRatingSubmitted={onRatingSubmitted}
-        tagColors={tagColors}
-        customPerformerTags={customPerformerTags}
-        allowRatingEdits={ratingAllowed}
-        onTagClick={onTagClick}
-      />
-
-      <EditEventModal
-        isOpen={isEditModalOpen}
-        onClose={closeEventPanels}
-        event={event}
-        onEventUpdated={onEventUpdated}
-      />
-
-    </>
+      </article>
   );
 }

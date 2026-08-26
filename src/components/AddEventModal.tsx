@@ -22,18 +22,20 @@ import {
 } from "../lib/specialGuests";
 import { useT } from "../hooks/useCopy";
 import { ensureEventImageStored } from "../lib/eventImageUpload";
+import { formatCustomTagPlaceholder } from "./PlaceholderCopyEdit";
 import TagInput from "./TagInput";
 import IconPicker from "./IconPicker";
 import CustomPerformerCategoryInput from "./CustomPerformerCategoryInput";
 import ModalShell from "./ModalShell";
 import EventImageField from "./EventImageField";
-import { Button, Input, Label, formErrorClass, formHintClass, typeCallout } from "./ui";
+import { Button, Input, Label, formErrorClass, typeCallout } from "./ui";
+import { AdminPlaceholderInput } from "./PlaceholderCopyEdit";
 import { cn } from "../lib/utils";
 
 interface AddEventModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onEventAdded: () => void;
+  onEventAdded: (eventId: string) => void;
 }
 
 export default function AddEventModal({
@@ -162,7 +164,7 @@ export default function AddEventModal({
       }
       if (storedImage.url) setImageUrl(storedImage.url);
 
-      const { error: insertError } = await supabase.from("events").insert({
+      const { data: inserted, error: insertError } = await supabase.from("events").insert({
         name,
         date,
         city: cityVal,
@@ -183,9 +185,10 @@ export default function AddEventModal({
           : null,
         custom_tag_meta: customMeta,
         created_by: user.id,
-      });
+      }).select('id').single();
 
       if (insertError) throw insertError;
+      if (!inserted?.id) throw new Error('Failed to create show');
 
       // Don't block the create UI on identity sync (large festival lineups).
       void syncTagIdentitiesFromEventFields(
@@ -206,7 +209,7 @@ export default function AddEventModal({
         console.warn("Background tag identity sync failed:", err),
       );
 
-      onEventAdded();
+      onEventAdded(inserted.id);
       onClose();
       setName("");
       setDate("");
@@ -247,12 +250,14 @@ export default function AddEventModal({
           <Label htmlFor="name" required>
             {t("form.showName")}
           </Label>
-          <Input
+          <AdminPlaceholderInput
             id="name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
+            copyKey="form.showName.placeholder"
+            placeholder={t("form.showName.placeholder")}
           />
         </div>
 
@@ -312,6 +317,7 @@ export default function AddEventModal({
               maxTags={1}
               required
               placeholder={t("form.city.placeholder")}
+              placeholderCopyKey="form.city.placeholder"
             />
           </div>
         </div>
@@ -328,6 +334,11 @@ export default function AddEventModal({
               ? t("form.venue.placeholder.music")
               : t("form.venue.placeholder.fashion")
           }
+          placeholderCopyKey={
+            showType === "music"
+              ? "form.venue.placeholder.music"
+              : "form.venue.placeholder.fashion"
+          }
         />
 
         <TagInput
@@ -340,6 +351,11 @@ export default function AddEventModal({
             showType === "music"
               ? t("form.starring.placeholder.music")
               : t("form.starring.placeholder.fashion")
+          }
+          placeholderCopyKey={
+            showType === "music"
+              ? "form.starring.placeholder.music"
+              : "form.starring.placeholder.fashion"
           }
         />
 
@@ -355,6 +371,7 @@ export default function AddEventModal({
             onChange={setSpecialGuests}
             tagColumn="featured_artists"
             placeholder={t("form.specialGuests.placeholder")}
+            placeholderCopyKey="form.specialGuests.placeholder"
             expandable
           />
         )}
@@ -370,6 +387,11 @@ export default function AddEventModal({
               ? t("form.producedBy.placeholder.music")
               : t("form.producedBy.placeholder.fashion")
           }
+          placeholderCopyKey={
+            showType === "music"
+              ? "form.producedBy.placeholder.music"
+              : "form.producedBy.placeholder.fashion"
+          }
           expandable
         />
 
@@ -381,6 +403,7 @@ export default function AddEventModal({
             onChange={setHairMakeup}
             tagColumn="hair_makeup"
             placeholder={t("form.hairMakeup.placeholder")}
+            placeholderCopyKey="form.hairMakeup.placeholder"
             expandable
           />
         )}
@@ -396,6 +419,11 @@ export default function AddEventModal({
               ? t("form.genre.placeholder.music")
               : t("form.genre.placeholder.fashion")
           }
+          placeholderCopyKey={
+            showType === "music"
+              ? "form.genre.placeholder.music"
+              : "form.genre.placeholder.fashion"
+          }
           expandable
         />
 
@@ -407,7 +435,8 @@ export default function AddEventModal({
             value={customTags[slug] || []}
             onChange={(v) => setCustomTags((prev) => ({ ...prev, [slug]: v }))}
             customTagSlug={slug}
-            placeholder={`e.g., ${label}...`}
+            placeholder={formatCustomTagPlaceholder(t("form.customTag.placeholder"), label)}
+            placeholderCopyKey="form.customTag.placeholder"
             expandable
             headerAction={
               <button
@@ -422,7 +451,7 @@ export default function AddEventModal({
                     return next;
                   });
                 }}
-                className="shrink-0 rounded p-1.5 text-red-500 hover:bg-red-50 hover:text-red-700"
+                className="shrink-0 rounded-md p-1.5 text-destructive hover:bg-muted"
                 title="Remove this category"
                 aria-label={`Remove ${label} category`}
               >
@@ -450,6 +479,7 @@ export default function AddEventModal({
               id="newCustomType"
               value={newCustomTypeLabel}
               onChange={setNewCustomTypeLabel}
+              placeholder={t("form.customCategory.placeholder")}
               excludedSlugs={[
                 SPECIAL_GUESTS_SLUG,
                 ...inlineCustomTypes.map((t) => t.slug),
@@ -501,6 +531,11 @@ export default function AddEventModal({
               ? t("form.collection.placeholder.music")
               : t("form.collection.placeholder.fashion")
           }
+          placeholderCopyKey={
+            showType === "music"
+              ? "form.collection.placeholder.music"
+              : "form.collection.placeholder.fashion"
+          }
           expandable
         />
 
@@ -511,17 +546,15 @@ export default function AddEventModal({
         />
 
         <div>
-          <Label htmlFor="countdownLink">Official ticket link</Label>
-          <Input
+          <Label htmlFor="countdownLink">{t("form.countdownLink")}</Label>
+          <AdminPlaceholderInput
             id="countdownLink"
             type="url"
             value={countdownLink}
             onChange={(e) => setCountdownLink(e.target.value)}
-            placeholder="https://… public ticket or registration page"
+            copyKey="form.countdownLink.placeholder"
+            placeholder={t("form.countdownLink.placeholder")}
           />
-          <p className={`mt-0.5 ${formHintClass}`}>
-            Opens when the countdown pill is tapped on upcoming shows.
-          </p>
         </div>
 
         {error ? <p className={formErrorClass}>{error}</p> : null}

@@ -1,9 +1,9 @@
 /**
- * App copy catalog (defaults). Overrides live in Settings → Copy (`copy_overrides`).
+ * App copy catalog (defaults). Brand + placeholder overrides use `copy_overrides` (edited in context by admins).
  * Add keys here, then render with `useT()` / `t(key)`.
  */
 
-export type CopyGroup = 'home' | 'search' | 'nav' | 'event' | 'form' | 'empty' | 'auth' | 'settings' | 'stats' | 'safety';
+export type CopyGroup = 'home' | 'search' | 'nav' | 'event' | 'form' | 'empty' | 'auth' | 'settings' | 'stats' | 'safety' | 'chrome';
 
 export type CopyKey =
   | 'home.title'
@@ -15,6 +15,7 @@ export type CopyKey =
   | 'auth.prompt.leaveReview'
   | 'auth.prompt.saveShow'
   | 'auth.prompt.addToList'
+  | 'auth.prompt.createList'
   | 'auth.signIn.title'
   | 'auth.signUp.title'
   | 'auth.email'
@@ -75,6 +76,8 @@ export type CopyKey =
   | 'event.saveToLiked'
   | 'event.removeFromLiked'
   | 'event.openShow'
+  | 'event.noRatings'
+  | 'event.yourRatingStars'
   | 'event.removeFromList'
   | 'event.addToList'
   | 'event.addedToList'
@@ -93,9 +96,13 @@ export type CopyKey =
   | 'profile.library'
   | 'profile.notFound'
   | 'profile.signInToView'
+  | 'profile.listsLoadError'
+  | 'chrome.closeDialog'
+  | 'chrome.copied'
   | 'form.createTitle'
   | 'form.editTitle'
   | 'form.showName'
+  | 'form.showName.placeholder'
   | 'form.showType'
   | 'form.date'
   | 'form.city'
@@ -117,6 +124,11 @@ export type CopyKey =
   | 'form.collection'
   | 'form.collection.placeholder.fashion'
   | 'form.collection.placeholder.music'
+  | 'form.countdownLink'
+  | 'form.countdownLink.placeholder'
+  | 'form.customCategory.placeholder'
+  | 'form.customTag.placeholder'
+  | 'form.chooseFile'
   | 'form.showPhoto'
   | 'form.profilePicture'
   | 'form.profilePictureRemove'
@@ -124,6 +136,7 @@ export type CopyKey =
   | 'form.profileCoverRemove'
   | 'form.listCover'
   | 'form.listCoverRemove'
+  | 'form.imageRemove'
   | 'form.imageUrl'
   | 'form.imageUrl.placeholder'
   | 'form.imageUploading'
@@ -342,6 +355,21 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     label: 'Profile sign-in required',
     group: 'nav',
   },
+  'profile.listsLoadError': {
+    default: 'Lists could not load.',
+    label: 'Profile library lists error',
+    group: 'nav',
+  },
+  'chrome.closeDialog': {
+    default: 'Close dialog',
+    label: 'Modal close button (aria)',
+    group: 'chrome',
+  },
+  'chrome.copied': {
+    default: 'Copied!',
+    label: 'Clipboard copy confirmation',
+    group: 'chrome',
+  },
   'event.saveToLiked': {
     default: 'Save',
     label: 'Save to Liked',
@@ -355,6 +383,16 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
   'event.openShow': {
     default: 'Open {name}',
     label: 'Open show (photo button)',
+    group: 'event',
+  },
+  'event.noRatings': {
+    default: 'No ratings',
+    label: 'Card ratings empty state',
+    group: 'event',
+  },
+  'event.yourRatingStars': {
+    default: 'Your rating: {count} stars',
+    label: 'Card your rating line',
     group: 'event',
   },
   'event.removeFromList': {
@@ -435,6 +473,11 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
   'auth.prompt.addToList': {
     default: 'Sign in to add shows to a list',
     label: 'Auth prompt: add to list',
+    group: 'auth',
+  },
+  'auth.prompt.createList': {
+    default: 'Sign in to create a list',
+    label: 'Auth prompt: create list',
     group: 'auth',
   },
   'auth.signIn.title': { default: 'Sign In', label: 'Auth: sign in title', group: 'auth' },
@@ -548,6 +591,11 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     group: 'form',
   },
   'form.showName': { default: 'Show Name', label: 'Form: Show name', group: 'form' },
+  'form.showName.placeholder': {
+    default: 'e.g., ADÉLA: The Red Bottoms Tour',
+    label: 'Form: Show name placeholder',
+    group: 'form',
+  },
   'form.showType': { default: 'Show type', label: 'Form: Show type', group: 'form' },
   'form.date': { default: 'Date', label: 'Form: Date', group: 'form' },
   'form.city': { default: 'City', label: 'Form: City', group: 'form' },
@@ -621,6 +669,31 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     label: 'Form: Collection placeholder (music)',
     group: 'form',
   },
+  'form.countdownLink': {
+    default: 'Countdown',
+    label: 'Form: Countdown link label',
+    group: 'form',
+  },
+  'form.countdownLink.placeholder': {
+    default: 'https://… public ticket or registration page',
+    label: 'Form: Official ticket link placeholder',
+    group: 'form',
+  },
+  'form.customCategory.placeholder': {
+    default: 'e.g., Hosted By, Music By',
+    label: 'Form: Custom category placeholder',
+    group: 'form',
+  },
+  'form.customTag.placeholder': {
+    default: 'e.g., {label}…',
+    label: 'Form: Custom tag placeholder',
+    group: 'form',
+  },
+  'form.chooseFile': {
+    default: 'Choose file',
+    label: 'Form: Choose file',
+    group: 'form',
+  },
   'form.showPhoto': { default: 'Show photo', label: 'Form: Show photo', group: 'form' },
   'form.profilePicture': { default: 'Profile picture', label: 'Form: Profile picture', group: 'form' },
   'form.profilePictureRemove': { default: 'Remove', label: 'Form: Remove profile picture', group: 'form' },
@@ -628,6 +701,7 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
   'form.profileCoverRemove': { default: 'Remove', label: 'Form: Remove profile cover', group: 'form' },
   'form.listCover': { default: 'Cover image', label: 'Form: List cover image', group: 'form' },
   'form.listCoverRemove': { default: 'Remove', label: 'Form: Remove list cover', group: 'form' },
+  'form.imageRemove': { default: 'Remove', label: 'Form: Remove image', group: 'form' },
   'form.imageUrl': { default: 'Or image URL', label: 'Form: Image URL', group: 'form' },
   'form.imageUrl.placeholder': {
     default: 'https://…',
@@ -856,15 +930,16 @@ export const COPY_GROUP_LABELS: Record<CopyGroup, string> = {
   settings: 'Settings',
   stats: 'Statistics',
   safety: 'Safety',
+  chrome: 'Chrome',
 };
 
 /**
- * Keys editable in Settings → Copy.
- * Only example / placeholder copy — not basic nav, labels, or CTAs.
- * Singular/plural label pairs stay code-only (not listed here).
+ * Placeholder keys editable in context (Add/Edit show modals, search bar, image URL field).
+ * Chrome, nav, labels, and CTAs stay code-only in COPY_CATALOG.
  */
 export const COPY_SETTINGS_KEYS: CopyKey[] = [
   'search.placeholder',
+  'form.showName.placeholder',
   'form.city.placeholder',
   'form.venue.placeholder.fashion',
   'form.venue.placeholder.music',
@@ -879,4 +954,7 @@ export const COPY_SETTINGS_KEYS: CopyKey[] = [
   'form.collection.placeholder.fashion',
   'form.collection.placeholder.music',
   'form.imageUrl.placeholder',
+  'form.countdownLink.placeholder',
+  'form.customCategory.placeholder',
+  'form.customTag.placeholder',
 ];

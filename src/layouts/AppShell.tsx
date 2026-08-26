@@ -15,9 +15,11 @@ import { useHomeCatalog } from '../contexts/HomeCatalogContext';
 import { AppChromeProvider } from '../contexts/AppChromeContext';
 import HomeHeaderSearch from '../components/layout/HomeHeaderSearch';
 import HomePinnedArtistsSlot from '../components/layout/HomePinnedArtistsSlot';
+import { LikedEventsProvider } from '../contexts/LikedEventsContext';
 import EventOverlayHost from '../components/layout/EventOverlayHost';
 import EmbedEventView from '../components/layout/EmbedEventView';
 import AppSharedModals from '../components/layout/AppSharedModals';
+import EventPanelModalsHost from '../components/layout/EventPanelModalsHost';
 import { LoadingSpinner } from '../components/ui';
 
 type AppShellProps = {
@@ -44,10 +46,12 @@ export default function AppShell({ setProfileBoardEvents }: AppShellProps) {
     modalRoute,
     closeAppModal,
     openAddEventModal,
+    openCreateListModal,
     openTagModal,
     openAuthModal,
     closeAuthModal,
     isAddEventModalOpen,
+    isCreateListModalOpen,
     isAuthModalOpen,
     isTagRatingsModalOpen,
     tagRatingsData,
@@ -57,6 +61,7 @@ export default function AppShell({ setProfileBoardEvents }: AppShellProps) {
   const { layoutNav, goBack } = useAppLayoutNav({
     setProfileBoardEvents,
     openAddEventModal,
+    openCreateListModal,
     openAuthModal,
   });
 
@@ -87,6 +92,7 @@ export default function AppShell({ setProfileBoardEvents }: AppShellProps) {
     overlayEventId ||
     isTagRatingsModalOpen ||
     isAddEventModalOpen ||
+    isCreateListModalOpen ||
     isAuthModalOpen ||
     isEventPanelModal
   );
@@ -96,6 +102,7 @@ export default function AppShell({ setProfileBoardEvents }: AppShellProps) {
     <AppSharedModals
       appSettings={appSettings}
       isAddEventModalOpen={isAddEventModalOpen}
+      isCreateListModalOpen={isCreateListModalOpen}
       isAuthModalOpen={isAuthModalOpen}
       isTagRatingsModalOpen={isTagRatingsModalOpen}
       tagRatingsData={tagRatingsData}
@@ -104,19 +111,45 @@ export default function AppShell({ setProfileBoardEvents }: AppShellProps) {
       tagModalRefreshTrigger={tagModalRefreshTrigger}
       onCloseAppModal={closeAppModal}
       onCloseAuthModal={closeAuthModal}
-      onEventAdded={() => void home.fetchEvents()}
+      onEventAdded={(eventId) => {
+        void home.fetchEvents();
+        closeAppModal();
+        openEventOverlay(eventId);
+      }}
       onOpenEventOverlay={openEventOverlay}
       onOpenTagModal={openTagModal}
     />
   );
 
   if (embedMode && eventIdFromUrl) {
+    const embedChrome = {
+      openEvent: openEventOverlay,
+      closeEventOverlay,
+      overlayEventId,
+      tagModalRefreshTrigger,
+      onTagClick: handleTagClick,
+      onAddEvent: openAddEventModal,
+      setProfileBoardEvents,
+      goBack,
+      refreshHomeCatalog: () => {
+        void home.fetchEvents();
+      },
+      refreshHomeEventRating: (eventId: string) => {
+        void home.refreshEventRating(eventId);
+      },
+    };
+
     return (
-      <CopyProvider settings={appSettings}>
-        <EmbedEventView eventId={eventIdFromUrl} onTagClick={handleTagClick}>
-          {sharedModals}
-        </EmbedEventView>
-      </CopyProvider>
+      <LikedEventsProvider>
+        <AppChromeProvider value={embedChrome}>
+          <CopyProvider settings={appSettings}>
+            <EmbedEventView eventId={eventIdFromUrl} onTagClick={handleTagClick}>
+              {sharedModals}
+              {appSettings ? <EventPanelModalsHost appSettings={appSettings} /> : null}
+            </EmbedEventView>
+          </CopyProvider>
+        </AppChromeProvider>
+      </LikedEventsProvider>
     );
   }
 
@@ -149,26 +182,30 @@ export default function AppShell({ setProfileBoardEvents }: AppShellProps) {
   };
 
   return (
-    <AppChromeProvider value={chromeValue}>
-      <CopyProvider settings={appSettings}>
-        <AppLayout
-          {...layoutNav}
-          activeView={activeView}
-          searchBar={searchBar}
-          pinnedArtistBar={<HomePinnedArtistsSlot />}
-        >
-          <Outlet />
-        </AppLayout>
-        {sharedModals}
-        {overlayEventId ? (
-          <EventOverlayHost
-            eventId={overlayEventId}
-            elevated={!!overlaySource}
-            onClose={closeEventOverlay}
-            onTagClick={handleTagClick}
-          />
-        ) : null}
-      </CopyProvider>
-    </AppChromeProvider>
+    <LikedEventsProvider>
+      <AppChromeProvider value={chromeValue}>
+        <CopyProvider settings={appSettings}>
+          <AppLayout
+            {...layoutNav}
+            activeView={activeView}
+            isPlusActive={isAddEventModalOpen || isCreateListModalOpen}
+            searchBar={searchBar}
+            pinnedArtistBar={<HomePinnedArtistsSlot />}
+          >
+            <Outlet />
+          </AppLayout>
+          {sharedModals}
+          <EventPanelModalsHost appSettings={appSettings} />
+          {overlayEventId ? (
+            <EventOverlayHost
+              eventId={overlayEventId}
+              elevated={!!overlaySource}
+              onClose={closeEventOverlay}
+              onTagClick={handleTagClick}
+            />
+          ) : null}
+        </CopyProvider>
+      </AppChromeProvider>
+    </LikedEventsProvider>
   );
 }

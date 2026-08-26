@@ -5,6 +5,7 @@ import { useHomeCatalogOptional } from "../../contexts/HomeCatalogContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAppSettings } from "../../hooks/useAppSettings";
 import { fetchEventWithStats, type EventWithStats } from "../../lib/eventsFeed";
+import { EVENT_FEED_CARD_MAX_WIDTH_CLASS } from "../../lib/eventCardLayout";
 import { LoadingSpinner } from "../ui";
 
 type EmbedEventViewProps = {
@@ -62,7 +63,7 @@ export default function EmbedEventView({
   return (
     <div className="min-h-screen bg-muted p-4">
       <EventJsonLd event={event} />
-      <div className="max-w-md mx-auto">
+      <div className={`${EVENT_FEED_CARD_MAX_WIDTH_CLASS} mx-auto`}>
         <EventCard
           event={event}
           averageRating={event.average_rating}

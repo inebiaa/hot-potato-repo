@@ -23,11 +23,11 @@ export default function IconPicker({
 
   return (
     <div>
-      {label && (
-        <label className="mb-1 block text-sm font-medium text-foreground">
+      {label ? (
+        <label className="mb-1 block type-callout font-medium text-foreground">
           {label}
         </label>
-      )}
+      ) : null}
       <div className="relative">
         <button
           type="button"
@@ -35,42 +35,62 @@ export default function IconPicker({
           className={cn(
             formControlClass,
             formControlPaddingClass,
-            "flex min-h-10 items-center justify-center gap-2 hover:bg-muted",
+            "flex min-h-10 w-full items-center gap-2 hover:bg-muted",
           )}
           title={hasSelection ? value : "None"}
           aria-label={label || `Icon: ${hasSelection ? value : "None"}`}
+          aria-expanded={isOpen}
         >
           {hasSelection ? (
-            <IconComponent size={20} className="text-foreground shrink-0" />
+            <IconComponent size={20} className="shrink-0 text-foreground" />
           ) : (
-            <span className="text-xs text-muted-foreground shrink-0">None</span>
+            <span className="type-callout text-muted-foreground shrink-0">
+              None
+            </span>
           )}
+          <span className="min-w-0 flex-1 truncate text-left type-callout text-muted-foreground">
+            {hasSelection ? value : "Choose icon"}
+          </span>
           <ChevronDown
             size={14}
-            className={`text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+            className={cn(
+              "shrink-0 text-muted-foreground transition-transform",
+              isOpen ? "rotate-180" : "",
+            )}
+            aria-hidden
           />
         </button>
-        {isOpen && (
+        {isOpen ? (
           <>
             <div
               className="fixed inset-0 z-10"
               onClick={() => setIsOpen(false)}
               aria-hidden="true"
             />
-            <div className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,320px)] bg-card border border-border rounded-lg p-2 grid grid-cols-4 sm:grid-cols-6 gap-1">
+            <div
+              className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,320px)] rounded-lg border border-border bg-card p-2 grid grid-cols-4 sm:grid-cols-6 gap-1 shadow-lg"
+              role="listbox"
+              aria-label={label || "Choose icon"}
+            >
               <button
                 type="button"
                 onClick={() => {
                   onChange("");
                   setIsOpen(false);
                 }}
-                className={`col-span-full min-h-11 px-3 text-sm sm:text-xs rounded-md border text-left ${!hasSelection ? "bg-muted border-input text-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}
+                className={cn(
+                  "col-span-full min-h-9 rounded-md border px-3 text-left type-callout",
+                  !hasSelection
+                    ? "border-input bg-muted text-foreground"
+                    : "border-border text-muted-foreground hover:bg-muted",
+                )}
                 title="No icon"
               >
                 No icon
               </button>
               {ICON_NAMES.map((name) => {
                 const Icon = EVENT_CARD_ICONS[name];
+                const selected = value === name;
                 return (
                   <button
                     key={name}
@@ -79,16 +99,21 @@ export default function IconPicker({
                       onChange(name);
                       setIsOpen(false);
                     }}
-                    className={`min-h-11 min-w-11 rounded-md hover:bg-muted flex items-center justify-center ${value === name ? "bg-muted ring-1 ring-border" : ""}`}
+                    className={cn(
+                      "flex min-h-9 min-w-9 items-center justify-center rounded-md hover:bg-muted",
+                      selected ? "bg-muted ring-1 ring-border" : "",
+                    )}
                     title={name}
+                    aria-selected={selected}
+                    role="option"
                   >
-                    <Icon size={20} className="text-foreground" />
+                    <Icon size={20} className="text-foreground" aria-hidden />
                   </button>
                 );
               })}
             </div>
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );

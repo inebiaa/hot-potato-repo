@@ -21,6 +21,10 @@ export function useAppModals() {
     navigate({ pathname: location.pathname, search: setAppModalParams(searchParams, 'add-event') });
   }, [navigate, location.pathname, searchParams]);
 
+  const openCreateListModal = useCallback(() => {
+    navigate({ pathname: location.pathname, search: setAppModalParams(searchParams, 'create-list') });
+  }, [navigate, location.pathname, searchParams]);
+
   const openTagModal = useCallback(
     (type: string, value: string) => {
       navigate({
@@ -49,10 +53,12 @@ export function useAppModals() {
     modalRoute: modalState.modalRoute,
     closeAppModal,
     openAddEventModal,
+    openCreateListModal,
     openTagModal,
     openAuthModal,
     closeAuthModal,
     isAddEventModalOpen: modalState.isAddEventModalOpen,
+    isCreateListModalOpen: modalState.isCreateListModalOpen,
     isAuthModalOpen: modalState.isAuthModalOpen,
     isTagRatingsModalOpen: modalState.isTagRatingsModalOpen,
     tagRatingsData: modalState.tagRatingsData,

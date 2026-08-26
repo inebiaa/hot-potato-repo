@@ -4,6 +4,7 @@ import { isStatsRoute } from './homeCatalogRoute';
 export type AppModalState = {
   modalRoute: ReturnType<typeof parseAppModal>;
   isAddEventModalOpen: boolean;
+  isCreateListModalOpen: boolean;
   isAuthModalOpen: boolean;
   isTagRatingsModalOpen: boolean;
   tagRatingsData: { type: string; value: string } | null;
@@ -14,6 +15,7 @@ export type AppModalState = {
 export function resolveAppModalState(pathname: string, searchParams: URLSearchParams): AppModalState {
   const modalRoute = parseAppModal(searchParams);
   const isAddEventModalOpen = modalRoute.modal === 'add-event';
+  const isCreateListModalOpen = modalRoute.modal === 'create-list';
   const isAuthModalOpen = modalRoute.modal === 'auth';
   const isTagRatingsModalOpen =
     !isStatsRoute(pathname) &&
@@ -31,6 +33,7 @@ export function resolveAppModalState(pathname: string, searchParams: URLSearchPa
   return {
     modalRoute,
     isAddEventModalOpen,
+    isCreateListModalOpen,
     isAuthModalOpen,
     isTagRatingsModalOpen,
     tagRatingsData,

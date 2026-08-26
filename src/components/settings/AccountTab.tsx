@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash2, User } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import ProfileAvatarField from '../ProfileAvatarField';
 import ProfileCoverField from '../ProfileCoverField';
@@ -102,13 +102,6 @@ export default function AccountTab(p: AccountTabProps) {
  <div className="space-y-8">
  <section>
  <h3 className={`mb-2 ${sectionHeadClass}`}>Account</h3>
- <div className="mb-3 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-border bg-muted">
- {editAvatarUrl.trim() ? (
- <img src={editAvatarUrl.trim()} alt="" className="h-full w-full object-cover" />
- ) : (
- <User size={28} className="text-muted-foreground" strokeWidth={1.5} aria-hidden />
- )}
- </div>
  <dl className={`mb-4 space-y-2 rounded-lg border border-border bg-muted/40 p-3 ${menuRowClass}`}>
  <div className="min-w-0">
  <dt className="text-muted-foreground">Name</dt>

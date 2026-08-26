@@ -10,6 +10,7 @@ export const APP_MODAL_KEYS = [
 
 export type AppModalKind =
   | 'add-event'
+  | 'create-list'
   | 'auth'
   | 'tag'
   | 'rate'
@@ -71,6 +72,7 @@ export function parseAppModal(current: URLSearchParams): {
   const raw = current.get('modal');
   const modal =
     raw === 'add-event' ||
+    raw === 'create-list' ||
     raw === 'auth' ||
     raw === 'tag' ||
     raw === 'rate' ||

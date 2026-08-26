@@ -3,6 +3,8 @@ import { useEffect, useId, useRef, useState, type DragEvent, type KeyboardEvent 
 import type { AppSettings } from '../types/appSettings';
 import { showTypePillColors } from '../lib/showType';
 import { getPillColors } from './tagCards/getPillColors';
+import { useAuth } from '../contexts/AuthContext';
+import { EmptyFieldPlaceholderOverlay } from './PlaceholderCopyEdit';
 import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
 import { useT } from '../hooks/useCopy';
 import { regionKindFromCode } from '../lib/cityPlaces';
@@ -131,6 +133,7 @@ export default function PrimarySearchBar({
 }: PrimarySearchBarProps) {
   void _onClearFilters;
   const t = useT();
+  const { isAdmin } = useAuth();
   const listboxId = useId();
   const fieldRef = useRef<HTMLDivElement>(null);
   const listboxRef = useRef<HTMLDivElement>(null);
@@ -231,7 +234,11 @@ export default function PrimarySearchBar({
     }
   };
 
-  const searchFieldClass = `relative flex min-h-10 w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1 type-body text-foreground shadow-sm transition-shadow focus-within:border-input focus-within:ring-1 focus-within:ring-ring ${searchDragOver ? 'bg-muted ring-2 ring-ring' : ''}`;
+  const searchFieldClass = `group relative flex min-h-10 w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1 type-body text-foreground shadow-sm transition-shadow focus-within:border-input focus-within:ring-1 focus-within:ring-ring ${searchDragOver ? 'bg-muted ring-2 ring-ring' : ''}`;
+
+  const searchPlaceholder = t('search.placeholder');
+  const searchFieldEmpty = selectedTags.length === 0 && !searchQuery.trim();
+  const showSearchPlaceholderOverlay = isAdmin && searchFieldEmpty;
 
   const chipsAndInputRow =
     'flex min-h-0 min-w-0 flex-1 flex-wrap items-center gap-1';
@@ -295,19 +302,33 @@ export default function PrimarySearchBar({
                 <X size={14} strokeWidth={2} />
               </button>
             ) : null}
-            <input
-              type="text"
-              placeholder={selectedTags.length ? '' : t('search.placeholder')}
-              value={searchQuery}
-              onChange={(e) => onSearchQueryChange(e.target.value)}
-              onKeyDown={onSearchKeyDown}
-              role="combobox"
-              aria-expanded={showTagSuggestions}
-              aria-controls={showTagSuggestions ? listboxId : undefined}
-              aria-autocomplete="list"
-              aria-activedescendant={activeOptionId}
-              className="min-h-0 min-w-[7rem] flex-1 border-0 bg-transparent py-0.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
-            />
+            <div className="relative min-w-[7rem] flex-1">
+              {showSearchPlaceholderOverlay ? (
+                <EmptyFieldPlaceholderOverlay
+                  copyKey="search.placeholder"
+                  placeholder={searchPlaceholder}
+                />
+              ) : null}
+              <input
+                type="text"
+                placeholder={
+                  showSearchPlaceholderOverlay
+                    ? ''
+                    : selectedTags.length
+                      ? ''
+                      : searchPlaceholder
+                }
+                value={searchQuery}
+                onChange={(e) => onSearchQueryChange(e.target.value)}
+                onKeyDown={onSearchKeyDown}
+                role="combobox"
+                aria-expanded={showTagSuggestions}
+                aria-controls={showTagSuggestions ? listboxId : undefined}
+                aria-autocomplete="list"
+                aria-activedescendant={activeOptionId}
+                className="w-full min-h-0 min-w-0 border-0 bg-transparent py-0.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
+              />
+            </div>
           </div>
           {showTagSuggestions ? (
             <div

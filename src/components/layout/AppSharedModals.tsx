@@ -1,12 +1,14 @@
 import AddEventModal from '../AddEventModal';
 import AuthModal from '../AuthModal';
 import TagRatingsModal from '../TagRatingsModal';
+import GlobalCreateListModal from './GlobalCreateListModal';
 import type { AppSettings } from '../../types/appSettings';
 import type { OverlaySource } from '../../contexts/AppChromeContext';
 
 type AppSharedModalsProps = {
   appSettings: AppSettings | null | undefined;
   isAddEventModalOpen: boolean;
+  isCreateListModalOpen: boolean;
   isAuthModalOpen: boolean;
   isTagRatingsModalOpen: boolean;
   tagRatingsData: { type: string; value: string } | null;
@@ -15,7 +17,7 @@ type AppSharedModalsProps = {
   tagModalRefreshTrigger: number;
   onCloseAppModal: () => void;
   onCloseAuthModal: () => void;
-  onEventAdded: () => void;
+  onEventAdded: (eventId: string) => void;
   onOpenEventOverlay: (eventId: string, source?: OverlaySource) => void;
   onOpenTagModal: (type: string, value: string) => void;
 };
@@ -23,6 +25,7 @@ type AppSharedModalsProps = {
 export default function AppSharedModals({
   appSettings,
   isAddEventModalOpen,
+  isCreateListModalOpen,
   isAuthModalOpen,
   isTagRatingsModalOpen,
   tagRatingsData,
@@ -38,6 +41,7 @@ export default function AppSharedModals({
   return (
     <>
       <AddEventModal isOpen={isAddEventModalOpen} onClose={onCloseAppModal} onEventAdded={onEventAdded} />
+      <GlobalCreateListModal isOpen={isCreateListModalOpen} onClose={onCloseAppModal} />
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={onCloseAuthModal}

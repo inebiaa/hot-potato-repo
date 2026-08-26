@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+import FileUploadPillRow from './FileUploadPillRow';
 import { Input, Label, formErrorClass, formHintClass } from './ui';
 import {
  ensureBrandImageStored,
@@ -29,9 +30,9 @@ export default function BrandImageField({
  urlInputId,
 }: BrandImageFieldProps) {
  const t = useT();
- const fileRef = useRef<HTMLInputElement>(null);
  const [uploading, setUploading] = useState(false);
  const [uploadError, setUploadError] = useState<string | null>(null);
+ const preview = imageUrl.trim();
 
  const onPickFile = async (file: File | null) => {
  setUploadError(null);
@@ -46,7 +47,6 @@ export default function BrandImageField({
  onImageUrlChange(result.url);
  } finally {
  setUploading(false);
- if (fileRef.current) fileRef.current.value = '';
  }
  };
 
@@ -69,14 +69,16 @@ export default function BrandImageField({
 
  return (
  <div className="space-y-2">
- <Label htmlFor={fileInputId}>{label}</Label>
- <Input
- ref={fileRef}
- id={fileInputId}
- type="file"
+ <Label>{label}</Label>
+ <FileUploadPillRow
+ fileInputId={fileInputId}
  accept="image/*,.ico"
  disabled={uploading}
- onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)}
+ chooseLabel={t('form.chooseFile')}
+ onFile={(file) => void onPickFile(file)}
+ showRemove={!!preview}
+ removeLabel={t('form.imageRemove')}
+ onRemove={() => onImageUrlChange('')}
  />
  <Label htmlFor={urlInputId}>{t('form.imageUrl')}</Label>
  <Input
@@ -97,7 +99,7 @@ export default function BrandImageField({
  placeholder={t('form.imageUrl.placeholder')}
  disabled={uploading}
  />
- {imageUrl ? <img src={imageUrl} alt="" className={previewClassName} /> : null}
+ {preview ? <img src={preview} alt="" className={previewClassName} /> : null}
  {uploading ? <p className={formHintClass}>{t('form.imageUploading')}</p> : null}
  {uploadError ? <p className={formErrorClass}>{uploadError}</p> : null}
  </div>

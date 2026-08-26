@@ -1,5 +1,5 @@
-import { useRef } from 'react';
 import { Button, Input, Label, Modal, formErrorClass, formHintClass } from '../ui';
+import FileUploadPillRow from '../FileUploadPillRow';
 import { useT } from '../../hooks/useCopy';
 import { deleteStoredListCover } from '../../lib/listCoverUpload';
 
@@ -39,7 +39,6 @@ export default function EditListModal({
  onClose,
 }: EditListModalProps) {
  const t = useT();
- const coverFileRef = useRef<HTMLInputElement | null>(null);
 
  return (
  <Modal onClose={onClose} title={t('event.editList')} panelClassName="max-w-md sm:rounded-lg">
@@ -73,36 +72,21 @@ export default function EditListModal({
  <img src={coverUrl.trim()} alt="" className="h-full w-full object-cover" />
  ) : null}
  </div>
- <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
- <Input
- ref={coverFileRef}
- id="edit-list-cover"
- type="file"
+ <FileUploadPillRow
+ fileInputId="edit-list-cover"
  accept="image/*"
  disabled={coverBusy || busy || !canUpload}
- className="max-w-full"
- onChange={(e) => {
- void onCoverFile(e.target.files?.[0] ?? null);
- if (coverFileRef.current) coverFileRef.current.value = '';
- }}
- />
- {coverUrl.trim() ? (
- <Button
- type="button"
- variant="ghost"
- size="sm"
- disabled={coverBusy || busy}
- onClick={() => {
+ chooseLabel={t('form.chooseFile')}
+ onFile={(file) => void onCoverFile(file)}
+ showRemove={!!coverUrl.trim()}
+ removeLabel={t('form.listCoverRemove')}
+ onRemove={() => {
  if (coverUrl && coverUrl !== coverOriginal) {
  void deleteStoredListCover(coverUrl);
  }
  onCoverUrlChange('');
  }}
- >
- {t('form.listCoverRemove')}
- </Button>
- ) : null}
- </div>
+ />
  </div>
  {coverBusy ? (
  <p className={formHintClass}>{t('form.imageUploading')}</p>

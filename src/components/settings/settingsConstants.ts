@@ -71,7 +71,7 @@ export const BUILT_IN_TAG_DEFAULTS: Pick<
   special_guests_icon: 'Mic',
 };
 
-export type TabId = 'branding' | 'copy' | 'legal' | 'moderation' | 'admins' | 'tags' | 'account';
+export type TabId = 'branding' | 'legal' | 'moderation' | 'admins' | 'tags' | 'account';
 export type CoreTagKey =
   | 'producer'
   | 'designer'

@@ -127,7 +127,7 @@ export default function HomePage() {
         </div>
       ) : null}
 
-      {loading ? (
+      {(loading && events.length === 0) ? (
         <div className="flex items-center justify-center py-12">
           <LoadingSpinner />
         </div>

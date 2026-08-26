@@ -21,6 +21,9 @@ import TagPillSplitLabel, {
 } from "./TagPillSplitLabel";
 import { TAG_INPUT_EDIT_PILL_COLORS, TAG_PILL_ROW_CLASS } from "./tagPillShell";
 import { formControlClass, formControlPaddingClass } from "./ui/field";
+import type { CopyKey } from "../copy";
+import { useAuth } from "../contexts/AuthContext";
+import { EmptyFieldPlaceholderOverlay } from "./PlaceholderCopyEdit";
 import { cn } from "../lib/utils";
 
 interface TagInputProps {
@@ -47,6 +50,8 @@ interface TagInputProps {
   headerAction?: ReactNode;
   /** Extra content under the field when expanded (e.g. icon picker). */
   expandedExtras?: ReactNode;
+  /** Admin placeholder editor shown between label and field. */
+  placeholderCopyKey?: CopyKey;
 }
 
 export default function TagInput({
@@ -64,6 +69,7 @@ export default function TagInput({
   expandable = false,
   headerAction,
   expandedExtras,
+  placeholderCopyKey,
 }: TagInputProps) {
   const tags = useMemo(() => (Array.isArray(value) ? value : []), [value]);
   const [inputValue, setInputValue] = useState("");
@@ -79,6 +85,10 @@ export default function TagInput({
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const focusAfterExpandRef = useRef(false);
   const requireSuggestionPick = useCitySuggestions;
+  const { isAdmin } = useAuth();
+  const fieldEmpty = tags.length === 0 && !inputValue.trim();
+  const showPlaceholderOverlay =
+    isAdmin && placeholderCopyKey && fieldEmpty && Boolean(placeholder);
 
   useEffect(() => {
     if (expandable && tags.length > 0) setExpanded(true);
@@ -374,7 +384,7 @@ export default function TagInput({
           formControlClass,
           formControlPaddingClass,
           TAG_PILL_ROW_CLASS,
-          "min-h-10 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring",
+          "group relative min-h-10 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring",
         )}
         onClick={() => inputRef.current?.focus()}
       >
@@ -432,19 +442,27 @@ export default function TagInput({
             />
           </span>
         ))}
-        <input
-          ref={inputRef}
-          id={id}
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={handleBlur}
-          onFocus={() => inputValue.trim() && setShowSuggestions(true)}
-          placeholder={tags.length === 0 ? placeholder : ""}
-          required={required && tags.length === 0}
-          className="min-w-[7rem] flex-1 bg-transparent py-0.5 text-sm outline-none placeholder:text-muted-foreground"
-        />
+        <div className="relative min-w-[7rem] flex-1">
+          {showPlaceholderOverlay ? (
+            <EmptyFieldPlaceholderOverlay
+              copyKey={placeholderCopyKey!}
+              placeholder={placeholder}
+            />
+          ) : null}
+          <input
+            ref={inputRef}
+            id={id}
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={handleBlur}
+            onFocus={() => inputValue.trim() && setShowSuggestions(true)}
+            placeholder={showPlaceholderOverlay ? "" : tags.length === 0 ? placeholder : ""}
+            required={required && tags.length === 0}
+            className="w-full min-w-0 bg-transparent py-0.5 text-sm outline-none placeholder:text-muted-foreground"
+          />
+        </div>
       </div>
       {showSuggestions && suggestions.length > 0 && (
         <div

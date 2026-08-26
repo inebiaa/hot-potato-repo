@@ -1,5 +1,7 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { trapTabKey, getFocusable } from '../lib/focusTrap';
+import { useT } from '../hooks/useCopy';
 
 type ModalShellProps = {
   onClose: () => void;
@@ -39,12 +41,35 @@ export default function ModalShell({
   hideTitleBar = false,
   bodyClassName = 'min-h-0 flex-1 overflow-y-auto overscroll-y-contain',
 }: ModalShellProps) {
+  const t = useT();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    previouslyFocusedRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const focusable = getFocusable(panel);
+    if (focusable.length > 0) {
+      focusable[0].focus({ preventScroll: true });
+    } else {
+      panel.setAttribute('tabindex', '-1');
+      panel.focus({ preventScroll: true });
+    }
+    return () => {
+      previouslyFocusedRef.current?.focus({ preventScroll: true });
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      trapTabKey(e, panel, onClose);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
   return (
@@ -57,6 +82,7 @@ export default function ModalShell({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
+        ref={panelRef}
         className={`relative w-full ${panelClassName} mx-auto flex min-h-0 max-h-[min(100dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] flex-col bg-card shadow-xl sm:max-h-[min(90dvh,900px)] overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -66,7 +92,7 @@ export default function ModalShell({
               type="button"
               onClick={onClose}
               className={`absolute right-1 top-1 z-10 sm:right-2 sm:top-2 ${modalCloseButtonClass}`}
-              aria-label="Close dialog"
+              aria-label={t('chrome.closeDialog')}
             >
               <X size={20} strokeWidth={2} />
             </button>
@@ -86,7 +112,7 @@ export default function ModalShell({
                 type="button"
                 onClick={onClose}
                 className={`-mr-1 sm:-mr-2 ${modalCloseButtonClass}`}
-                aria-label="Close dialog"
+                aria-label={t('chrome.closeDialog')}
               >
                 <X size={20} strokeWidth={2} />
               </button>

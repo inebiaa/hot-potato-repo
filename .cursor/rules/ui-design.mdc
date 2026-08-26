@@ -43,6 +43,7 @@ Use the shared scale (classes or exports from `src/components/ui/typography.ts`)
 ## Shared controls
 
 - Prefer `src/components/ui/` (`Button`, `Input`, `Label`, `Textarea`, `Modal`) and `formControlClass` from `ui/field.ts`.
+- File uploads and admin placeholder editing: see **form-field-patterns** (`FileUploadPill`, inline pencil).
 - Do not invent one-off `border-gray-300 rounded-md focus:ring-blue-*` field styles.
 
 ## Tag pills

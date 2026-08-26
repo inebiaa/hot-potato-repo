@@ -17,6 +17,9 @@ export const formErrorClass = 'type-callout text-destructive';
 /** Inline success after submit (14px). */
 export const formSuccessClass = 'type-callout text-green-700';
 
+/** Muted inline status (e.g. Copied!) — not green chrome. */
+export const inlineStatusClass = 'type-callout text-muted-foreground shrink-0';
+
 /** Settings subsection title on a tab (14px, semibold). */
 export const sectionHeadClass = 'type-callout font-semibold text-foreground';
 

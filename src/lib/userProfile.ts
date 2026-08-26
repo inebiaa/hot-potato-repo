@@ -70,6 +70,18 @@ export async function resolveProfileByHandle(handle: string): Promise<ResolvedUs
   return data as ResolvedUserProfile;
 }
 
+/** Public @handle for list/profile URLs. */
+export async function fetchUserPublicHandle(userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('user_id_public')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const handle = (data.user_id_public || '').trim();
+  return handle || null;
+}
+
 /** Parse a profile handle from `/handle`. */
 export function parseProfileHandleFromPath(pathname: string): string | null {
   const match = pathname.match(/\/([a-zA-Z0-9_-]+)\/?$/);

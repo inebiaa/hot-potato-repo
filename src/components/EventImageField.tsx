@@ -1,5 +1,7 @@
-import { useRef, useState } from 'react';
-import { Input, Label, formErrorClass, formHintClass } from './ui';
+import { useState } from 'react';
+import FileUploadPillRow from './FileUploadPillRow';
+import { AdminPlaceholderInput } from './PlaceholderCopyEdit';
+import { Label, formErrorClass, formHintClass } from './ui';
 import { isCdnImageUrl } from '../lib/imageCdn';
 import { ensureEventImageStored, uploadEventImageFile } from '../lib/eventImageUpload';
 import { useT } from '../hooks/useCopy';
@@ -17,9 +19,10 @@ export default function EventImageField({
  userId,
 }: EventImageFieldProps) {
  const t = useT();
- const fileRef = useRef<HTMLInputElement>(null);
  const [uploading, setUploading] = useState(false);
  const [uploadError, setUploadError] = useState<string | null>(null);
+ const imagePlaceholder = t('form.imageUrl.placeholder');
+ const preview = imageUrl.trim();
 
  const onPickFile = async (file: File | null) => {
  setUploadError(null);
@@ -38,7 +41,6 @@ export default function EventImageField({
  onImageUrlChange(result.url);
  } finally {
  setUploading(false);
- if (fileRef.current) fileRef.current.value = '';
  }
  };
 
@@ -65,17 +67,19 @@ export default function EventImageField({
 
  return (
  <div className="space-y-2">
- <Label htmlFor="event-image-file">{t('form.showPhoto')}</Label>
- <Input
- ref={fileRef}
- id="event-image-file"
- type="file"
+ <Label>{t('form.showPhoto')}</Label>
+ <FileUploadPillRow
+ fileInputId="event-image-file"
  accept="image/*"
  disabled={uploading || !userId}
- onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)}
+ chooseLabel={t('form.chooseFile')}
+ onFile={(file) => void onPickFile(file)}
+ showRemove={!!preview}
+ removeLabel={t('form.imageRemove')}
+ onRemove={() => onImageUrlChange('')}
  />
  <Label htmlFor="imageUrl">{t('form.imageUrl')}</Label>
- <Input
+ <AdminPlaceholderInput
  id="imageUrl"
  type="url"
  value={imageUrl}
@@ -90,18 +94,19 @@ export default function EventImageField({
  void rehostUrl(imageUrl);
  }
  }}
- placeholder={t('form.imageUrl.placeholder')}
+ copyKey="form.imageUrl.placeholder"
+ placeholder={imagePlaceholder}
  disabled={uploading}
  />
- {imageUrl ? (
+ {preview ? (
  <img
- src={imageUrl}
+ src={preview}
  alt=""
  className="mt-1 h-24 w-full max-w-xs rounded-md object-cover"
  />
  ) : null}
- {uploading ? <p className={formHintClass}>{t('form.imageUploading')}</p> : null}
  {uploadError ? <p className={formErrorClass}>{uploadError}</p> : null}
+ {uploading ? <p className={formHintClass}>{t('form.imageUploading')}</p> : null}
  </div>
  );
 }

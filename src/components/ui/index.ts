@@ -16,6 +16,7 @@ export {
  formHintClass,
  formErrorClass,
  formSuccessClass,
+ inlineStatusClass,
  sectionHeadClass,
  menuRowClass,
 } from './field';

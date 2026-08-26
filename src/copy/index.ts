@@ -24,6 +24,17 @@ export function parseCopyOverrides(raw: string | null | undefined): CopyOverride
   }
 }
 
+export function patchCopyOverride(
+  overrides: CopyOverrides,
+  key: CopyKey,
+  value: string
+): CopyOverrides {
+  const next = { ...overrides };
+  if (value === COPY_CATALOG[key].default) delete next[key];
+  else next[key] = value;
+  return next;
+}
+
 export function serializeCopyOverrides(overrides: CopyOverrides): string {
   const cleaned: CopyOverrides = {};
   for (const [key, value] of Object.entries(overrides) as [CopyKey, string | undefined][]) {

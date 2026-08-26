@@ -143,3 +143,18 @@ body {
     font-weight: 500;
   }
 }
+
+@keyframes loading-hammer-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-hammer-spin {
+  animation: loading-hammer-spin 0.6s linear infinite;
+  will-change: transform;
+  backface-visibility: hidden;
+}

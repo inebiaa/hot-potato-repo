@@ -2,10 +2,12 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   Plus,
   LogOut,
@@ -16,13 +18,16 @@ import {
   Settings,
   Home,
   MoreVertical,
+  ListPlus,
 } from "lucide-react";
 import type { AppSettings } from "../types/appSettings";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import { useT } from "../hooks/useCopy";
 import ModalShell from "./ModalShell";
+import { cn } from "../lib/utils";
 import {
   Button,
+  menuRowClass,
   typeCaption,
   typeCaptionEmphasis,
   typeCallout,
@@ -30,10 +35,6 @@ import {
 } from "./ui";
 
 export type AppHeaderActiveView = "home" | "stats" | "profile" | "settings";
-
-/** Primary actions: no chrome box — icon / text only, tint on hover. */
-const ctaGhost =
-  "text-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card";
 
 interface AppHeaderProps {
   pathname: string;
@@ -47,7 +48,9 @@ interface AppHeaderProps {
   onOpenStats: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
-  onAddEvent: () => void;
+  onOpenAddShow: () => void;
+  onOpenCreateList: () => void;
+  isPlusActive?: boolean;
   onSignIn: () => void;
   onSignOut: () => void;
   searchBar?: ReactNode;
@@ -69,7 +72,9 @@ export default function AppHeader({
   onOpenStats,
   onOpenProfile,
   onOpenSettings,
-  onAddEvent,
+  onOpenAddShow,
+  onOpenCreateList,
+  isPlusActive = false,
   onSignIn,
   onSignOut,
   searchBar,
@@ -77,11 +82,45 @@ export default function AppHeader({
 }: AppHeaderProps) {
   const t = useT();
   const menuId = useId();
+  const addMenuId = useId();
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const desktopPlusRef = useRef<HTMLButtonElement>(null);
+  const mobilePlusRef = useRef<HTMLButtonElement>(null);
+  const addMenuPanelRef = useRef<HTMLDivElement>(null);
+  const addMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const drawerPanelRef = useRef<HTMLDivElement>(null);
   const drawerWasOpenRef = useRef(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [addMenuPos, setAddMenuPos] = useState<{
+    top: number;
+    right: number;
+    above: boolean;
+  } | null>(null);
+
+  const plusVisualActive = isPlusActive || addMenuOpen;
+
+  const closeAddMenu = useCallback(() => setAddMenuOpen(false), []);
+
+  const toggleAddMenu = useCallback((anchor: HTMLButtonElement | null) => {
+    if (addMenuOpen) {
+      setAddMenuOpen(false);
+      return;
+    }
+    addMenuAnchorRef.current = anchor;
+    setAddMenuOpen(true);
+  }, [addMenuOpen]);
+
+  const pickAddShow = useCallback(() => {
+    closeAddMenu();
+    onOpenAddShow();
+  }, [closeAddMenu, onOpenAddShow]);
+
+  const pickCreateList = useCallback(() => {
+    closeAddMenu();
+    onOpenCreateList();
+  }, [closeAddMenu, onOpenCreateList]);
 
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
@@ -96,6 +135,54 @@ export default function AppHeader({
   }, [onSignOut]);
 
   useBodyScrollLock(drawerOpen);
+
+  useLayoutEffect(() => {
+    if (!addMenuOpen) {
+      setAddMenuPos(null);
+      return;
+    }
+    const update = () => {
+      const el = addMenuAnchorRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const above = rect.bottom > window.innerHeight * 0.6;
+      setAddMenuPos({
+        top: above ? rect.top - 4 : rect.bottom + 4,
+        right: Math.max(8, window.innerWidth - rect.right),
+        above,
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [addMenuOpen]);
+
+  useEffect(() => {
+    if (!addMenuOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        addMenuPanelRef.current?.contains(target) ||
+        addMenuAnchorRef.current?.contains(target)
+      ) {
+        return;
+      }
+      closeAddMenu();
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeAddMenu();
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [addMenuOpen, closeAddMenu]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -278,12 +365,23 @@ export default function AppHeader({
                         />
                       </button>
                       <button
+                        ref={desktopPlusRef}
                         type="button"
-                        onClick={onAddEvent}
-                        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition ${ctaGhost}`}
-                        title="Add show"
+                        onClick={() => toggleAddMenu(desktopPlusRef.current)}
+                        className={cn(
+                          iconBtn,
+                          plusVisualActive && "text-foreground",
+                        )}
+                        title={t("nav.add")}
+                        aria-label={t("nav.add")}
+                        aria-expanded={addMenuOpen}
+                        aria-haspopup="menu"
+                        aria-controls={addMenuId}
                       >
-                        <Plus size={20} strokeWidth={2.5} />
+                        <Plus
+                          size={20}
+                          strokeWidth={plusVisualActive ? 2.25 : 2}
+                        />
                       </button>
                       <button
                         type="button"
@@ -365,11 +463,15 @@ export default function AppHeader({
             </button>
           )}
           <button
+            ref={mobilePlusRef}
             type="button"
-            className={navItemClass(false)}
-            onClick={onAddEvent}
+            className={navItemClass(plusVisualActive)}
+            onClick={() => toggleAddMenu(mobilePlusRef.current)}
+            aria-expanded={addMenuOpen}
+            aria-haspopup="menu"
+            aria-controls={addMenuId}
           >
-            <Plus size={22} />
+            <Plus size={22} strokeWidth={plusVisualActive ? 2.5 : 2} />
             <span>{t("nav.add")}</span>
           </button>
         </div>
@@ -440,10 +542,23 @@ export default function AppHeader({
                 <button
                   type="button"
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-foreground hover:bg-muted"
-                  onClick={() => runAndClose(onAddEvent)}
+                  onClick={() => runAndClose(pickAddShow)}
                 >
                   <Plus size={20} className="shrink-0 text-muted-foreground" />
-                  <span className="type-body font-medium">Add show</span>
+                  <span className="type-body font-medium">{t("event.addShow")}</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-foreground hover:bg-muted"
+                  onClick={() => runAndClose(pickCreateList)}
+                >
+                  <ListPlus
+                    size={20}
+                    className="shrink-0 text-muted-foreground"
+                  />
+                  <span className="type-body font-medium">
+                    {t("event.createList")}
+                  </span>
                 </button>
                 {!user ? (
                   <button
@@ -543,6 +658,43 @@ export default function AppHeader({
           </div>
         </div>
       )}
+
+      {addMenuOpen && addMenuPos
+        ? createPortal(
+            <div
+              ref={addMenuPanelRef}
+              id={addMenuId}
+              role="menu"
+              aria-label={t("nav.add")}
+              className="fixed z-50 min-w-[11rem] rounded-lg border border-border bg-card py-1 shadow-lg"
+              style={{
+                top: addMenuPos.top,
+                right: addMenuPos.right,
+                transform: addMenuPos.above ? "translateY(-100%)" : undefined,
+              }}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-muted ${menuRowClass}`}
+                onClick={pickAddShow}
+              >
+                <Plus size={14} className="shrink-0 text-muted-foreground" />
+                <span>{t("event.addShow")}</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-muted ${menuRowClass}`}
+                onClick={pickCreateList}
+              >
+                <ListPlus size={14} className="shrink-0 text-muted-foreground" />
+                <span>{t("event.createList")}</span>
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {signOutConfirmOpen ? (
         <ModalShell

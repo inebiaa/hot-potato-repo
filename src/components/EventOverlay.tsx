@@ -1,9 +1,11 @@
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef, useEffect } from "react";
 import { X } from "lucide-react";
+import { useT } from "../hooks/useCopy";
 import type { Event, Rating } from "../lib/supabase";
 import type { AppSettings } from "../types/appSettings";
 import EventCard from "./EventCard/EventCard";
 import { LoadingSpinner } from "./ui";
+import { EVENT_FEED_CARD_MAX_WIDTH_CLASS } from "../lib/eventCardLayout";
 
 type EventOverlayProps = {
   eventId: string;
@@ -45,6 +47,7 @@ export default function EventOverlay({
   onRatingSubmitted,
   onEventUpdated,
 }: EventOverlayProps) {
+  const t = useT();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
@@ -115,7 +118,7 @@ export default function EventOverlay({
         <div
           ref={panelRef}
           tabIndex={-1}
-          className="relative max-w-md w-full my-8 flex-shrink-0 outline-none"
+          className={`relative ${EVENT_FEED_CARD_MAX_WIDTH_CLASS} w-full my-8 flex-shrink-0 outline-none`}
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
@@ -123,7 +126,7 @@ export default function EventOverlay({
             type="button"
             onClick={onClose}
             className="absolute right-1 top-1 z-10 inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:right-2 sm:top-2"
-            aria-label="Close dialog"
+            aria-label={t("chrome.closeDialog")}
           >
             <X size={20} strokeWidth={2} />
           </button>

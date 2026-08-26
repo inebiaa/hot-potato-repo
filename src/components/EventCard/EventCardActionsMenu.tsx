@@ -19,7 +19,8 @@ import {
   buildEventEmailPlainText,
   buildEventEmailRichHtml,
 } from "../../lib/eventEmailRichCard";
-import { canonicalEventUrl } from "../../lib/siteBase";
+import { canonicalEventUrl, listPagePath } from "../../lib/siteBase";
+import { fetchUserPublicHandle } from "../../lib/userProfile";
 import { setAppModalParams } from "../../lib/searchParamsModal";
 import { useT } from "../../hooks/useCopy";
 import { deleteStoredEventImage } from "../../lib/eventImageUpload";
@@ -29,7 +30,7 @@ import {
   fetchUserPlaylists,
   removeEventFromList,
 } from "../../lib/userLists";
-import { BackIconButton, formErrorClass, formSuccessClass } from "../ui";
+import { BackIconButton, formErrorClass, inlineStatusClass } from "../ui";
 import ReportContentModal from "../ReportContentModal";
 import { useAppSettings } from "../../hooks/useAppSettings";
 import {
@@ -199,9 +200,11 @@ export default function EventCardActionsMenu({
       onLikedChange?.(true);
       setAddedToListId(list.id);
       setPlaylists((prev) => [list, ...prev]);
-      window.setTimeout(() => {
-        setShowActionsMenu(false);
-      }, 600);
+      const handle = await fetchUserPublicHandle(user.id);
+      setShowActionsMenu(false);
+      if (handle) {
+        navigate(listPagePath(handle, list.id));
+      }
     } finally {
       setCreateListBusy(false);
     }
@@ -363,7 +366,7 @@ export default function EventCardActionsMenu({
           }
           setShowActionsMenu(true);
         }}
-        className="p-0.5 text-muted-foreground hover:text-muted-foreground rounded transition-colors"
+        className="inline-flex shrink-0 items-center p-0.5 leading-none text-muted-foreground hover:text-muted-foreground rounded transition-colors"
         title="Actions"
         aria-haspopup="true"
         aria-expanded={showActionsMenu}
@@ -502,7 +505,7 @@ export default function EventCardActionsMenu({
                             {justAdded ? (
                               <Check
                                 size={14}
-                                className="text-green-600 shrink-0"
+                                className="shrink-0 text-foreground"
                               />
                             ) : null}
                           </button>
@@ -558,8 +561,8 @@ export default function EventCardActionsMenu({
                     />
                     <span className="min-w-0 flex-1">Copy link</span>
                     {shareCopied === "link" && (
-                      <span className={`shrink-0 ${formSuccessClass}`}>
-                        Copied!
+                      <span className={inlineStatusClass}>
+                        {t("chrome.copied")}
                       </span>
                     )}
                   </button>
@@ -602,8 +605,8 @@ export default function EventCardActionsMenu({
                     />
                     <span className="min-w-0 flex-1">Copy for email</span>
                     {shareCopied === "email" && (
-                      <span className={`shrink-0 ${formSuccessClass}`}>
-                        Copied!
+                      <span className={inlineStatusClass}>
+                        {t("chrome.copied")}
                       </span>
                     )}
                   </button>

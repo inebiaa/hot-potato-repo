@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, UserList, Rating, Event } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { USER_LISTS_SETUP_SQL, getSupabaseSqlEditorUrl } from '../../lib/userListsSetupSql';
 import {
   addEventToListAndLiked,
   createUserPlaylist,
@@ -81,7 +80,6 @@ export default function ProfilePage({
   const [savedLibraryEvents, setSavedLibraryEvents] = useState<Event[]>([]);
   const [libraryTagMap, setLibraryTagMap] = useState<TagResolutionMap | null>(null);
   const [addEventSearch, setAddEventSearch] = useState('');
-  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [listLinkCopied, setListLinkCopied] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [reportProfileOpen, setReportProfileOpen] = useState(false);
@@ -104,7 +102,7 @@ export default function ProfilePage({
         try {
           await ensureLibraryLists(userId);
         } catch {
-          // Lists may be unset up; fetch below surfaces the SQL banner
+          // Lists may fail to load; library shows a retry message
         }
       }
 
@@ -393,20 +391,21 @@ export default function ProfilePage({
       setCreateError('Name is required');
       return;
     }
-    const { error } = await createUserPlaylist(userId, newListName, {
+    const { data: list, error } = await createUserPlaylist(userId, newListName, {
       description: newListDescription,
       isPublic: !newListPrivate,
       sortOrder: lists.length,
     });
-    if (error) {
-      setCreateError(error.message || 'Failed to create list');
+    if (error || !list) {
+      setCreateError(error?.message || 'Failed to create list');
       return;
     }
     setNewListName('');
     setNewListDescription('');
     setNewListPrivate(false);
     setIsCreateListOpen(false);
-    fetchProfile();
+    await fetchProfile();
+    void openManageList(list.id);
   };
 
   const deleteList = async (listId: string) => {
@@ -516,6 +515,7 @@ export default function ProfilePage({
       editListCoverOriginalRef.current = nextCover || '';
       setIsEditListOpen(false);
       await fetchProfile();
+      await openManageList(manageListId);
     } finally {
       setEditListBusy(false);
     }
@@ -551,19 +551,6 @@ export default function ProfilePage({
     await openManageList(listId);
     fetchProfile();
     setIsAddEventOpen(false);
-  };
-
-  const enableLists = async () => {
-    setCopyFeedback(null);
-    try {
-      await navigator.clipboard.writeText(USER_LISTS_SETUP_SQL);
-      setCopyFeedback('SQL copied!');
-      const url = getSupabaseSqlEditorUrl();
-      if (url) window.open(url, '_blank', 'noopener');
-      setTimeout(() => setCopyFeedback(null), 3000);
-    } catch {
-      setCopyFeedback('Failed to copy');
-    }
   };
 
   const addSearchNorm = normalizeForSearch(addEventSearch);
@@ -817,7 +804,6 @@ export default function ProfilePage({
         <ProfileLibraryBoards
           isOwnProfile={isOwnProfile}
           listsError={listsError}
-          reviewsCount={reviews.length}
           visibleLibraryLists={visibleLibraryLists}
           boardSavedSearchEvents={boardSavedSearchEvents}
           searchActive={searchActive}
@@ -825,11 +811,7 @@ export default function ProfilePage({
           onOpenList={(listId) => {
             void openManageList(listId);
           }}
-          onEnableLists={() => {
-            void enableLists();
-          }}
           onRefresh={fetchProfile}
-          copyFeedback={copyFeedback}
           onStartCreateList={() => {
             setIsCreateListOpen(true);
             setCreateError('');

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import { supabase, Event } from "../lib/supabase";
 import { getSeasonFromDate } from "../lib/season";
@@ -11,6 +12,7 @@ import {
 import { coalesceTagList } from "../lib/eventTagArray";
 import { effectiveHeaderTags } from "../lib/eventHeaderTags";
 import { normalizeExternalUrl } from "../lib/externalUrl";
+import { eventPagePath } from "../lib/siteBase";
 import { resolveVenueFormattedAddress } from "../lib/resolveVenueAddress";
 import { isCanonicalCityLabel } from "../lib/cityPlaces";
 import {
@@ -31,12 +33,14 @@ import {
   deleteStoredEventImage,
   ensureEventImageStored,
 } from "../lib/eventImageUpload";
+import { formatCustomTagPlaceholder } from "./PlaceholderCopyEdit";
 import TagInput from "./TagInput";
 import IconPicker from "./IconPicker";
 import CustomPerformerCategoryInput from "./CustomPerformerCategoryInput";
 import ModalShell from "./ModalShell";
 import EventImageField from "./EventImageField";
-import { Button, Input, Label, formErrorClass, formHintClass, typeCallout } from "./ui";
+import { Button, Input, Label, formErrorClass, typeCallout } from "./ui";
+import { AdminPlaceholderInput } from "./PlaceholderCopyEdit";
 import { cn } from "../lib/utils";
 
 interface EditEventModalProps {
@@ -53,6 +57,7 @@ export default function EditEventModal({
   event,
 }: EditEventModalProps) {
   const t = useT();
+  const navigate = useNavigate();
   const [name, setName] = useState(event.name);
   const [date, setDate] = useState(event.date.slice(0, 10));
   const [showType, setShowType] = useState<ShowType>(() =>
@@ -307,6 +312,7 @@ export default function EditEventModal({
 
       await onEventUpdated();
       onClose();
+      navigate(eventPagePath(event.id));
     } catch (err) {
       console.error("Failed to update event:", err);
       const msg =
@@ -328,12 +334,14 @@ export default function EditEventModal({
           <Label htmlFor="name" required>
             {t("form.showName")}
           </Label>
-          <Input
+          <AdminPlaceholderInput
             id="name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
+            copyKey="form.showName.placeholder"
+            placeholder={t("form.showName.placeholder")}
           />
         </div>
 
@@ -393,6 +401,7 @@ export default function EditEventModal({
               maxTags={1}
               required
               placeholder={t("form.city.placeholder")}
+              placeholderCopyKey="form.city.placeholder"
             />
           </div>
         </div>
@@ -409,6 +418,11 @@ export default function EditEventModal({
               ? t("form.venue.placeholder.music")
               : t("form.venue.placeholder.fashion")
           }
+          placeholderCopyKey={
+            showType === "music"
+              ? "form.venue.placeholder.music"
+              : "form.venue.placeholder.fashion"
+          }
         />
 
         <TagInput
@@ -421,6 +435,11 @@ export default function EditEventModal({
             showType === "music"
               ? t("form.starring.placeholder.music")
               : t("form.starring.placeholder.fashion")
+          }
+          placeholderCopyKey={
+            showType === "music"
+              ? "form.starring.placeholder.music"
+              : "form.starring.placeholder.fashion"
           }
         />
 
@@ -436,6 +455,7 @@ export default function EditEventModal({
             onChange={setSpecialGuests}
             tagColumn="featured_artists"
             placeholder={t("form.specialGuests.placeholder")}
+            placeholderCopyKey="form.specialGuests.placeholder"
             expandable
           />
         )}
@@ -451,6 +471,11 @@ export default function EditEventModal({
               ? t("form.producedBy.placeholder.music")
               : t("form.producedBy.placeholder.fashion")
           }
+          placeholderCopyKey={
+            showType === "music"
+              ? "form.producedBy.placeholder.music"
+              : "form.producedBy.placeholder.fashion"
+          }
           expandable
         />
 
@@ -462,6 +487,7 @@ export default function EditEventModal({
             onChange={setHairMakeup}
             tagColumn="hair_makeup"
             placeholder={t("form.hairMakeup.placeholder")}
+            placeholderCopyKey="form.hairMakeup.placeholder"
             expandable
           />
         )}
@@ -477,6 +503,11 @@ export default function EditEventModal({
               ? t("form.genre.placeholder.music")
               : t("form.genre.placeholder.fashion")
           }
+          placeholderCopyKey={
+            showType === "music"
+              ? "form.genre.placeholder.music"
+              : "form.genre.placeholder.fashion"
+          }
           expandable
         />
 
@@ -488,7 +519,8 @@ export default function EditEventModal({
             value={customTags[slug] || []}
             onChange={(v) => setCustomTags((prev) => ({ ...prev, [slug]: v }))}
             customTagSlug={slug}
-            placeholder={`e.g., ${label}...`}
+            placeholder={formatCustomTagPlaceholder(t("form.customTag.placeholder"), label)}
+            placeholderCopyKey="form.customTag.placeholder"
             expandable
             headerAction={
               <button
@@ -503,7 +535,7 @@ export default function EditEventModal({
                     return next;
                   });
                 }}
-                className="shrink-0 rounded p-1.5 text-red-500 hover:bg-red-50 hover:text-red-700"
+                className="shrink-0 rounded-md p-1.5 text-destructive hover:bg-muted"
                 title="Remove this category"
                 aria-label={`Remove ${label} category`}
               >
@@ -531,6 +563,7 @@ export default function EditEventModal({
               id="newCustomType"
               value={newCustomTypeLabel}
               onChange={setNewCustomTypeLabel}
+              placeholder={t("form.customCategory.placeholder")}
               excludedSlugs={[
                 SPECIAL_GUESTS_SLUG,
                 ...inlineCustomTypes.map((t) => t.slug),
@@ -547,9 +580,6 @@ export default function EditEventModal({
                 ]);
               }}
             />
-            <p className={`mt-0.5 ${formHintClass}`}>
-              e.g. Presented By — choose existing or type a new name, then Add
-            </p>
           </div>
           <Button
             type="button"
@@ -585,6 +615,11 @@ export default function EditEventModal({
               ? t("form.collection.placeholder.music")
               : t("form.collection.placeholder.fashion")
           }
+          placeholderCopyKey={
+            showType === "music"
+              ? "form.collection.placeholder.music"
+              : "form.collection.placeholder.fashion"
+          }
           expandable
         />
 
@@ -595,17 +630,15 @@ export default function EditEventModal({
         />
 
         <div>
-          <Label htmlFor="countdownLink">Official ticket link</Label>
-          <Input
+          <Label htmlFor="countdownLink">{t("form.countdownLink")}</Label>
+          <AdminPlaceholderInput
             id="countdownLink"
             type="url"
             value={countdownLink}
             onChange={(e) => setCountdownLink(e.target.value)}
-            placeholder="https://… public ticket or registration page"
+            copyKey="form.countdownLink.placeholder"
+            placeholder={t("form.countdownLink.placeholder")}
           />
-          <p className={`mt-0.5 ${formHintClass}`}>
-            Opens when the countdown pill is tapped on upcoming shows.
-          </p>
         </div>
 
         {error ? <p className={formErrorClass}>{error}</p> : null}

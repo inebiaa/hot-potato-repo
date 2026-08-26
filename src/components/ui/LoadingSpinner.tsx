@@ -1,11 +1,36 @@
-import { Loader2 } from 'lucide-react';
+import { Hammer } from 'lucide-react';
+import { cn } from '../../lib/utils';
 
 type LoadingSpinnerProps = {
- className?: string;
- size?: number;
+  className?: string;
+  size?: number;
 };
 
-/** Circular Lucide spinner (replaces border-only spin rings). */
-export default function LoadingSpinner({ className = 'text-muted-foreground', size = 40 }: LoadingSpinnerProps) {
- return <Loader2 className={`animate-spin ${className}`} size={size} strokeWidth={2} aria-hidden />;
+/** Continuous spin around the handle grip (Lucide hammer pivot ~62% / 88%). */
+export default function LoadingSpinner({
+  className = 'text-muted-foreground',
+  size = 28,
+}: LoadingSpinnerProps) {
+  const pivotX = size * 0.62;
+  const pivotY = size * 0.88;
+
+  return (
+    <span
+      role="status"
+      aria-label="Loading"
+      className={cn('inline-flex items-center justify-center', className)}
+      style={{ width: size, height: size }}
+    >
+      <span
+        className="loading-hammer-spin block"
+        style={{
+          width: size,
+          height: size,
+          transformOrigin: `${pivotX}px ${pivotY}px`,
+        }}
+      >
+        <Hammer size={size} strokeWidth={2} aria-hidden className="block" />
+      </span>
+    </span>
+  );
 }

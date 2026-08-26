@@ -16,7 +16,9 @@ type AppLayoutProps = {
   onOpenStats: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
-  onAddEvent: () => void;
+  onOpenAddShow: () => void;
+  onOpenCreateList: () => void;
+  isPlusActive?: boolean;
   onSignIn: () => void;
   onSignOut: () => void;
   searchBar?: ReactNode;
@@ -36,7 +38,9 @@ export default function AppLayout({
   onOpenStats,
   onOpenProfile,
   onOpenSettings,
-  onAddEvent,
+  onOpenAddShow,
+  onOpenCreateList,
+  isPlusActive = false,
   onSignIn,
   onSignOut,
   searchBar,
@@ -60,7 +64,9 @@ export default function AppLayout({
         onOpenStats={onOpenStats}
         onOpenProfile={onOpenProfile}
         onOpenSettings={onOpenSettings}
-        onAddEvent={onAddEvent}
+        onOpenAddShow={onOpenAddShow}
+        onOpenCreateList={onOpenCreateList}
+        isPlusActive={isPlusActive}
         onSignIn={onSignIn}
         onSignOut={onSignOut}
         searchBar={searchBar}

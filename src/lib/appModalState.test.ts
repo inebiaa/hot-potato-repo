@@ -2,6 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { resolveAppModalState } from './appModalState.ts';
 
+test('resolveAppModalState opens create-list modal from URL', () => {
+  const state = resolveAppModalState('/', new URLSearchParams('modal=create-list'));
+  assert.equal(state.isCreateListModalOpen, true);
+  assert.equal(state.isAddEventModalOpen, false);
+});
+
 test('resolveAppModalState opens add-event modal from URL', () => {
   const state = resolveAppModalState('/', new URLSearchParams('modal=add-event'));
   assert.equal(state.isAddEventModalOpen, true);

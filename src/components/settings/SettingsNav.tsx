@@ -9,7 +9,6 @@ export function settingsNavItems(isAdmin: boolean): SettingsNavItem[] {
   return [
     { id: 'account', label: 'Account' },
     { id: 'branding', label: 'Branding' },
-    { id: 'copy', label: 'Copy' },
     { id: 'tags', label: 'Tags' },
     { id: 'legal', label: 'Legal' },
     { id: 'moderation', label: 'Moderation' },

@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
-import { Button, Input, Label, formErrorClass, formHintClass } from './ui';
+import { useState } from 'react';
+import { Label, formErrorClass, formHintClass } from './ui';
+import FileUploadPillRow from './FileUploadPillRow';
 import ProfileAvatarCard from './profile/ProfileAvatarCard';
 import { uploadProfileImageFile } from '../lib/profileImageUpload';
 import { useT } from '../hooks/useCopy';
@@ -16,7 +17,6 @@ export default function ProfileAvatarField({
  userId,
 }: ProfileAvatarFieldProps) {
  const t = useT();
- const fileRef = useRef<HTMLInputElement>(null);
  const [uploading, setUploading] = useState(false);
  const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -37,7 +37,6 @@ export default function ProfileAvatarField({
  onAvatarUrlChange(result.url);
  } finally {
  setUploading(false);
- if (fileRef.current) fileRef.current.value = '';
  }
  };
 
@@ -45,31 +44,19 @@ export default function ProfileAvatarField({
 
  return (
  <div className="space-y-3">
- <Label htmlFor="profile-avatar-file">{t('form.profilePicture')}</Label>
+ <Label>{t('form.profilePicture')}</Label>
  <div className="flex items-center gap-4">
  <ProfileAvatarCard src={preview} preview />
- <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
- <Input
- ref={fileRef}
- id="profile-avatar-file"
- type="file"
+ <FileUploadPillRow
+ fileInputId="profile-avatar-file"
  accept="image/*"
  disabled={uploading || !userId}
- className="max-w-full"
- onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)}
+ chooseLabel={t('form.chooseFile')}
+ onFile={(file) => void onPickFile(file)}
+ showRemove={!!preview}
+ removeLabel={t('form.profilePictureRemove')}
+ onRemove={() => onAvatarUrlChange('')}
  />
- {preview ? (
- <Button
- type="button"
- variant="ghost"
- size="sm"
- disabled={uploading}
- onClick={() => onAvatarUrlChange('')}
- >
- {t('form.profilePictureRemove')}
- </Button>
- ) : null}
- </div>
  </div>
  {uploading ? <p className={formHintClass}>{t('form.imageUploading')}</p> : null}
  {uploadError ? <p className={formErrorClass}>{uploadError}</p> : null}

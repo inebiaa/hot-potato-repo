@@ -4,6 +4,9 @@ import {
  type CustomPerformerCategoryOption,
 } from '../lib/tags';
 import { tagMatchesQuery } from '../lib/normalize';
+import { useAuth } from '../contexts/AuthContext';
+import { useT } from '../hooks/useCopy';
+import { EmptyFieldPlaceholderOverlay } from './PlaceholderCopyEdit';
 import { Input } from './ui';
 import { cn } from '../lib/utils';
 
@@ -30,13 +33,18 @@ export default function CustomPerformerCategoryInput({
  onChange,
  excludedSlugs,
  onPickExisting,
- placeholder = 'e.g., Hosted By, Music By',
+ placeholder,
 }: CustomPerformerCategoryInputProps) {
+ const t = useT();
+ const { isAdmin } = useAuth();
+ const resolvedPlaceholder = placeholder ?? t('form.customCategory.placeholder');
  const [allCategories, setAllCategories] = useState<CustomPerformerCategoryOption[]>([]);
  const [showSuggestions, setShowSuggestions] = useState(false);
  const [highlightedIndex, setHighlightedIndex] = useState(-1);
  const inputRef = useRef<HTMLInputElement>(null);
  const excluded = useMemo(() => new Set(excludedSlugs), [excludedSlugs]);
+ const isEmpty = !value.trim();
+ const showPlaceholderOverlay = isAdmin && isEmpty;
 
  useEffect(() => {
  let cancelled = false;
@@ -87,6 +95,14 @@ export default function CustomPerformerCategoryInput({
 
  return (
  <div className="relative">
+ <div className="group relative">
+ {showPlaceholderOverlay ? (
+ <EmptyFieldPlaceholderOverlay
+ copyKey="form.customCategory.placeholder"
+ placeholder={resolvedPlaceholder}
+ className="px-3"
+ />
+ ) : null}
  <Input
  ref={inputRef}
  id={id}
@@ -105,9 +121,10 @@ export default function CustomPerformerCategoryInput({
  setHighlightedIndex(-1);
  }, 150);
  }}
- placeholder={placeholder}
+ placeholder={showPlaceholderOverlay ? '' : resolvedPlaceholder}
  autoComplete="off"
  />
+ </div>
  {showSuggestions && suggestions.length > 0 && (
  <div
  className="absolute z-50 mt-1 max-h-40 w-full overflow-auto rounded-lg border border-border bg-card py-1 "

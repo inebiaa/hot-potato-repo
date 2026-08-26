@@ -1,0 +1,30 @@
+---
+description: File upload pills, in-context placeholder editing, icon picker
+alwaysApply: true
+---
+
+# Form field patterns
+
+## File uploads
+
+- Do **not** show native `<input type="file">` chrome in the UI.
+- Use `FileUploadPill` (`src/components/FileUploadPill.tsx`) with `t('form.chooseFile')`.
+- Hide the input (`sr-only`); trigger matches a **producer tag pill** (`tagPillSegmentShellClass`, colors from `getPillColors('producer', appSettings)`).
+- Interactive: `cursor-pointer`, `hover:opacity-80` (same as feed pills). Not chrome `bg-muted`.
+- Image URL / text fields stay normal `Input` or `AdminPlaceholderInput`.
+
+## Placeholder example editing (admin)
+
+- No global copy dictionary for placeholders. Edit **in context** on the field.
+- **Only when empty.** Non-admins see a normal placeholder; no pencil.
+- Ghost text on the left; pencil on the **far right** inside the field container; pencil on **hover only**.
+- Click pencil: edit the example text **inline** (same spot, muted style). **No popover, no modal.**
+- Save on blur or Enter; Escape cancels. Persists via `copy_overrides` (`useCopyOverrideEditor`).
+- Wire with `TagInput` `placeholderCopyKey`, `AdminPlaceholderInput`, or `EmptyFieldPlaceholderOverlay` in `PlaceholderCopyEdit.tsx`.
+- New placeholder keys: add to `COPY_CATALOG` and `COPY_SETTINGS_KEYS`.
+
+## Icon picker
+
+- `IconPicker` uses shared form controls (`formControlClass`, full-width trigger: icon + name + chevron).
+- **Not** pill styling. Pills are for file-upload triggers, not icon selection.
+- Dropdown is a bordered panel with a simple icon grid.

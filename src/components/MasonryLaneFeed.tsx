@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { EVENT_FEED_CARD_MAX_WIDTH_PX } from '../lib/eventCardLayout';
 
 /**
  * Shortest-column masonry for the home feed.
@@ -120,7 +121,7 @@ type LaneLayout = {
 export default function MasonryLaneFeed({
   items,
   columnMinWidthPx = 220,
-  columnMaxWidthPx = 448,
+  columnMaxWidthPx = EVENT_FEED_CARD_MAX_WIDTH_PX,
   gapPx = 24,
   defaultItemHeightPx = 420,
   className = '',

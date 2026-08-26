@@ -6,11 +6,13 @@ import { profilePagePath } from '../lib/siteBase';
 import { useDesktopLikePointer } from './useDesktopLikePointer';
 import { useAppSettings } from './useAppSettings';
 import { useHomeCatalog } from '../contexts/HomeCatalogContext';
+import { COPY_CATALOG } from '../copy/catalog';
 import type { Event } from '../lib/supabase';
 
 type UseAppLayoutNavOptions = {
   setProfileBoardEvents: (events: Event[] | null) => void;
   openAddEventModal: () => void;
+  openCreateListModal: () => void;
   openAuthModal: (mode?: 'signin' | 'signup', prompt?: string) => void;
 };
 
@@ -22,6 +24,7 @@ function scrollTop() {
 export function useAppLayoutNav({
   setProfileBoardEvents,
   openAddEventModal,
+  openCreateListModal,
   openAuthModal,
 }: UseAppLayoutNavOptions) {
   const navigate = useNavigate();
@@ -78,6 +81,14 @@ export function useAppLayoutNav({
     })();
   }, [resetCatalogNav, navigate, user]);
 
+  const openCreateList = useCallback(() => {
+    if (!user) {
+      openAuthModal('signin', COPY_CATALOG['auth.prompt.createList'].default);
+      return;
+    }
+    openCreateListModal();
+  }, [user, openAuthModal, openCreateListModal]);
+
   const layoutNav = useMemo(
     () =>
       appSettings
@@ -91,7 +102,8 @@ export function useAppLayoutNav({
             onOpenStats: openStats,
             onOpenProfile: openProfile,
             onOpenSettings: openSettings,
-            onAddEvent: openAddEventModal,
+            onOpenAddShow: openAddEventModal,
+            onOpenCreateList: openCreateList,
             onSignIn: () => openAuthModal('signin'),
             onSignOut: () => signOut(),
           }
@@ -107,6 +119,7 @@ export function useAppLayoutNav({
       openProfile,
       openSettings,
       openAddEventModal,
+      openCreateList,
       openAuthModal,
       signOut,
     ],

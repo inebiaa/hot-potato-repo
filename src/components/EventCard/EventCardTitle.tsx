@@ -1,9 +1,8 @@
 import { Link } from 'react-router-dom';
 import { cn } from '../../lib/utils';
-import { typeHeadline } from '../ui';
 
-/** Inline + leading-snug pairs with the floated action row (h-[1.375em]). */
-const EVENT_TITLE_CLASS = `inline min-w-0 ${typeHeadline} leading-snug text-foreground`;
+/** Typography comes from the title row wrapper (type-headline leading-snug). */
+const EVENT_TITLE_CLASS = 'inline min-w-0 text-foreground';
 const EVENT_TITLE_INTERACTIVE_CLASS =
   'cursor-pointer hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm';
 

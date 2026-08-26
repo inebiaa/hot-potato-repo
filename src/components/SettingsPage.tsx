@@ -13,7 +13,6 @@ import { Button, formErrorClass, formSuccessClass } from './ui';
 import AccountTab from './settings/AccountTab';
 import AdminsTab from './settings/AdminsTab';
 import BrandingTab from './settings/BrandingTab';
-import CopyTab from './settings/CopyTab';
 import LegalTab from './settings/LegalTab';
 import ModerationTab from './settings/ModerationTab';
 import SettingsNav, { settingsNavItems } from './settings/SettingsNav';
@@ -21,9 +20,9 @@ import TagsTab from './settings/TagsTab';
 import { type SwatchColorKey, type TabId } from './settings/settingsConstants';
 
 interface SettingsPageProps {
- onSettingsUpdated: () => void;
+  onSettingsUpdated: () => void;
  onSettingsPreview?: (settings: import('../types/appSettings').AppSettings) => void;
- onAccountUpdated?: () => void;
+  onAccountUpdated?: () => void;
 }
 
 export default function SettingsPage({
@@ -31,7 +30,7 @@ export default function SettingsPage({
  onSettingsPreview,
  onAccountUpdated,
 }: SettingsPageProps) {
- const { user, isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
  const navItems = settingsNavItems(!!isAdmin);
  const [activeTab, setActiveTab] = useState<TabId>(() => (isAdmin ? 'branding' : 'account'));
 
@@ -56,15 +55,15 @@ export default function SettingsPage({
  setError: editor.setError,
  });
 
- useEffect(() => {
+  useEffect(() => {
  if (!isAdmin) setActiveTab('account');
  else if (activeTab === 'account' && !navItems.some((i) => i.id === activeTab)) {
  setActiveTab('branding');
  }
- // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [isAdmin]);
 
- const showSave = activeTab === 'branding' || activeTab === 'copy' || activeTab === 'legal' || activeTab === 'tags';
+ const showSave = activeTab === 'branding' || activeTab === 'legal' || activeTab === 'tags';
 
  return (
  <div className="flex flex-col gap-8 md:flex-row md:gap-10">
@@ -108,32 +107,28 @@ export default function SettingsPage({
  {showSave ? (
  <form
  onSubmit={(e) => {
- e.preventDefault();
+    e.preventDefault();
  void editor.saveSettings();
  }}
  className="space-y-6"
  >
  {activeTab === 'branding' ? (
- <BrandingTab
+              <BrandingTab
  settings={editor.settings}
  pinnedArtistNames={editor.pinnedArtistNames}
- onPinnedArtistsChange={(names) => {
+                onPinnedArtistsChange={(names) => {
  editor.setPinnedArtistNames(names);
- void resolvePinnedArtistNamesToIds(names, user?.id).then((ids) => {
- const serialized = serializeHeaderPinnedArtistIds(ids);
+                  void resolvePinnedArtistNamesToIds(names, user?.id).then((ids) => {
+                    const serialized = serializeHeaderPinnedArtistIds(ids);
  editor.setSettings((s) => {
- const next = { ...s, header_pinned_artists: serialized };
- onSettingsPreview?.(next);
- return next;
- });
- });
- }}
+                      const next = { ...s, header_pinned_artists: serialized };
+                      onSettingsPreview?.(next);
+                      return next;
+                    });
+                  });
+                }}
  onChange={editor.patchSettings}
  />
- ) : null}
-
- {activeTab === 'copy' ? (
- <CopyTab settings={editor.settings} onChange={editor.patchSettings} />
  ) : null}
 
  {activeTab === 'legal' ? (
@@ -141,10 +136,10 @@ export default function SettingsPage({
  ) : null}
 
  {activeTab === 'tags' ? (
- <TagsTab
+              <TagsTab
  settings={editor.settings}
  setSettings={editor.setSettings}
- onSettingsPreview={onSettingsPreview}
+                onSettingsPreview={onSettingsPreview}
  paletteColors={palette.paletteColors}
  editingColor={palette.editingColor}
  setEditingColor={palette.setEditingColor}
@@ -176,13 +171,13 @@ export default function SettingsPage({
  <div>
  {editor.error ? <p className={formErrorClass}>{editor.error}</p> : null}
  {editor.success ? <p className={formSuccessClass}>{editor.success}</p> : null}
- </div>
- )}
+            </div>
+          )}
 
  <Button type="submit" disabled={editor.loading}>
- <Save size={18} />
+              <Save size={18} />
  {editor.loading ? 'Saving...' : 'Save Settings'}
- </Button>
+            </Button>
  </form>
  ) : null}
 
@@ -192,7 +187,7 @@ export default function SettingsPage({
  {editor.success ? <p className={formSuccessClass}>{editor.success}</p> : null}
  </div>
  ) : null}
- </div>
- </div>
- );
+          </div>
+    </div>
+  );
 }
