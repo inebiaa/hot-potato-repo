@@ -1,26 +1,77 @@
 ﻿---
-description: UI design system - grey chrome, shared controls, tag pills
+description: UI design system - tokens, type scale, grey chrome, pills
 alwaysApply: true
 ---
 
 # UI design rules
 
+Source of truth: CSS variables + utilities in `src/index.css`, Tailwind color map in `tailwind.config.js`, type helpers in `src/components/ui/typography.ts`.
+
+## Tokens (chrome)
+
+- Use semantic tokens only for app chrome: `background`, `foreground`, `muted`, `muted-foreground`, `card`, `border`, `input`, `ring`, `primary`, `secondary`, `accent`, `destructive`.
+- Prefer classes like `bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `hover:bg-muted`, `focus-visible:ring-ring`.
+- Do **not** add new Tailwind `gray-*`, `neutral-*`, `slate-*`, or raw hex greys for chrome (header, layout, cards shell, modals, menus, settings, profile chrome).
+- Page fill is **flat** `bg-background` (no grey page gradients).
+- Scrollbars and theme color follow the same tokens.
+
 ## Color
-- App chrome is **black / white / grey only** (neutral palette + CSS tokens in `src/index.css`).
+
+- App chrome is **black / white / grey only** (tokens above).
 - Do **not** use Tailwind `blue-*` (or other accent hues) for buttons, links, focus rings, headers, or backgrounds.
-- Tag **type colors** on event cards may stay colorful via settings / `getPillColors` - that is content, not chrome.
+- **Pills are a product object.** Tag pills and other pill UI (including profile display names styled as pills) keep their colored fills via settings / `getPillColors` / inline pill colors. That is content, not chrome.
+- Do not strip pill color to “match chrome greys.”
+
+## Type scale
+
+Use the shared scale (classes or exports from `src/components/ui/typography.ts`). Responsive bumps live in `index.css` (`@media` per class). Do **not** stack Tailwind `text-*` / `sm:text-*` on type-scale classes. Do **not** invent one-off `text-3xl` / `text-[11px]` for new chrome.
+
+| Step | Class / export | Size | Weight | Use |
+|------|----------------|------|--------|-----|
+| title | `type-title` | 30px | 700 | Page titles (home, settings, stats, lists) |
+| wordmark | `type-wordmark` | 18px → 24px at `sm` | 700 | Header app name only |
+| headline | `type-headline` | 18px → 20px at `sm` | 700 | Card titles, modal titles, section heads |
+| body | `type-body` | 15px | 400 | Default reading, forms, most buttons |
+| callout | `type-callout` | 14px | 400 | Secondary lines (date, venue, subtitles, labels) |
+| caption | `type-caption` / `type-caption-emphasis` | 12px | 400 / 500 | Meta; mobile tab labels use emphasis |
+
+- No separate “display” step.
+- **Pills keep their own size** via `tagPillShell` (`text-xs` in the shell) - do not force type-scale classes onto pill chips.
+- Font stack stays system UI (`-apple-system` / Segoe / etc. in `index.css`). Do not add a random webfont without an explicit ask.
 
 ## Shared controls
+
 - Prefer `src/components/ui/` (`Button`, `Input`, `Label`, `Textarea`, `Modal`) and `formControlClass` from `ui/field.ts`.
 - Do not invent one-off `border-gray-300 rounded-md focus:ring-blue-*` field styles.
 
 ## Tag pills
+
 - Size/shape come only from `src/components/tagPillShell.ts` (`TAG_PILL_SIZE_CLASS`, `tagPillShellClass`, `tagPillSegmentShellClass`).
 - Event cards and TagInput must use `TagPillSplitLabel` + those shells - never a custom larger chip.
 - In TagInput, the remove **X** sits **inside** the last segment (`trailingSlot`), not as its own pill.
 
+## Layout / feed
+
+- Masonry (`MasonryLaneFeed`): column **width** comes from how many lanes fit in the viewport, not from how many items are showing. Short search results must not stretch cards wider.
+
+## Corners
+
+- **Spine:** `EventCard` uses `rounded-lg` (`--radius` in `src/index.css`). Match it on chrome surfaces: modals (`ModalShell`), profile cards/boards, list covers, empty states, dropdown panels.
+- Use **`rounded-lg`** for new panels and cards. Do **not** use `rounded-xl` or `rounded-2xl` on app chrome.
+- **Exceptions (keep as-is):** tag pills `rounded-md` (`tagPillShell.ts`), circular controls `rounded-full`, event card image top `rounded-t-lg`.
+
+## Errors and success
+
+- Inline form/field errors: `formErrorClass` from `ui/field.ts` (or `type-callout text-destructive`). No bordered error banners on every form.
+- Inline success: `formSuccessClass`. Hints / footnotes: `formHintClass` (`type-caption`). Menu rows: `menuRowClass`. Settings subsection titles: `sectionHeadClass`.
+- Full-page load failures: simple centered copy, not a heavy chrome shell.
+- Reserve red (`text-destructive`, `variant="danger"`) for destructive **actions** when possible; validation errors may still use `text-destructive`.
+
 ## Settings
+
 - Settings is a **page** (`?settings=1`), not a modal. Do not reintroduce `modal=settings`.
 
 ## When adding UI
-- Match existing grey tokens and shared components first; extract a new `ui/` primitive if the same control appears twice.
+
+- Match tokens + type scale + shared components first; extract a new `ui/` primitive if the same control appears twice.
+- If you touch a file still using `gray-*` / `neutral-*` for chrome, convert those classes to tokens in the same pass when practical.

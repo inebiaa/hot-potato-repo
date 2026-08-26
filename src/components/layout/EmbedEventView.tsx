@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import EventCard from '../EventCard/EventCard';
-import EventJsonLd from '../EventJsonLd';
-import { useHomeCatalogOptional } from '../../contexts/HomeCatalogContext';
-import { useAuth } from '../../contexts/AuthContext';
-import { useAppSettings } from '../../hooks/useAppSettings';
-import { fetchEventWithStats, type EventWithStats } from '../../lib/eventsFeed';
-import { LoadingSpinner } from '../ui';
+import { useEffect, useState } from "react";
+import EventCard from "../EventCard/EventCard";
+import EventJsonLd from "../EventJsonLd";
+import { useHomeCatalogOptional } from "../../contexts/HomeCatalogContext";
+import { useAuth } from "../../contexts/AuthContext";
+import { useAppSettings } from "../../hooks/useAppSettings";
+import { fetchEventWithStats, type EventWithStats } from "../../lib/eventsFeed";
+import { LoadingSpinner } from "../ui";
 
 type EmbedEventViewProps = {
   eventId: string;
@@ -14,7 +14,11 @@ type EmbedEventViewProps = {
 };
 
 /** Embed card. One-event fetch; does not wait on the home browse feed. */
-export default function EmbedEventView({ eventId, onTagClick, children }: EmbedEventViewProps) {
+export default function EmbedEventView({
+  eventId,
+  onTagClick,
+  children,
+}: EmbedEventViewProps) {
   const { appSettings } = useAppSettings();
   const { user } = useAuth();
   const catalog = useHomeCatalogOptional();
@@ -42,21 +46,21 @@ export default function EmbedEventView({ eventId, onTagClick, children }: EmbedE
 
   if (!appSettings || (!event && !failed)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-muted">
         <LoadingSpinner />
       </div>
     );
   }
   if (!event) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <p className="text-gray-600">Show not found</p>
+      <div className="min-h-screen flex items-center justify-center bg-muted p-4">
+        <p className="text-muted-foreground">Show not found</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-muted p-4">
       <EventJsonLd event={event} />
       <div className="max-w-md mx-auto">
         <EventCard

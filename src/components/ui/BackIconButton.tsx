@@ -3,7 +3,7 @@ import type { ButtonHTMLAttributes } from 'react';
 import { cn } from '../../lib/utils';
 
 const shellClass =
-  'inline-flex shrink-0 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
+  'inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card';
 
 type BackIconButtonProps = {
   label: string;

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import { Ban, Flag, MoreVertical } from 'lucide-react';
-import { ListCover } from '../ListCoverCollage';
-import { useT } from '../../hooks/useCopy';
-import type { ProfilePageProps } from './types';
-import ProfileAvatarCard from './ProfileAvatarCard';
-import { Button } from '../ui';
+import { useEffect, useRef, useState } from "react";
+import { Ban, Flag, MoreVertical } from "lucide-react";
+import { ListCover } from "../ListCoverCollage";
+import { useT } from "../../hooks/useCopy";
+import type { ProfilePageProps } from "./types";
+import ProfileAvatarCard from "./ProfileAvatarCard";
+import { Button } from "../ui";
 
 interface ProfileHeaderProps {
   coverUrl: string;
@@ -14,7 +14,7 @@ interface ProfileHeaderProps {
   isOwnProfile: boolean;
   currentUserFullName?: string;
   currentUserEmailPrefix?: string;
-  tagColors?: ProfilePageProps['tagColors'];
+  tagColors?: ProfilePageProps["tagColors"];
   showSafetyMenu?: boolean;
   isBlocked?: boolean;
   onReport?: () => void;
@@ -48,75 +48,83 @@ export default function ProfileHeader({
         setMenuOpen(false);
       }
     };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
   }, [menuOpen]);
 
   const displayName =
     username.trim() ||
     (isOwnProfile && currentUserFullName?.trim()) ||
     (isOwnProfile && currentUserEmailPrefix?.trim()) ||
-    t('nav.profile');
+    t("nav.profile");
 
   const cover = coverUrl.trim();
-  const pillBg = tagColors?.optional_tags_bg_color || '#e0e7ff';
-  const pillText = tagColors?.optional_tags_text_color || '#3730a3';
+  const pillBg = tagColors?.optional_tags_bg_color || "#e0e7ff";
+  const pillText = tagColors?.optional_tags_text_color || "#3730a3";
 
   return (
     <header className="mb-10">
       {isBlocked ? (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/60 px-4 py-3 text-sm">
-          <span className="text-foreground">{t('safety.block.banner')}</span>
-          <Button type="button" size="sm" variant="secondary" onClick={() => onUnblock?.()}>
-            {t('safety.block.unblock')}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/60 px-4 py-3 type-callout">
+          <span className="text-foreground">{t("safety.block.banner")}</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => onUnblock?.()}
+          >
+            {t("safety.block.unblock")}
           </Button>
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
-        <div className="relative h-40 bg-neutral-100 sm:h-52 lg:h-56">
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="relative h-40 bg-muted sm:h-52 lg:h-56">
           {cover ? (
             <ListCover coverUrl={cover} className="h-full w-full" />
           ) : (
-            <div
-              className="h-full w-full bg-gradient-to-br from-neutral-100 via-neutral-50 to-neutral-200/80"
-              aria-hidden
-            />
+            <div className="h-full w-full bg-muted" aria-hidden />
           )}
           {showSafetyMenu ? (
             <div ref={menuRef} className="absolute right-3 top-3 z-20">
               <button
                 type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-white/90 text-neutral-700 shadow-sm hover:bg-white"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-card/90 text-muted-foreground shadow-sm hover:bg-card"
                 aria-label="Profile options"
                 onClick={() => setMenuOpen((v) => !v)}
               >
                 <MoreVertical size={18} />
               </button>
               {menuOpen ? (
-                <div className="absolute right-0 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-border bg-white py-1 shadow-lg">
+                <div className="absolute right-0 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg">
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left type-body hover:bg-muted"
                     onClick={() => {
                       setMenuOpen(false);
                       onReport?.();
                     }}
                   >
-                    <Flag size={14} className="shrink-0 text-gray-500" />
-                    <span>{t('safety.report.action')}</span>
+                    <Flag
+                      size={14}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                    <span>{t("safety.report.action")}</span>
                   </button>
                   {!isBlocked ? (
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left type-body hover:bg-muted"
                       onClick={() => {
                         setMenuOpen(false);
                         onBlock?.();
                       }}
                     >
-                      <Ban size={14} className="shrink-0 text-gray-500" />
-                      <span>{t('safety.block.action')}</span>
+                      <Ban
+                        size={14}
+                        className="shrink-0 text-muted-foreground"
+                      />
+                      <span>{t("safety.block.action")}</span>
                     </button>
                   ) : null}
                 </div>
@@ -125,7 +133,7 @@ export default function ProfileHeader({
           ) : null}
         </div>
 
-        <div className="relative border-t border-neutral-100 bg-white px-4 sm:px-6">
+        <div className="relative border-t border-border bg-card px-4 sm:px-6">
           <div className="absolute left-4 top-0 z-10 -translate-y-[38%] sm:left-6">
             <ProfileAvatarCard src={avatarUrl} priority />
           </div>
@@ -141,7 +149,9 @@ export default function ProfileHeader({
                 </span>
               </h1>
               {userIdPublic ? (
-                <p className="shrink-0 text-sm text-neutral-500">@{userIdPublic}</p>
+                <p className="shrink-0 type-callout text-muted-foreground">
+                  @{userIdPublic}
+                </p>
               ) : null}
             </div>
           </div>

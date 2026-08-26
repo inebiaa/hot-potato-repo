@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
-import ProfilePage from '../components/profile/ProfilePage';
-import RouteLoading from '../components/layout/RouteLoading';
-import RouteMessage from '../components/layout/RouteMessage';
-import { routePageShellClass } from '../components/layout/routePageShell';
-import { useAppChrome } from '../contexts/AppChromeContext';
-import { useAuth } from '../contexts/AuthContext';
-import { useAppSettings } from '../hooks/useAppSettings';
-import { useT } from '../hooks/useCopy';
-import { isProfileHandlePathSegment, resolveProfileByHandle } from '../lib/userProfile';
+import { useEffect, useState } from "react";
+import { useParams, useLocation } from "react-router-dom";
+import ProfilePage from "../components/profile/ProfilePage";
+import RouteLoading from "../components/layout/RouteLoading";
+import RouteMessage from "../components/layout/RouteMessage";
+import { routePageShellClass } from "../components/layout/routePageShell";
+import { useAppChrome } from "../contexts/AppChromeContext";
+import { useAuth } from "../contexts/AuthContext";
+import { useAppSettings } from "../hooks/useAppSettings";
+import { useT } from "../hooks/useCopy";
+import {
+  isProfileHandlePathSegment,
+  resolveProfileByHandle,
+} from "../lib/userProfile";
 
 export default function ProfileRoutePage() {
   const t = useT();
@@ -28,9 +31,12 @@ export default function ProfileRoutePage() {
   const [resolving, setResolving] = useState(false);
   const [notFound, setNotFound] = useState(false);
 
-  const pathnameIsOwn = location.pathname === '/profile' || location.pathname.endsWith('/profile');
+  const pathnameIsOwn =
+    location.pathname === "/profile" || location.pathname.endsWith("/profile");
   const handle =
-    params.handle && isProfileHandlePathSegment(params.handle) ? params.handle : null;
+    params.handle && isProfileHandlePathSegment(params.handle)
+      ? params.handle
+      : null;
   const showOwnProfile = pathnameIsOwn && !handle;
 
   useEffect(() => {
@@ -79,7 +85,7 @@ export default function ProfileRoutePage() {
   if (notFound) {
     return (
       <RouteMessage width="wide">
-        <p className="mb-4 text-gray-700">{t('profile.notFound')}</p>
+        <p className="mb-4 text-foreground">{t("profile.notFound")}</p>
       </RouteMessage>
     );
   }
@@ -87,7 +93,7 @@ export default function ProfileRoutePage() {
   if (showOwnProfile && !user && !handle) {
     return (
       <RouteMessage width="wide">
-        <p className="mb-4 text-gray-700">{t('profile.signInToView')}</p>
+        <p className="mb-4 text-foreground">{t("profile.signInToView")}</p>
       </RouteMessage>
     );
   }
@@ -97,11 +103,11 @@ export default function ProfileRoutePage() {
   }
 
   return (
-    <div className={routePageShellClass('wide')}>
+    <div className={routePageShellClass("wide")}>
       <ProfilePage
         userId={profileUserId}
         onTagClick={onTagClick}
-        onOpenEvent={(id) => openEvent(id, 'viewRatings')}
+        onOpenEvent={(id) => openEvent(id, "viewRatings")}
         onBoardEventsChange={setProfileBoardEvents}
         onSearchEventRatingSubmitted={(id) => refreshHomeEventRating(id)}
         onSearchEventUpdated={refreshHomeCatalog}

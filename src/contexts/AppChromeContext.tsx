@@ -15,7 +15,7 @@ export type AppChromeValue = {
   /** Page-scoped search counts for profile and shared lists. */
   headerSearchCounts: { filtered: number; total: number } | null;
   setHeaderSearchCounts: (counts: { filtered: number; total: number } | null) => void;
-  /** Browser-style back; falls back to home when there is no history. */
+  /** Back from secondary pages to the home feed. */
   goBack: () => void;
   /** Invalidate the home feed after another page changes events or the account. */
   refreshHomeCatalog: () => void;

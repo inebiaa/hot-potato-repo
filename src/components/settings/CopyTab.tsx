@@ -1,4 +1,4 @@
-import type { AppSettings } from '../../types/appSettings';
+import type { AppSettings } from "../../types/appSettings";
 import {
   COPY_CATALOG,
   COPY_GROUP_LABELS,
@@ -8,18 +8,18 @@ import {
   type CopyGroup,
   type CopyKey,
   type CopyOverrides,
-} from '../../copy';
-import { Input, Label, Textarea } from '../ui';
+} from "../../copy";
+import { Input, Label, Textarea } from "../ui";
 
 type CopyTabProps = {
   settings: AppSettings;
   onChange: (patch: Partial<AppSettings>) => void;
 };
 
-const GROUP_ORDER: CopyGroup[] = ['search', 'form'];
+const GROUP_ORDER: CopyGroup[] = ["search", "form"];
 
 function isLongField(key: CopyKey): boolean {
-  return key.includes('placeholder');
+  return key.includes("placeholder");
 }
 
 export default function CopyTab({ settings, onChange }: CopyTabProps) {
@@ -41,7 +41,7 @@ export default function CopyTab({ settings, onChange }: CopyTabProps) {
     <div className="space-y-6">
       {byGroup.map(({ group, keys }) => (
         <section key={group} className="space-y-3">
-          <h3 className="text-sm font-semibold text-neutral-800 border-b border-neutral-200 pb-1">
+          <h3 className="text-sm font-semibold text-foreground border-b border-border pb-1">
             {COPY_GROUP_LABELS[group]}
           </h3>
           {keys.map((key) => {
@@ -66,7 +66,9 @@ export default function CopyTab({ settings, onChange }: CopyTabProps) {
                     onChange={(e) => setValue(key, e.target.value)}
                   />
                 )}
-                <p className="mt-0.5 text-[11px] text-neutral-400 font-mono">{key}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground font-mono">
+                  {key}
+                </p>
               </div>
             );
           })}

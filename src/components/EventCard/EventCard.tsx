@@ -1,4 +1,4 @@
-import { useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation, useParams, useSearchParams, Link } from 'react-router-dom';
 import { Calendar, MapPin, Star, Heart } from 'lucide-react';
 import { Event, Rating } from '../../lib/supabase';
 import { useMemo, useState, useEffect } from 'react';
@@ -21,6 +21,7 @@ import type { TagColorsForPills } from '../tagCards/types';
 import EventCardTitle from './EventCardTitle';
 import EventCardActionsMenu from './EventCardActionsMenu';
 import EventCardTags from './EventCardTags';
+import { cn } from '../../lib/utils';
 
 interface EventCardProps {
   event: Event;
@@ -161,19 +162,56 @@ export default function EventCard({
     }
   };
 
-  const handleCardClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    const isInteractive = target.closest('button') || target.closest('a') || target.closest('[data-event-actions]') || target.closest('[data-tag-pill]');
-    if (isInteractive) return;
-    if (!onViewClick) return;
-    onViewClick(event.id);
-  };
-
   const cardImageSrc = eventCardImageUrl(event.image_url);
+
+  const photoShellClass =
+    'block h-48 w-full shrink-0 overflow-hidden rounded-t-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+  const renderCardPhoto = () => {
+    const img = (
+      <RemoteImg
+        src={cardImageSrc!}
+        alt=""
+        priority={imagePriority}
+        className="h-48 w-full object-cover rounded-t-lg"
+        style={imageOpacity !== undefined ? { opacity: imageOpacity } : undefined}
+      />
+    );
+
+    if (onViewClick) {
+      return (
+        <button
+          type="button"
+          onClick={() => onViewClick(event.id)}
+          className={cn(photoShellClass, 'cursor-pointer')}
+          aria-label={t('event.openShow').replace('{name}', event.name)}
+        >
+          {img}
+        </button>
+      );
+    }
+
+    if (viewHref) {
+      if (viewHref.startsWith('http://') || viewHref.startsWith('https://')) {
+        return (
+          <a href={viewHref} className={photoShellClass}>
+            {img}
+          </a>
+        );
+      }
+      return (
+        <Link to={viewHref} className={photoShellClass}>
+          {img}
+        </Link>
+      );
+    }
+
+    return <div className={photoShellClass}>{img}</div>;
+  };
 
   if (stackPhotoOnly) {
     return (
-      <div className={`rounded-lg shadow-md overflow-hidden shrink-0 h-48 ${imageOpacity !== undefined ? 'bg-transparent' : 'bg-gray-200'}`}>
+      <div className={`rounded-lg shadow-md overflow-hidden shrink-0 h-48 ${imageOpacity !== undefined ? 'bg-transparent' : 'bg-muted'}`}>
         {cardImageSrc ? (
           <RemoteImg
             src={cardImageSrc}
@@ -190,37 +228,23 @@ export default function EventCard({
   return (
     <>
       <div
-        className={`${imageOpacity !== undefined ? 'bg-transparent' : 'bg-white'} rounded-lg shadow-md hover:shadow-xl transition-all relative ${onViewClick ? 'cursor-pointer' : ''}`}
-        onClick={handleCardClick}
-        role={onViewClick ? 'button' : undefined}
-        tabIndex={onViewClick ? 0 : undefined}
-        onKeyDown={onViewClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewClick(event.id); } } : undefined}
+        className={`${imageOpacity !== undefined ? 'bg-transparent' : 'bg-card'} rounded-lg shadow-md relative`}
       >
-        {cardImageSrc && (
-          <div className="overflow-hidden rounded-t-lg shrink-0 h-48 bg-gray-200">
-            <RemoteImg
-              src={cardImageSrc}
-              alt=""
-              priority={imagePriority}
-              className="w-full h-48 object-cover flex-shrink-0 rounded-t-lg"
-              style={imageOpacity !== undefined ? { opacity: imageOpacity } : undefined}
-            />
-          </div>
-        )}
-        <div className={`p-6 min-w-0 ${imageOpacity !== undefined ? 'bg-white' : ''}`}>
+        {cardImageSrc ? renderCardPhoto() : null}
+        <div className={`min-w-0 p-6 ${imageOpacity !== undefined ? 'bg-card' : ''}`}>
           <div className="mb-2 min-w-0 after:block after:clear-both after:content-['']">
             <div
-              className="float-right -mr-0.5 flex h-[1.375em] shrink-0 items-center gap-0.5 text-lg sm:text-xl [shape-outside:margin-box]"
+              className="float-right -mr-0.5 flex h-[1.375em] shrink-0 items-center gap-0.5 [shape-outside:margin-box]"
               data-event-actions
             >
               <button
                 type="button"
                 onClick={(e) => { void handleToggleLiked(e); }}
                 disabled={likeBusy}
-                className={`p-0.5 rounded transition-colors ${
+                className={`rounded p-0.5 transition-colors ${
                   isLiked
-                    ? 'text-neutral-900 hover:text-neutral-700'
-                    : 'text-gray-400 hover:text-gray-600'
+                    ? 'text-foreground hover:text-muted-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
                 title={isLiked ? t('event.removeFromLiked') : t('event.saveToLiked')}
                 aria-label={isLiked ? t('event.removeFromLiked') : t('event.saveToLiked')}
@@ -238,6 +262,7 @@ export default function EventCard({
             </div>
             <EventCardTitle
               name={event.name}
+              eventId={event.id}
               viewHref={viewHref}
               onViewClick={onViewClick}
             />
@@ -249,13 +274,13 @@ export default function EventCard({
             onTagClick={onTagClick}
             onEventUpdated={onEventUpdated}
             afterHeader={
-              <div className="space-y-1 mb-4">
-                <div className="flex items-center text-gray-500 text-sm">
+              <div className="mb-4 space-y-1">
+                <div className="flex items-center type-callout text-muted-foreground">
                   <Calendar size={16} className="mr-2 flex-shrink-0" />
                   {formatEventDateDisplay(event.date)}
                 </div>
                 {event.location && (
-                  <div className="flex items-center text-gray-500 text-sm">
+                  <div className="flex items-center type-callout text-muted-foreground">
                     <MapPin size={16} className="mr-2 flex-shrink-0" />
                     <span className="min-w-0">{event.location}</span>
                   </div>
@@ -265,11 +290,11 @@ export default function EventCard({
             afterBody={
               <>
                 {ratingAllowed && (
-                  <div className="flex items-center pt-4 border-t">
+                  <div className="flex items-center border-t border-border pt-4">
                     <button
                       type="button"
                       onClick={() => openEventPanel('view-ratings')}
-                      className="flex items-center hover:bg-gray-50 p-2 -ml-2 transition-colors group"
+                      className="group -ml-2 flex items-center p-2 transition-colors hover:bg-muted"
                       title="View all ratings"
                     >
                       <div className="flex items-center">
@@ -277,11 +302,11 @@ export default function EventCard({
                           <Star
                             key={star}
                             size={18}
-                            className={star <= averageRating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}
+                            className={star <= averageRating ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/40'}
                           />
                         ))}
                       </div>
-                      <span className="ml-2 text-gray-600 text-sm group-hover:text-neutral-900 transition-colors">
+                      <span className="ml-2 type-callout text-muted-foreground transition-colors group-hover:text-foreground">
                         {averageRating > 0 ? averageRating.toFixed(1) : 'No ratings'} ({ratingCount})
                       </span>
                     </button>
@@ -289,12 +314,12 @@ export default function EventCard({
                 )}
 
                 {ratingAllowed && userRating && (
-                  <div className="mt-3 pt-3 border-t">
-                    <p className="text-sm text-gray-600 font-medium">
+                  <div className="mt-3 border-t border-border pt-3">
+                    <p className="type-callout font-medium text-muted-foreground">
                       Your rating: {userRating.rating} stars
                     </p>
                     {userRating.comment && (
-                      <p className="mt-1 text-sm text-gray-500 italic">
+                      <p className="mt-1 type-callout italic text-muted-foreground">
                         <CommentWithTags
                           comment={userRating.comment}
                           event={event}

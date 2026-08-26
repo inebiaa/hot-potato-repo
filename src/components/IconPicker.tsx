@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
-import { EVENT_CARD_ICONS, getIcon } from '../lib/eventCardIcons';
-import { formControlClass, formControlPaddingClass } from './ui/field';
-import { cn } from '../lib/utils';
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { EVENT_CARD_ICONS, getIcon } from "../lib/eventCardIcons";
+import { formControlClass, formControlPaddingClass } from "./ui/field";
+import { cn } from "../lib/utils";
 
 interface IconPickerProps {
   label: string;
@@ -12,14 +12,22 @@ interface IconPickerProps {
 
 const ICON_NAMES = Object.keys(EVENT_CARD_ICONS);
 
-export default function IconPicker({ label, value, onChange }: IconPickerProps) {
+export default function IconPicker({
+  label,
+  value,
+  onChange,
+}: IconPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const IconComponent = getIcon(value, 'producer_icon');
+  const IconComponent = getIcon(value, "producer_icon");
   const hasSelection = !!value;
 
   return (
     <div>
-      {label && <label className="mb-1 block text-sm font-medium text-foreground">{label}</label>}
+      {label && (
+        <label className="mb-1 block text-sm font-medium text-foreground">
+          {label}
+        </label>
+      )}
       <div className="relative">
         <button
           type="button"
@@ -27,29 +35,36 @@ export default function IconPicker({ label, value, onChange }: IconPickerProps) 
           className={cn(
             formControlClass,
             formControlPaddingClass,
-            'flex min-h-10 items-center justify-center gap-2 hover:bg-muted',
+            "flex min-h-10 items-center justify-center gap-2 hover:bg-muted",
           )}
-          title={hasSelection ? value : 'None'}
-          aria-label={label || `Icon: ${hasSelection ? value : 'None'}`}
+          title={hasSelection ? value : "None"}
+          aria-label={label || `Icon: ${hasSelection ? value : "None"}`}
         >
           {hasSelection ? (
-            <IconComponent size={20} className="text-gray-700 shrink-0" />
+            <IconComponent size={20} className="text-foreground shrink-0" />
           ) : (
-            <span className="text-xs text-gray-500 shrink-0">None</span>
+            <span className="text-xs text-muted-foreground shrink-0">None</span>
           )}
-          <ChevronDown size={14} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown
+            size={14}
+            className={`text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+          />
         </button>
         {isOpen && (
           <>
-            <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} aria-hidden="true" />
-            <div className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,320px)] bg-white border border-gray-200 rounded-lg shadow-lg p-2 grid grid-cols-4 sm:grid-cols-6 gap-1">
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => setIsOpen(false)}
+              aria-hidden="true"
+            />
+            <div className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,320px)] bg-card border border-border rounded-lg p-2 grid grid-cols-4 sm:grid-cols-6 gap-1">
               <button
                 type="button"
                 onClick={() => {
-                  onChange('');
+                  onChange("");
                   setIsOpen(false);
                 }}
-                className={`col-span-full min-h-11 px-3 text-sm sm:text-xs rounded-md border text-left ${!hasSelection ? 'bg-neutral-100 border-neutral-300 text-neutral-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                className={`col-span-full min-h-11 px-3 text-sm sm:text-xs rounded-md border text-left ${!hasSelection ? "bg-muted border-input text-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}
                 title="No icon"
               >
                 No icon
@@ -64,10 +79,10 @@ export default function IconPicker({ label, value, onChange }: IconPickerProps) 
                       onChange(name);
                       setIsOpen(false);
                     }}
-                    className={`min-h-11 min-w-11 rounded-md hover:bg-gray-100 flex items-center justify-center ${value === name ? 'bg-neutral-100 ring-1 ring-neutral-300' : ''}`}
+                    className={`min-h-11 min-w-11 rounded-md hover:bg-muted flex items-center justify-center ${value === name ? "bg-muted ring-1 ring-border" : ""}`}
                     title={name}
                   >
-                    <Icon size={20} className="text-gray-700" />
+                    <Icon size={20} className="text-foreground" />
                   </button>
                 );
               })}

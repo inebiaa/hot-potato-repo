@@ -1,10 +1,12 @@
-import { Star } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { shortenEventNameUsingFooterTags } from '../../lib/collectionTagDisplay';
-import { getPillColors } from './getPillColors';
-import { getTagSectionIcon } from './tagSectionIcon';
-import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from '../TagPillSplitLabel';
-import type { TagEntityCardSharedProps } from './types';
+import { Star } from "lucide-react";
+import { useMemo, useState } from "react";
+import { shortenEventNameUsingFooterTags } from "../../lib/collectionTagDisplay";
+import { getPillColors } from "./getPillColors";
+import { getTagSectionIcon } from "./tagSectionIcon";
+import TagPillSplitLabel, {
+  tagPillSplitSegmentGroupClass,
+} from "../TagPillSplitLabel";
+import type { TagEntityCardSharedProps } from "./types";
 
 export interface TagCardContentProps extends TagEntityCardSharedProps {
   /** Shown under the entity name (e.g. Designer, Collection). */
@@ -38,8 +40,8 @@ export default function TagCardContent({
 
   const sortedEventRatings = useMemo(() => {
     return [...eventRatings].sort((a, b) => {
-      const dateA = a.event?.date || '';
-      const dateB = b.event?.date || '';
+      const dateA = a.event?.date || "";
+      const dateB = b.event?.date || "";
       if (dateA !== dateB) return dateB.localeCompare(dateA);
       return a.event_name.localeCompare(b.event_name);
     });
@@ -61,14 +63,16 @@ export default function TagCardContent({
     <div className="p-6">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-bold text-gray-900 truncate">{tagValue}</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{roleLabel}</p>
+          <h2 className="text-xl font-bold text-foreground truncate">
+            {tagValue}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-0.5">{roleLabel}</p>
         </div>
       </div>
 
       {sortedEventRatings.length > 0 && (
         <div className="mb-3">
-          <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
+          <div className="flex items-center justify-between text-xs font-semibold text-foreground mb-1">
             <div className="flex items-center min-w-0">
               <SectionIcon size={14} className="mr-1 shrink-0" />
               Shows
@@ -85,26 +89,34 @@ export default function TagCardContent({
                 >
                   <TagPillSplitLabel
                     text={showPillLabel(row)}
-                    segmentColors={{ backgroundColor: pillColors.bg, color: pillColors.text }}
+                    segmentColors={{
+                      backgroundColor: pillColors.bg,
+                      color: pillColors.text,
+                    }}
                   />
                 </button>
               ) : (
                 <span key={row.event_id} className={pillClass}>
                   <TagPillSplitLabel
                     text={showPillLabel(row)}
-                    segmentColors={{ backgroundColor: pillColors.bg, color: pillColors.text }}
+                    segmentColors={{
+                      backgroundColor: pillColors.bg,
+                      color: pillColors.text,
+                    }}
                   />
                 </span>
-              )
+              ),
             )}
             {sortedEventRatings.length > TAG_LIMIT && (
               <button
                 type="button"
                 onClick={() => setPillsExpanded((x) => !x)}
-                className="text-xs text-gray-400 hover:text-gray-600 inline-flex shrink-0 items-center justify-center px-2 py-1 rounded-md"
-                title={pillsExpanded ? 'Show less' : 'View more shows'}
+                className="text-xs text-muted-foreground hover:text-muted-foreground inline-flex shrink-0 items-center justify-center px-2 py-1 rounded-md"
+                title={pillsExpanded ? "Show less" : "View more shows"}
               >
-                {pillsExpanded ? '−' : `+${sortedEventRatings.length - TAG_LIMIT}`}
+                {pillsExpanded
+                  ? "−"
+                  : `+${sortedEventRatings.length - TAG_LIMIT}`}
               </button>
             )}
           </div>
@@ -119,15 +131,20 @@ export default function TagCardContent({
               <Star
                 key={star}
                 size={18}
-                className={star <= overallAverage ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}
+                className={
+                  star <= overallAverage
+                    ? "fill-yellow-400 text-yellow-400"
+                    : "text-muted-foreground/40"
+                }
               />
             ))}
           </div>
-          <span className="ml-2 text-gray-600 text-sm">
-            {overallAverage > 0 ? overallAverage.toFixed(1) : 'No ratings'} ({totalRatings})
-            <span className="text-gray-400">
-              {' '}
-              · {totalShows} show{totalShows === 1 ? '' : 's'}
+          <span className="ml-2 text-muted-foreground text-sm">
+            {overallAverage > 0 ? overallAverage.toFixed(1) : "No ratings"} (
+            {totalRatings})
+            <span className="text-muted-foreground">
+              {" "}
+              · {totalShows} show{totalShows === 1 ? "" : "s"}
             </span>
           </span>
         </div>
@@ -144,42 +161,54 @@ export default function TagCardContent({
           <button
             type="button"
             onClick={() => setIsListExpanded((x) => !x)}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 text-left transition-colors"
+            className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted text-left transition-colors"
           >
-            <span className="text-sm font-medium text-gray-700">
-              {isListExpanded ? 'Hide' : 'View'} shows
+            <span className="text-sm font-medium text-foreground">
+              {isListExpanded ? "Hide" : "View"} shows
             </span>
-            <span className="text-xs text-gray-500">{sortedEventRatings.length} total</span>
+            <span className="text-xs text-muted-foreground">
+              {sortedEventRatings.length} total
+            </span>
           </button>
           {isListExpanded && (
-            <ul className="mt-2 max-h-96 overflow-y-auto rounded-lg border border-gray-100 min-h-[14rem]">
+            <ul className="mt-2 max-h-96 overflow-y-auto rounded-lg border border-border min-h-[14rem]">
               {sortedEventRatings.map((eventRating) => (
                 <li
                   key={eventRating.event_id}
-                  role={onEventClick ? 'button' : undefined}
+                  role={onEventClick ? "button" : undefined}
                   tabIndex={onEventClick ? 0 : undefined}
-                  onClick={onEventClick ? () => handleEventClick(eventRating.event_id) : undefined}
+                  onClick={
+                    onEventClick
+                      ? () => handleEventClick(eventRating.event_id)
+                      : undefined
+                  }
                   onKeyDown={
                     onEventClick
                       ? (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') handleEventClick(eventRating.event_id);
+                          if (e.key === "Enter" || e.key === " ")
+                            handleEventClick(eventRating.event_id);
                         }
                       : undefined
                   }
-                  className={`flex items-center justify-between gap-3 px-4 py-3 text-left transition-colors border-b border-gray-50 last:border-0 ${
+                  className={`flex items-center justify-between gap-3 px-4 py-3 text-left transition-colors border-b border-border last:border-0 ${
                     onEventClick
-                      ? 'hover:bg-gray-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-200 focus:ring-inset'
-                      : ''
+                      ? "hover:bg-muted cursor-pointer focus:outline-none focus:ring-2 focus:ring-border focus:ring-inset"
+                      : ""
                   }`}
                 >
                   <div className="flex-1 min-w-0">
-                    <span className="font-medium text-gray-900 truncate block">{showPillLabel(eventRating)}</span>
+                    <span className="font-medium text-foreground truncate block">
+                      {showPillLabel(eventRating)}
+                    </span>
                     {eventRating.event?.date && (
-                      <span className="text-xs text-gray-500">
-                        {new Date(eventRating.event.date).toLocaleDateString(undefined, {
-                          month: 'short',
-                          year: 'numeric',
-                        })}
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(eventRating.event.date).toLocaleDateString(
+                          undefined,
+                          {
+                            month: "short",
+                            year: "numeric",
+                          },
+                        )}
                       </span>
                     )}
                   </div>
@@ -189,12 +218,18 @@ export default function TagCardContent({
                         <Star
                           key={s}
                           size={12}
-                          className={s <= eventRating.avg_rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}
+                          className={
+                            s <= eventRating.avg_rating
+                              ? "fill-yellow-400 text-yellow-400"
+                              : "text-muted-foreground/40"
+                          }
                         />
                       ))}
                     </div>
-                    <span className="text-xs font-medium text-gray-600 w-6">
-                      {eventRating.avg_rating > 0 ? eventRating.avg_rating.toFixed(1) : '—'}
+                    <span className="text-xs font-medium text-muted-foreground w-6">
+                      {eventRating.avg_rating > 0
+                        ? eventRating.avg_rating.toFixed(1)
+                        : "—"}
                     </span>
                   </div>
                 </li>
@@ -204,8 +239,11 @@ export default function TagCardContent({
         </div>
       ) : (
         <div className="mt-3 pt-3 border-t">
-          <p className="text-center text-sm text-gray-500 py-2">
-            No rated shows yet. {totalShows > 0 ? `${totalShows} show${totalShows === 1 ? '' : 's'} with this tag.` : ''}
+          <p className="text-center text-sm text-muted-foreground py-2">
+            No rated shows yet.{" "}
+            {totalShows > 0
+              ? `${totalShows} show${totalShows === 1 ? "" : "s"} with this tag.`
+              : ""}
           </p>
         </div>
       )}

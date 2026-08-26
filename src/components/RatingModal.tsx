@@ -8,7 +8,7 @@ import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplit
 import { TAG_PILL_ROW_CLASS } from './tagPillShell';
 import { getEventInsertTagStyles } from '../lib/commentTagParsing';
 import ModalShell from './ModalShell';
-import { Button } from './ui';
+import { Button, formErrorClass, formHintClass, Label, typeCallout } from './ui';
 
 interface RatingModalTagColors {
   producer_bg_color?: string;
@@ -147,15 +147,13 @@ export default function RatingModal({
       onClose={onClose}
       title={existingRating ? 'Update Your Rating' : 'Rate Event'}
       zClass={zClass}
-      panelClassName="max-w-md sm:rounded-xl"
+      panelClassName="max-w-md sm:rounded-lg"
     >
-        <p className="text-gray-600 mb-4 px-4 sm:px-6 pt-1">{event.name}</p>
+        <p className={`mb-4 px-4 pt-1 sm:px-6 ${typeCallout} text-muted-foreground`}>{event.name}</p>
 
         <form onSubmit={handleSubmit} className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Your Rating
-            </label>
+            <Label className="mb-2 block">Your Rating</Label>
             <div className="flex flex-wrap gap-1">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
@@ -164,12 +162,12 @@ export default function RatingModal({
                   onClick={() => setRating(star)}
                   onMouseEnter={() => setHoveredRating(star)}
                   onMouseLeave={() => setHoveredRating(0)}
-                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500"
+                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label={`${star} star${star > 1 ? 's' : ''}`}
                 >
                   <Star
                     size={32}
-                    className={star <= (hoveredRating || rating) ? 'text-amber-500 fill-amber-500' : 'text-gray-300'}
+                    className={star <= (hoveredRating || rating) ? 'text-amber-500 fill-amber-500' : 'text-muted-foreground/40'}
                   />
                 </button>
               ))}
@@ -177,12 +175,10 @@ export default function RatingModal({
           </div>
 
           <div>
-            <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">
-              Comment
-            </label>
+            <Label htmlFor="comment">Comment</Label>
             {eventTags.length > 0 && (
               <div className={`mb-2 ${TAG_PILL_ROW_CLASS}`}>
-                <span className="text-xs text-gray-500 self-center mr-1">Insert tag:</span>
+                <span className={`mr-1 self-center ${formHintClass}`}>Insert tag:</span>
                 {eventTags.map((tag) => {
                   const colors = {
                     backgroundColor: tag.bg || '#f3f4f6',
@@ -213,11 +209,7 @@ export default function RatingModal({
             />
           </div>
 
-          {error && (
-            <div className="text-sm text-red-600">
-              {error}
-            </div>
-          )}
+          {error ? <p className={formErrorClass}>{error}</p> : null}
 
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button type="submit" disabled={loading} className="min-h-[44px] flex-1">

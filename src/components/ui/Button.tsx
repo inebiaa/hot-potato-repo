@@ -3,18 +3,18 @@ import { cn } from '../../lib/utils';
 
 const variants = {
   primary:
-    'bg-primary text-primary-foreground hover:bg-neutral-800 disabled:bg-neutral-400 disabled:text-white',
+    'bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50',
   secondary:
-    'bg-secondary text-secondary-foreground border border-border hover:bg-neutral-200 disabled:opacity-50',
+    'bg-secondary text-secondary-foreground border border-border hover:bg-muted disabled:opacity-50',
   ghost: 'bg-transparent text-foreground hover:bg-accent disabled:opacity-50',
   danger:
-    'bg-destructive text-destructive-foreground hover:bg-red-800 disabled:opacity-50',
+    'bg-destructive text-destructive-foreground hover:opacity-90 disabled:opacity-50',
 } as const;
 
 const sizes = {
-  sm: 'min-h-9 px-3 py-1.5 text-sm',
-  md: 'min-h-10 px-4 py-2 text-sm',
-  lg: 'min-h-11 px-6 py-3 text-base',
+  sm: 'min-h-9 px-3 py-1.5 type-callout',
+  md: 'min-h-10 px-4 py-2 type-body',
+  lg: 'min-h-11 px-6 py-3 type-body',
 } as const;
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {

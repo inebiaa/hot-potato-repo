@@ -1,17 +1,21 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { supabase } from '../lib/supabase';
-import { getSeasonFromDate } from '../lib/season';
-import type { Event } from '../lib/supabase';
-import { effectiveHeaderTags } from '../lib/eventHeaderTags';
-import { eventArrayMatchesFilter, eventMatchesVenueTag, type TagResolutionMap } from '../lib/tagDisplayResolution';
-import { getSpecialGuests } from '../lib/specialGuests';
-import { sameTagSpelling } from '../lib/tagIdentity';
-import TagCardRouter from './tagCards/TagCardRouter';
-import ModalShell from './ModalShell';
-import { LoadingSpinner } from './ui';
-import type { EventRating, TagRatingEventSlice } from './tagCards/types';
-import { useTagDisplayMap } from '../contexts/TagDisplayContext';
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { supabase } from "../lib/supabase";
+import { getSeasonFromDate } from "../lib/season";
+import type { Event } from "../lib/supabase";
+import { effectiveHeaderTags } from "../lib/eventHeaderTags";
+import {
+  eventArrayMatchesFilter,
+  eventMatchesVenueTag,
+  type TagResolutionMap,
+} from "../lib/tagDisplayResolution";
+import { getSpecialGuests } from "../lib/specialGuests";
+import { sameTagSpelling } from "../lib/tagIdentity";
+import TagCardRouter from "./tagCards/TagCardRouter";
+import ModalShell from "./ModalShell";
+import { LoadingSpinner } from "./ui";
+import type { EventRating, TagRatingEventSlice } from "./tagCards/types";
+import { useTagDisplayMap } from "../contexts/TagDisplayContext";
 
 interface TagRatingsModalProps {
   isOpen: boolean;
@@ -104,8 +108,16 @@ export default function TagRatingsModal({
       fetchSeqRef.current += 1;
     };
     // fetchTagRatings is async and reads latest props; listing all deps would refetch excessively
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, tagType, tagValue, refreshTrigger, tagResolutionMap, eventsForTag, cachedAllEvents]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isOpen,
+    tagType,
+    tagValue,
+    refreshTrigger,
+    tagResolutionMap,
+    eventsForTag,
+    cachedAllEvents,
+  ]);
 
   const matchEvent = (e: {
     producers?: string[] | null;
@@ -120,27 +132,66 @@ export default function TagRatingsModal({
     custom_tags?: Record<string, string[]> | null;
   }) => {
     switch (tagType) {
-      case 'producer':
-        return eventArrayMatchesFilter(tagResolutionMap, 'producer', e.producers, tagValue);
-      case 'designer':
-        return eventArrayMatchesFilter(tagResolutionMap, 'designer', e.featured_designers, tagValue);
-      case 'artist':
-        return (
-          eventArrayMatchesFilter(tagResolutionMap, 'artist', e.featured_artists, tagValue) ||
-          eventArrayMatchesFilter(tagResolutionMap, 'artist', getSpecialGuests(e.custom_tags), tagValue)
+      case "producer":
+        return eventArrayMatchesFilter(
+          tagResolutionMap,
+          "producer",
+          e.producers,
+          tagValue,
         );
-      case 'hair_makeup':
-        return eventArrayMatchesFilter(tagResolutionMap, 'hair_makeup', e.hair_makeup, tagValue);
-      case 'city':
+      case "designer":
+        return eventArrayMatchesFilter(
+          tagResolutionMap,
+          "designer",
+          e.featured_designers,
+          tagValue,
+        );
+      case "artist":
+        return (
+          eventArrayMatchesFilter(
+            tagResolutionMap,
+            "artist",
+            e.featured_artists,
+            tagValue,
+          ) ||
+          eventArrayMatchesFilter(
+            tagResolutionMap,
+            "artist",
+            getSpecialGuests(e.custom_tags),
+            tagValue,
+          )
+        );
+      case "hair_makeup":
+        return eventArrayMatchesFilter(
+          tagResolutionMap,
+          "hair_makeup",
+          e.hair_makeup,
+          tagValue,
+        );
+      case "city":
         return sameTagSpelling(e.city, tagValue);
-      case 'venue':
-        return eventMatchesVenueTag({ location: e.location || null }, tagValue, tagResolutionMap);
-      case 'season':
-        return getSeasonFromDate(e.date || '') === tagValue;
-      case 'header_tags':
-        return eventArrayMatchesFilter(tagResolutionMap, 'header_tags', effectiveHeaderTags(e), tagValue);
-      case 'footer_tags':
-        return eventArrayMatchesFilter(tagResolutionMap, 'footer_tags', e.footer_tags, tagValue);
+      case "venue":
+        return eventMatchesVenueTag(
+          { location: e.location || null },
+          tagValue,
+          tagResolutionMap,
+        );
+      case "season":
+        return getSeasonFromDate(e.date || "") === tagValue;
+      case "header_tags":
+        return eventArrayMatchesFilter(
+          tagResolutionMap,
+          "header_tags",
+          effectiveHeaderTags(e),
+          tagValue,
+        );
+      case "footer_tags":
+        return eventArrayMatchesFilter(
+          tagResolutionMap,
+          "footer_tags",
+          e.footer_tags,
+          tagValue,
+        );
       default:
         return false;
     }
@@ -170,14 +221,18 @@ export default function TagRatingsModal({
         events = cachedAllEvents.filter((e) => matchEvent(e));
       } else {
         const { data: allEvents, error: eventsError } = await supabase
-          .from('events')
-          .select('id, name, date, producers, featured_designers, featured_artists, hair_makeup, city, location, header_tags, footer_tags, custom_tags, custom_tag_meta')
-          .order('date', { ascending: false });
+          .from("events")
+          .select(
+            "id, name, date, producers, featured_designers, featured_artists, hair_makeup, city, location, header_tags, footer_tags, custom_tags, custom_tag_meta",
+          )
+          .order("date", { ascending: false });
 
         if (eventsError) throw eventsError;
 
         if (isFetchStale(seq)) return;
-        events = ((allEvents || []) as TagRatingEventSlice[]).filter((e) => matchEvent(e));
+        events = ((allEvents || []) as TagRatingEventSlice[]).filter((e) =>
+          matchEvent(e),
+        );
       }
 
       if (isFetchStale(seq)) return;
@@ -196,9 +251,9 @@ export default function TagRatingsModal({
       const eventIds = events.map((e) => e.id);
 
       const { data: ratingsRows, error: ratingsError } = await supabase
-        .from('ratings')
-        .select('event_id, rating')
-        .in('event_id', eventIds);
+        .from("ratings")
+        .select("event_id, rating")
+        .in("event_id", eventIds);
 
       if (ratingsError) throw ratingsError;
 
@@ -206,10 +261,23 @@ export default function TagRatingsModal({
 
       const ratings = ratingsRows || [];
 
-      const eventRatingsMap = new Map<string, { sum: number; count: number; name: string; event?: TagRatingEventSlice }>();
+      const eventRatingsMap = new Map<
+        string,
+        {
+          sum: number;
+          count: number;
+          name: string;
+          event?: TagRatingEventSlice;
+        }
+      >();
 
       events.forEach((event) => {
-        eventRatingsMap.set(event.id, { sum: 0, count: 0, name: event.name, event });
+        eventRatingsMap.set(event.id, {
+          sum: 0,
+          count: 0,
+          name: event.name,
+          event,
+        });
       });
 
       let totalSum = 0;
@@ -234,8 +302,8 @@ export default function TagRatingsModal({
           event: data.event,
         }))
         .sort((a, b) => {
-          const dateA = a.event?.date || '';
-          const dateB = b.event?.date || '';
+          const dateA = a.event?.date || "";
+          const dateB = b.event?.date || "";
           if (dateA !== dateB) return dateB.localeCompare(dateA);
           return a.event_name.localeCompare(b.event_name);
         });
@@ -247,7 +315,7 @@ export default function TagRatingsModal({
         setTotalRatings(totalCount);
       }
     } catch (error) {
-      console.error('Error fetching tag ratings:', error);
+      console.error("Error fetching tag ratings:", error);
     } finally {
       if (!isFetchStale(seq)) {
         setLoading(false);
@@ -280,13 +348,13 @@ export default function TagRatingsModal({
       zClass="z-[70]"
       panelClassName="max-w-md sm:rounded-lg"
       hideTitleBar
-      backdropClassName={eventOverlayOpen ? 'pointer-events-none' : ''}
+      backdropClassName={eventOverlayOpen ? "pointer-events-none" : ""}
     >
-      <div className={eventOverlayOpen ? 'pointer-events-none' : ''}>
+      <div className={eventOverlayOpen ? "pointer-events-none" : ""}>
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12 px-6">
             <LoadingSpinner className="mb-3" />
-            <p className="text-sm text-gray-500">Loading…</p>
+            <p className="text-sm text-muted-foreground">Loading…</p>
           </div>
         ) : (
           <TagCardRouter tagType={tagType} {...sharedCardProps} />
@@ -295,5 +363,7 @@ export default function TagRatingsModal({
     </ModalShell>
   );
 
-  return isOpen && typeof document !== 'undefined' ? createPortal(modal, document.body) : null;
+  return isOpen && typeof document !== "undefined"
+    ? createPortal(modal, document.body)
+    : null;
 }

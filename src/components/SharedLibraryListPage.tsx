@@ -1,26 +1,37 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Flag, MoreVertical } from 'lucide-react';
-import { supabase, type Event, type Rating, type UserList } from '../lib/supabase';
-import EventCard from './EventCard/EventCard';
-import MasonryLaneFeed, { type MasonryLaneItem } from './MasonryLaneFeed';
-import { TagDisplayProvider } from '../contexts/TagDisplayContext';
-import { useHomeCatalogOptional } from '../contexts/HomeCatalogContext';
-import { fetchTagResolutionForEvents, type TagResolutionMap } from '../lib/tagDisplayResolution';
-import { eventMatchesTextQuery, filterEventsBySelectedTags } from '../lib/eventTagFilter';
-import { normalizeEventTagArrays } from '../lib/eventTagArray';
-import { fetchEventRatingStats } from '../lib/eventRatingStats';
-import { useAuth } from '../contexts/AuthContext';
-import { useAppChrome } from '../contexts/AppChromeContext';
-import { useT } from '../hooks/useCopy';
-import { listPagePath } from '../lib/siteBase';
-import { ListCover } from './ListCoverCollage';
-import { pickListCollageUrls } from '../lib/listCoverCollage';
-import ListSocialMeta from './ListSocialMeta';
-import { isUserBlocked } from '../lib/ugcSafety';
-import ReportContentModal from './ReportContentModal';
-import { LoadingSpinner } from './ui';
-import { useAppSettings } from '../hooks/useAppSettings';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Flag, MoreVertical } from "lucide-react";
+import {
+  supabase,
+  type Event,
+  type Rating,
+  type UserList,
+} from "../lib/supabase";
+import EventCard from "./EventCard/EventCard";
+import MasonryLaneFeed, { type MasonryLaneItem } from "./MasonryLaneFeed";
+import { TagDisplayProvider } from "../contexts/TagDisplayContext";
+import { useHomeCatalogOptional } from "../contexts/HomeCatalogContext";
+import {
+  fetchTagResolutionForEvents,
+  type TagResolutionMap,
+} from "../lib/tagDisplayResolution";
+import {
+  eventMatchesTextQuery,
+  filterEventsBySelectedTags,
+} from "../lib/eventTagFilter";
+import { normalizeEventTagArrays } from "../lib/eventTagArray";
+import { fetchEventRatingStats } from "../lib/eventRatingStats";
+import { useAuth } from "../contexts/AuthContext";
+import { useAppChrome } from "../contexts/AppChromeContext";
+import { useT } from "../hooks/useCopy";
+import { listPagePath } from "../lib/siteBase";
+import { ListCover } from "./ListCoverCollage";
+import { pickListCollageUrls } from "../lib/listCoverCollage";
+import ListSocialMeta from "./ListSocialMeta";
+import { isUserBlocked } from "../lib/ugcSafety";
+import ReportContentModal from "./ReportContentModal";
+import { LoadingSpinner, menuRowClass, typeCallout } from "./ui";
+import { useAppSettings } from "../hooks/useAppSettings";
 
 type BoardRow = {
   event: Event;
@@ -36,7 +47,11 @@ type SharedLibraryListPageProps = {
   onOpenEvent?: (eventId: string) => void;
   onTagClick?: (type: string, value: string, displayLabel?: string) => void;
   tagColors?: ProfileTagColors;
-  customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
+  customPerformerTags?: {
+    slug: string;
+    bg_color: string;
+    text_color: string;
+  }[];
 };
 
 type ProfileTagColors = {
@@ -75,8 +90,8 @@ export default function SharedLibraryListPage({
   const home = useHomeCatalogOptional();
   const { setProfileBoardEvents, setHeaderSearchCounts } = useAppChrome();
   const [list, setList] = useState<UserList | null>(null);
-  const [ownerUsername, setOwnerUsername] = useState('');
-  const [ownerHandle, setOwnerHandle] = useState('');
+  const [ownerUsername, setOwnerUsername] = useState("");
+  const [ownerHandle, setOwnerHandle] = useState("");
   const [rows, setRows] = useState<BoardRow[]>([]);
   const [tagMap, setTagMap] = useState<TagResolutionMap | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,12 +103,15 @@ export default function SharedLibraryListPage({
   useEffect(() => {
     if (!listMenuOpen) return;
     const close = (e: MouseEvent) => {
-      if (listMenuRef.current && !listMenuRef.current.contains(e.target as Node)) {
+      if (
+        listMenuRef.current &&
+        !listMenuRef.current.contains(e.target as Node)
+      ) {
         setListMenuOpen(false);
       }
     };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
   }, [listMenuOpen]);
 
   useEffect(() => {
@@ -101,12 +119,16 @@ export default function SharedLibraryListPage({
     (async () => {
       setLoading(true);
       setError(null);
-      setOwnerUsername('');
-      setOwnerHandle('');
-      const listRes = await supabase.from('user_lists').select('*').eq('id', listId).maybeSingle();
+      setOwnerUsername("");
+      setOwnerHandle("");
+      const listRes = await supabase
+        .from("user_lists")
+        .select("*")
+        .eq("id", listId)
+        .maybeSingle();
       if (cancelled) return;
       if (listRes.error || !listRes.data) {
-        setError('List not found');
+        setError("List not found");
         setList(null);
         setRows([]);
         setLoading(false);
@@ -115,7 +137,7 @@ export default function SharedLibraryListPage({
       const listRow = listRes.data as UserList;
       const isOwner = user?.id === listRow.user_id;
       if (!listRow.is_public && !isOwner) {
-        setError('This list is private');
+        setError("This list is private");
         setList(listRow);
         setRows([]);
         setLoading(false);
@@ -125,30 +147,33 @@ export default function SharedLibraryListPage({
 
       {
         const profileRes = await supabase
-          .from('user_profiles')
-          .select('username, user_id_public')
-          .eq('user_id', listRow.user_id)
+          .from("user_profiles")
+          .select("username, user_id_public")
+          .eq("user_id", listRow.user_id)
           .maybeSingle();
         if (!cancelled) {
-          setOwnerUsername((profileRes.data?.username || '').trim());
-          setOwnerHandle((profileRes.data?.user_id_public || '').trim());
+          setOwnerUsername((profileRes.data?.username || "").trim());
+          setOwnerHandle((profileRes.data?.user_id_public || "").trim());
         }
       }
 
       if (listRow.is_rated_list) {
         const ratingsRes = await supabase
-          .from('ratings')
-          .select('*')
-          .eq('user_id', listRow.user_id)
-          .order('created_at', { ascending: false });
+          .from("ratings")
+          .select("*")
+          .eq("user_id", listRow.user_id)
+          .order("created_at", { ascending: false });
         const ratings = (ratingsRes.data || []) as Rating[];
         const eventIds = [...new Set(ratings.map((r) => r.event_id))];
         const eventsRes =
           eventIds.length > 0
-            ? await supabase.from('events').select('*').in('id', eventIds)
+            ? await supabase.from("events").select("*").in("id", eventIds)
             : { data: [] as Event[] };
         const eventsMap = new Map(
-          ((eventsRes.data || []) as Event[]).map((e) => [e.id, normalizeEventTagArrays(e)]),
+          ((eventsRes.data || []) as Event[]).map((e) => [
+            e.id,
+            normalizeEventTagArrays(e),
+          ]),
         );
         const statsRes = await fetchEventRatingStats(eventIds);
         const board = ratings
@@ -165,28 +190,42 @@ export default function SharedLibraryListPage({
             return row;
           })
           .filter((x): x is BoardRow => x != null);
-        board.sort((a, b) => (b.event.date || '').localeCompare(a.event.date || ''));
+        board.sort((a, b) =>
+          (b.event.date || "").localeCompare(a.event.date || ""),
+        );
         if (!cancelled) setRows(board);
       } else {
         const membership = await supabase
-          .from('user_list_events')
-          .select('*')
-          .eq('list_id', listId)
-          .order('position');
+          .from("user_list_events")
+          .select("*")
+          .eq("list_id", listId)
+          .order("position");
         const ids = (membership.data || []).map((e) => e.event_id as string);
         const eventsRes =
-          ids.length > 0 ? await supabase.from('events').select('*').in('id', ids) : { data: [] as Event[] };
+          ids.length > 0
+            ? await supabase.from("events").select("*").in("id", ids)
+            : { data: [] as Event[] };
         const eventsMap = new Map(
-          ((eventsRes.data || []) as Event[]).map((e) => [e.id, normalizeEventTagArrays(e)]),
+          ((eventsRes.data || []) as Event[]).map((e) => [
+            e.id,
+            normalizeEventTagArrays(e),
+          ]),
         );
         const [statsRes, viewerRatingsRes] = await Promise.all([
           fetchEventRatingStats(ids),
           user?.id && ids.length > 0
-            ? supabase.from('ratings').select('*').eq('user_id', user.id).in('event_id', ids)
+            ? supabase
+                .from("ratings")
+                .select("*")
+                .eq("user_id", user.id)
+                .in("event_id", ids)
             : Promise.resolve({ data: [] as Rating[] }),
         ]);
         const viewerByEvent = new Map(
-          ((viewerRatingsRes.data || []) as Rating[]).map((r) => [r.event_id, r]),
+          ((viewerRatingsRes.data || []) as Rating[]).map((r) => [
+            r.event_id,
+            r,
+          ]),
         );
         const board = (membership.data || [])
           .map((le) => {
@@ -202,7 +241,9 @@ export default function SharedLibraryListPage({
             return row;
           })
           .filter((x): x is BoardRow => x != null);
-        board.sort((a, b) => (b.event.date || '').localeCompare(a.event.date || ''));
+        board.sort((a, b) =>
+          (b.event.date || "").localeCompare(a.event.date || ""),
+        );
         if (!cancelled) setRows(board);
       }
       setLoading(false);
@@ -215,7 +256,7 @@ export default function SharedLibraryListPage({
   // Canonical path is /:handle/list/:id (rewrite legacy /list/:id and wrong handles).
   useEffect(() => {
     if (!ownerHandle || !listId) return;
-    const current = (urlHandle || '').trim();
+    const current = (urlHandle || "").trim();
     if (current.toLowerCase() === ownerHandle.toLowerCase()) return;
     navigate(listPagePath(ownerHandle, listId), { replace: true });
   }, [ownerHandle, listId, urlHandle, navigate]);
@@ -240,16 +281,19 @@ export default function SharedLibraryListPage({
     return () => setProfileBoardEvents(null);
   }, [rows, setProfileBoardEvents]);
 
-  const searchQuery = home?.searchQuery ?? '';
+  const searchQuery = home?.searchQuery ?? "";
   const selectedTags = home?.selectedTags ?? [];
-  const searchActive = selectedTags.length > 0 || searchQuery.trim().length >= 2;
+  const searchActive =
+    selectedTags.length > 0 || searchQuery.trim().length >= 2;
   const visibleRows = useMemo(() => {
     if (!searchActive) return rows;
     return rows.filter((row) => {
       const event = row.event;
       if (!event?.id) return false;
       if (!eventMatchesTextQuery(event, searchQuery, tagMap)) return false;
-      return filterEventsBySelectedTags([event], selectedTags, tagMap).length > 0;
+      return (
+        filterEventsBySelectedTags([event], selectedTags, tagMap).length > 0
+      );
     });
   }, [rows, searchActive, searchQuery, selectedTags, tagMap]);
 
@@ -266,31 +310,31 @@ export default function SharedLibraryListPage({
   }, [setHeaderSearchCounts]);
 
   const title = useMemo(() => {
-    if (!list) return '';
+    if (!list) return "";
     if (list.is_rated_list) {
       const isOwner = !!user && user.id === list.user_id;
-      if (isOwner) return t('event.ratedListName');
-      const name = ownerUsername || t('nav.profile');
-      return t('event.ratedListNameForUser').replace('{name}', name);
+      if (isOwner) return t("event.ratedListName");
+      const name = ownerUsername || t("nav.profile");
+      return t("event.ratedListNameForUser").replace("{name}", name);
     }
     if (list.is_liked_list) {
       const isOwner = !!user && user.id === list.user_id;
-      if (isOwner) return t('event.likedListName');
-      const name = ownerUsername || t('nav.profile');
-      return t('event.likedListNameForUser').replace('{name}', name);
+      if (isOwner) return t("event.likedListName");
+      const name = ownerUsername || t("nav.profile");
+      return t("event.likedListNameForUser").replace("{name}", name);
     }
     return list.name;
   }, [list, t, user, ownerUsername]);
 
   /** Public-facing title for OG / crawlers (never “My …”). */
   const shareTitle = useMemo(() => {
-    if (!list) return '';
-    const name = ownerUsername || t('nav.profile');
+    if (!list) return "";
+    const name = ownerUsername || t("nav.profile");
     if (list.is_rated_list) {
-      return t('event.ratedListNameForUser').replace('{name}', name);
+      return t("event.ratedListNameForUser").replace("{name}", name);
     }
     if (list.is_liked_list) {
-      return t('event.likedListNameForUser').replace('{name}', name);
+      return t("event.likedListNameForUser").replace("{name}", name);
     }
     return list.name;
   }, [list, t, ownerUsername]);
@@ -299,7 +343,8 @@ export default function SharedLibraryListPage({
     () => pickListCollageUrls(rows.map((r) => r.event?.image_url)),
     [rows],
   );
-  const shareImageUrl = (list?.cover_image_url || '').trim() || collageUrls[0] || null;
+  const shareImageUrl =
+    (list?.cover_image_url || "").trim() || collageUrls[0] || null;
   const sharePayload = useMemo(() => {
     if (!list || !shareTitle || error || !ownerHandle) return null;
     return {
@@ -311,7 +356,15 @@ export default function SharedLibraryListPage({
       ownerUsername: ownerUsername || null,
       eventCount: rows.length,
     };
-  }, [list, shareTitle, shareImageUrl, ownerHandle, ownerUsername, rows.length, error]);
+  }, [
+    list,
+    shareTitle,
+    shareImageUrl,
+    ownerHandle,
+    ownerUsername,
+    rows.length,
+    error,
+  ]);
 
   if (loading) {
     return (
@@ -323,38 +376,45 @@ export default function SharedLibraryListPage({
 
   if (error) {
     return (
-      <div className="rounded-2xl bg-white/80 py-16 px-6 text-center">
-        <p className="text-neutral-600 text-sm">{error}</p>
+      <div className="rounded-lg bg-white/80 py-16 px-6 text-center">
+        <p className={`${typeCallout} text-muted-foreground`}>{error}</p>
       </div>
     );
   }
 
-  const laneItems: MasonryLaneItem[] = visibleRows.map(({ event, averageRating, ratingCount, userRating }, index) => ({
-    id: event.id,
-    children: (
-      <EventCard
-        event={event}
-        averageRating={averageRating}
-        ratingCount={ratingCount}
-        userRating={userRating}
-        onRatingSubmitted={() => {}}
-        onEventUpdated={() => {}}
-        onTagClick={onTagClick || (() => {})}
-        onViewClick={onOpenEvent}
-        tagColors={tagColors}
-        customPerformerTags={customPerformerTags}
-        imagePriority={index < 4}
-      />
-    ),
-  }));
+  const laneItems: MasonryLaneItem[] = visibleRows.map(
+    ({ event, averageRating, ratingCount, userRating }, index) => ({
+      id: event.id,
+      children: (
+        <EventCard
+          event={event}
+          averageRating={averageRating}
+          ratingCount={ratingCount}
+          userRating={userRating}
+          onRatingSubmitted={() => {}}
+          onEventUpdated={() => {}}
+          onTagClick={onTagClick || (() => {})}
+          onViewClick={onOpenEvent}
+          tagColors={tagColors}
+          customPerformerTags={customPerformerTags}
+          imagePriority={index < 4}
+        />
+      ),
+    }),
+  );
 
   const canReportList = !!user && !!list && list.user_id !== user.id;
-  const ownerBlocked = !!list && isUserBlocked(blockedUserIds, list.user_id) && list.user_id !== user?.id;
+  const ownerBlocked =
+    !!list &&
+    isUserBlocked(blockedUserIds, list.user_id) &&
+    list.user_id !== user?.id;
 
   if (ownerBlocked) {
     return (
-      <div className="rounded-2xl bg-white/80 py-16 px-6 text-center">
-        <p className="text-neutral-600 text-sm">{t('safety.block.hiddenBody')}</p>
+      <div className="rounded-lg bg-card/80 py-16 px-6 text-center">
+        <p className={`text-muted-foreground ${typeCallout}`}>
+          {t("safety.block.hiddenBody")}
+        </p>
       </div>
     );
   }
@@ -365,32 +425,32 @@ export default function SharedLibraryListPage({
       <ListCover
         coverUrl={list?.cover_image_url}
         collageUrls={collageUrls}
-        className="mb-6 h-40 w-full rounded-xl sm:h-52"
+        className="mb-6 h-40 w-full rounded-lg sm:h-52"
       />
       <div className="mb-6 flex items-start justify-between gap-3">
-        <h1 className="text-xl font-semibold text-neutral-900 tracking-tight">{title}</h1>
+        <h1 className="type-title text-foreground">{title}</h1>
         {canReportList ? (
           <div ref={listMenuRef} className="relative shrink-0">
             <button
               type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
               aria-label="List options"
               onClick={() => setListMenuOpen((v) => !v)}
             >
               <MoreVertical size={18} />
             </button>
             {listMenuOpen ? (
-              <div className="absolute right-0 z-20 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-border bg-white py-1 shadow-lg">
+              <div className="absolute right-0 z-20 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-border bg-card py-1 ">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left ${menuRowClass} hover:bg-muted`}
                   onClick={() => {
                     setListMenuOpen(false);
                     setReportOpen(true);
                   }}
                 >
-                  <Flag size={14} className="shrink-0 text-gray-500" />
-                  <span>{t('safety.report.action')}</span>
+                  <Flag size={14} className="shrink-0 text-muted-foreground" />
+                  <span>{t("safety.report.action")}</span>
                 </button>
               </div>
             ) : null}
@@ -398,16 +458,24 @@ export default function SharedLibraryListPage({
         ) : null}
       </div>
       {rows.length === 0 ? (
-        <div className="rounded-2xl bg-white/80 py-16 px-6 text-center">
-          <p className="text-neutral-500 text-sm">No shows in this list yet.</p>
+        <div className="rounded-lg bg-card/80 py-16 px-6 text-center">
+          <p className={`text-muted-foreground ${typeCallout}`}>
+            No shows in this list yet.
+          </p>
         </div>
       ) : visibleRows.length === 0 ? (
-        <div className="rounded-2xl bg-white/80 py-16 px-6 text-center">
-          <p className="text-neutral-500 text-sm">{t('empty.noMatch.title')}</p>
+        <div className="rounded-lg bg-card/80 py-16 px-6 text-center">
+          <p className={`text-muted-foreground ${typeCallout}`}>
+            {t("empty.noMatch.title")}
+          </p>
         </div>
       ) : (
         <TagDisplayProvider map={tagMap}>
-          <MasonryLaneFeed items={laneItems} columnMinWidthPx={220} gapPx={24} />
+          <MasonryLaneFeed
+            items={laneItems}
+            columnMinWidthPx={220}
+            gapPx={24}
+          />
         </TagDisplayProvider>
       )}
       {list && reportOpen ? (

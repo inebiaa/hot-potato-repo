@@ -70,7 +70,7 @@ function tagLabel(type: string, value = ''): string {
 
 /** Lucide X on the query-clear control (filter chips use TagPillSplitLabel trailingSlot). */
 const queryClearBtn =
-  'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-600 opacity-80 transition-opacity hover:bg-gray-100 hover:opacity-100';
+  'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-80 transition-opacity hover:bg-muted hover:opacity-100';
 
 function suggestionTypeLabel(type: string, value?: string): string {
   if (type === 'header_tags') return 'Genre';
@@ -261,14 +261,14 @@ export default function PrimarySearchBar({
   };
 
   const searchFieldClass = embeddedInHeader
-    ? `relative flex min-h-10 w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-sm text-gray-900 shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'bg-neutral-100 ring-2 ring-neutral-400' : ''}`
-    : `relative flex min-h-[2.5rem] w-full min-w-[200px] flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-shadow focus-within:border-gray-300 focus-within:ring-1 focus-within:ring-gray-300 ${searchDragOver ? 'ring-2 ring-neutral-400 bg-neutral-100' : ''}`;
+    ? `relative flex min-h-10 w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1 type-body text-foreground shadow-sm transition-shadow focus-within:border-input focus-within:ring-1 focus-within:ring-ring ${searchDragOver ? 'bg-muted ring-2 ring-ring' : ''}`
+    : `relative flex min-h-[2.5rem] w-full min-w-[200px] flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 type-body shadow-sm transition-shadow focus-within:border-input focus-within:ring-1 focus-within:ring-ring ${searchDragOver ? 'bg-muted ring-2 ring-ring' : ''}`;
 
   const chipsAndInputRow =
     'flex min-h-0 min-w-0 flex-1 flex-wrap items-center gap-1';
 
   return (
-    <div className={embeddedInHeader ? 'w-full min-w-0' : 'mb-6 border-b border-gray-200 pb-4'}>
+    <div className={embeddedInHeader ? 'w-full min-w-0' : 'mb-6 border-b border-border pb-4'}>
       <div className={embeddedInHeader ? 'w-full' : 'flex flex-wrap items-center gap-3'}>
         <div
           ref={fieldRef}
@@ -277,7 +277,7 @@ export default function PrimarySearchBar({
           onDragLeave={onSearchDragLeave}
           onDrop={onSearchDrop}
         >
-          <Search className="pointer-events-none shrink-0 text-gray-400" size={18} strokeWidth={2} />
+          <Search className="pointer-events-none shrink-0 text-muted-foreground" size={18} strokeWidth={2} />
           <div className={chipsAndInputRow}>
             {selectedTags.map((selectedTag) => {
               const { type, value, label } = selectedTag;
@@ -337,14 +337,14 @@ export default function PrimarySearchBar({
               aria-controls={showTagSuggestions ? listboxId : undefined}
               aria-autocomplete="list"
               aria-activedescendant={activeOptionId}
-              className="min-h-0 min-w-[7rem] flex-1 border-0 bg-transparent py-0.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"
+              className="min-h-0 min-w-[7rem] flex-1 border-0 bg-transparent py-0.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
             />
           </div>
           {showTagSuggestions ? (
             <div
               ref={listboxRef}
               id={listboxId}
-              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white py-0.5 shadow-lg"
+              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-card py-0.5 shadow-lg"
               role="listbox"
               aria-label="Tag suggestions"
             >
@@ -363,15 +363,15 @@ export default function PrimarySearchBar({
                       e.preventDefault();
                       selectSuggestion(suggestion);
                     }}
-                    className={`grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 px-3 py-2 text-left text-sm ${
-                      active ? 'bg-gray-100' : 'hover:bg-gray-50'
+                    className={`grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 px-3 py-2 text-left type-body ${
+                      active ? 'bg-muted' : 'hover:bg-muted/60'
                     }`}
                   >
-                    <span className="shrink-0 text-xs capitalize text-gray-400">
+                    <span className="shrink-0 type-caption capitalize text-muted-foreground">
                       {suggestionTypeLabel(suggestion.type, suggestion.value)}:
                     </span>
                     <span
-                      className="min-w-0 truncate text-gray-900"
+                      className="min-w-0 truncate text-foreground"
                       title={suggestion.label.replace(/\r\n|\r|\n/g, ' ')}
                     >
                       {suggestion.label.replace(/\r\n|\r|\n/g, ' ')}
@@ -387,7 +387,7 @@ export default function PrimarySearchBar({
       {showCounts ? (
         <div
           className={
-            embeddedInHeader ? 'mt-1 text-xs text-gray-500' : 'mt-3 text-sm text-gray-600'
+            embeddedInHeader ? 'mt-1 type-caption text-muted-foreground' : 'mt-3 type-callout text-muted-foreground'
           }
         >
           {countSummary}

@@ -1,24 +1,42 @@
-import { createPortal } from 'react-dom';
-import { Edit, Trash2, Share2, Mail, MoreVertical, ListPlus, ListMinus, Check, Plus, Flag } from 'lucide-react';
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Event, supabase, type UserList } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { buildEventEmailPlainText, buildEventEmailRichHtml } from '../../lib/eventEmailRichCard';
-import { canonicalEventUrl } from '../../lib/siteBase';
-import { setAppModalParams } from '../../lib/searchParamsModal';
-import { useT } from '../../hooks/useCopy';
-import { deleteStoredEventImage } from '../../lib/eventImageUpload';
+import { createPortal } from "react-dom";
+import {
+  Edit,
+  Trash2,
+  Share2,
+  Mail,
+  MoreVertical,
+  ListPlus,
+  ListMinus,
+  Check,
+  Plus,
+  Flag,
+} from "lucide-react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { Event, supabase, type UserList } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import {
+  buildEventEmailPlainText,
+  buildEventEmailRichHtml,
+} from "../../lib/eventEmailRichCard";
+import { canonicalEventUrl } from "../../lib/siteBase";
+import { setAppModalParams } from "../../lib/searchParamsModal";
+import { useT } from "../../hooks/useCopy";
+import { deleteStoredEventImage } from "../../lib/eventImageUpload";
 import {
   addEventToListAndLiked,
   createUserPlaylist,
   fetchUserPlaylists,
   removeEventFromList,
-} from '../../lib/userLists';
-import { BackIconButton } from '../ui';
-import ReportContentModal from '../ReportContentModal';
-import { useAppSettings } from '../../hooks/useAppSettings';
-import { formControlClass, formControlPaddingClass, formControlTextClass } from '../ui/field';
+} from "../../lib/userLists";
+import { BackIconButton, formErrorClass, formSuccessClass } from "../ui";
+import ReportContentModal from "../ReportContentModal";
+import { useAppSettings } from "../../hooks/useAppSettings";
+import {
+  formControlClass,
+  formControlPaddingClass,
+  formControlTextClass,
+} from "../ui/field";
 
 interface EventCardActionsMenuProps {
   event: Event;
@@ -48,35 +66,41 @@ export default function EventCardActionsMenu({
   const { appSettings } = useAppSettings();
 
   const [isDeleting, setIsDeleting] = useState(false);
-  const [shareCopied, setShareCopied] = useState<'link' | 'embed' | 'embedcode' | 'email' | null>(null);
+  const [shareCopied, setShareCopied] = useState<
+    "link" | "embed" | "embedcode" | "email" | null
+  >(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
-  const [actionsView, setActionsView] = useState<'main' | 'add-to-list' | 'create-list'>('main');
+  const [actionsView, setActionsView] = useState<
+    "main" | "add-to-list" | "create-list"
+  >("main");
   const [playlists, setPlaylists] = useState<UserList[]>([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(false);
-  const [playlistsError, setPlaylistsError] = useState('');
+  const [playlistsError, setPlaylistsError] = useState("");
   const [addingToListId, setAddingToListId] = useState<string | null>(null);
   const [addedToListId, setAddedToListId] = useState<string | null>(null);
-  const [newListName, setNewListName] = useState('');
+  const [newListName, setNewListName] = useState("");
   const [newListPrivate, setNewListPrivate] = useState(false);
   const [createListBusy, setCreateListBusy] = useState(false);
-  const [createListError, setCreateListError] = useState('');
+  const [createListError, setCreateListError] = useState("");
   const [removeFromListBusy, setRemoveFromListBusy] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(
+    null,
+  );
   const actionsMenuBtnRef = useRef<HTMLButtonElement | null>(null);
   const playlistsFetchGen = useRef(0);
 
   useEffect(() => {
     if (!showActionsMenu) {
-      setActionsView('main');
+      setActionsView("main");
       setPlaylists([]);
-      setPlaylistsError('');
+      setPlaylistsError("");
       setAddingToListId(null);
       setAddedToListId(null);
-      setNewListName('');
+      setNewListName("");
       setNewListPrivate(false);
       setCreateListBusy(false);
-      setCreateListError('');
+      setCreateListError("");
       setMenuPos(null);
     }
   }, [showActionsMenu]);
@@ -93,11 +117,11 @@ export default function EventCardActionsMenu({
       });
     };
     update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
     return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
     };
   }, [showActionsMenu, actionsView]);
 
@@ -105,20 +129,22 @@ export default function EventCardActionsMenu({
     if (!user) return;
     const gen = ++playlistsFetchGen.current;
     setPlaylistsLoading(true);
-    setPlaylistsError('');
+    setPlaylistsError("");
     try {
       const { data, error } = await fetchUserPlaylists(user.id);
       if (gen !== playlistsFetchGen.current) return;
       if (error) {
         setPlaylists([]);
-        setPlaylistsError(error.message || 'Failed to load lists');
+        setPlaylistsError(error.message || "Failed to load lists");
         return;
       }
       setPlaylists(data);
     } catch (err) {
       if (gen !== playlistsFetchGen.current) return;
       setPlaylists([]);
-      setPlaylistsError(err instanceof Error ? err.message : 'Failed to load lists');
+      setPlaylistsError(
+        err instanceof Error ? err.message : "Failed to load lists",
+      );
     } finally {
       if (gen === playlistsFetchGen.current) setPlaylistsLoading(false);
     }
@@ -129,45 +155,45 @@ export default function EventCardActionsMenu({
       setShowActionsMenu(false);
       navigate({
         pathname: location.pathname,
-        search: setAppModalParams(searchParams, 'auth', {
-          authMode: 'signin',
-          authPrompt: t('auth.prompt.addToList'),
+        search: setAppModalParams(searchParams, "auth", {
+          authMode: "signin",
+          authPrompt: t("auth.prompt.addToList"),
         }),
       });
       return;
     }
-    setActionsView('add-to-list');
+    setActionsView("add-to-list");
     await loadPlaylists();
   };
 
   const openCreateList = () => {
-    setCreateListError('');
-    setNewListName('');
+    setCreateListError("");
+    setNewListName("");
     setNewListPrivate(false);
-    setActionsView('create-list');
+    setActionsView("create-list");
   };
 
   const handleCreateListAndAdd = async () => {
     if (!user || createListBusy) return;
     const name = newListName.trim();
     if (!name) {
-      setCreateListError('Name is required');
+      setCreateListError("Name is required");
       return;
     }
     setCreateListBusy(true);
-    setCreateListError('');
+    setCreateListError("");
     try {
       const { data: list, error } = await createUserPlaylist(user.id, name, {
         isPublic: !newListPrivate,
         sortOrder: playlists.length,
       });
       if (error || !list) {
-        setCreateListError(error?.message || 'Failed to create list');
+        setCreateListError(error?.message || "Failed to create list");
         return;
       }
       const addRes = await addEventToListAndLiked(user.id, list.id, event.id);
       if (addRes.error) {
-        setCreateListError(addRes.error.message || 'Failed to add show');
+        setCreateListError(addRes.error.message || "Failed to add show");
         return;
       }
       onLikedChange?.(true);
@@ -202,10 +228,14 @@ export default function EventCardActionsMenu({
     if (!user || !listMembership || removeFromListBusy) return;
     setRemoveFromListBusy(true);
     try {
-      const { error } = await removeEventFromList(listMembership.listId, event.id, {
-        userId: user.id,
-        isLikedList: listMembership.isLikedList,
-      });
+      const { error } = await removeEventFromList(
+        listMembership.listId,
+        event.id,
+        {
+          userId: user.id,
+          isLikedList: listMembership.isLikedList,
+        },
+      );
       if (error) return;
       if (listMembership.isLikedList) onLikedChange?.(false);
       setShowActionsMenu(false);
@@ -219,18 +249,21 @@ export default function EventCardActionsMenu({
   const embedLink = `${canonicalEventUrl(event.id)}?embed=1`;
   const embedCode = `<iframe src="${embedLink}" width="400" height="600" frameborder="0" title="${event.name}"></iframe>`;
 
-  const copyToClipboard = async (text: string, type: 'link' | 'embed' | 'embedcode') => {
+  const copyToClipboard = async (
+    text: string,
+    type: "link" | "embed" | "embedcode",
+  ) => {
     try {
       await navigator.clipboard.writeText(text);
       setShareCopied(type);
       setTimeout(() => setShareCopied(null), 2000);
     } catch {
       // fallback for older browsers
-      const ta = document.createElement('textarea');
+      const ta = document.createElement("textarea");
       ta.value = text;
       document.body.appendChild(ta);
       ta.select();
-      document.execCommand('copy');
+      document.execCommand("copy");
       document.body.removeChild(ta);
       setShareCopied(type);
       setTimeout(() => setShareCopied(null), 2000);
@@ -241,15 +274,18 @@ export default function EventCardActionsMenu({
     const plain = buildEventEmailPlainText(event);
     const html = buildEventEmailRichHtml(event);
     const markCopied = () => {
-      setShareCopied('email');
+      setShareCopied("email");
       setTimeout(() => setShareCopied(null), 2000);
     };
     try {
-      if (typeof navigator.clipboard?.write === 'function' && typeof ClipboardItem !== 'undefined') {
+      if (
+        typeof navigator.clipboard?.write === "function" &&
+        typeof ClipboardItem !== "undefined"
+      ) {
         await navigator.clipboard.write([
           new ClipboardItem({
-            'text/plain': new Blob([plain], { type: 'text/plain' }),
-            'text/html': new Blob([html], { type: 'text/html' }),
+            "text/plain": new Blob([plain], { type: "text/plain" }),
+            "text/html": new Blob([html], { type: "text/html" }),
           }),
         ]);
         markCopied();
@@ -262,11 +298,11 @@ export default function EventCardActionsMenu({
       await navigator.clipboard.writeText(plain);
       markCopied();
     } catch {
-      const ta = document.createElement('textarea');
+      const ta = document.createElement("textarea");
       ta.value = plain;
       document.body.appendChild(ta);
       ta.select();
-      document.execCommand('copy');
+      document.execCommand("copy");
       document.body.removeChild(ta);
       markCopied();
     }
@@ -278,16 +314,20 @@ export default function EventCardActionsMenu({
   const handleDelete = async () => {
     if (!user || !canEdit) return;
 
-    if (!confirm('Are you sure you want to delete this show? This action cannot be undone.')) {
+    if (
+      !confirm(
+        "Are you sure you want to delete this show? This action cannot be undone.",
+      )
+    ) {
       return;
     }
 
     setIsDeleting(true);
     try {
       const { error } = await supabase
-        .from('events')
+        .from("events")
         .delete()
-        .eq('id', event.id);
+        .eq("id", event.id);
 
       if (error) throw error;
 
@@ -295,8 +335,8 @@ export default function EventCardActionsMenu({
 
       onEventUpdated();
     } catch (error) {
-      console.error('Error deleting event:', error);
-      alert('Failed to delete event');
+      console.error("Error deleting event:", error);
+      alert("Failed to delete event");
     } finally {
       setIsDeleting(false);
     }
@@ -323,247 +363,302 @@ export default function EventCardActionsMenu({
           }
           setShowActionsMenu(true);
         }}
-        className="p-0.5 text-gray-400 hover:text-gray-600 rounded transition-colors"
+        className="p-0.5 text-muted-foreground hover:text-muted-foreground rounded transition-colors"
         title="Actions"
         aria-haspopup="true"
         aria-expanded={showActionsMenu}
       >
         <MoreVertical size={16} />
       </button>
-      {showActionsMenu && menuPos && createPortal(
-        <>
-          <div
-            className="fixed inset-0 z-[80]"
-            onClick={() => setShowActionsMenu(false)}
-            aria-hidden="true"
-          />
-          <div
-            className="fixed z-[90] w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1"
-            style={{ top: menuPos.top, right: menuPos.right }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {actionsView === 'create-list' ? (
-              <div className="px-3 py-2 space-y-2">
-                <BackIconButton
-                  size="sm"
-                  label={t('nav.back')}
-                  className="-ml-1 mb-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActionsView('add-to-list');
-                    setCreateListError('');
-                    void loadPlaylists();
-                  }}
-                />
-                <input
-                  type="text"
-                  value={newListName}
-                  onChange={(e) => setNewListName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      void handleCreateListAndAdd();
-                    }
-                  }}
-                  autoFocus
-                  className={`${formControlClass} ${formControlPaddingClass} ${formControlTextClass}`}
-                  aria-label={t('event.createList')}
-                />
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={newListPrivate}
-                  onClick={() => setNewListPrivate((v) => !v)}
-                  className="w-full flex items-center justify-between gap-2 rounded-md border border-neutral-200 px-2 py-1.5 text-sm text-neutral-800 hover:bg-neutral-50"
-                >
-                  <span>{t('event.listPrivate')}</span>
-                  <span
-                    className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${
-                      newListPrivate ? 'bg-neutral-900' : 'bg-neutral-300'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                        newListPrivate ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </span>
-                </button>
-                {createListError ? (
-                  <p className="text-xs text-red-600">{createListError}</p>
-                ) : null}
-                <button
-                  type="button"
-                  disabled={createListBusy}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void handleCreateListAndAdd();
-                  }}
-                  className="w-full rounded-md bg-neutral-900 px-2 py-1.5 text-sm text-white hover:bg-neutral-800 disabled:opacity-50"
-                >
-                  {addedToListId ? t('event.addedToList') : t('event.createList')}
-                </button>
-              </div>
-            ) : actionsView === 'add-to-list' ? (
-              <>
-                <div className="border-b border-gray-100 px-2 py-1.5">
+      {showActionsMenu &&
+        menuPos &&
+        createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[80]"
+              onClick={() => setShowActionsMenu(false)}
+              aria-hidden="true"
+            />
+            <div
+              className="fixed z-[90] w-56 bg-card rounded-lg shadow-lg border border-border py-1"
+              style={{ top: menuPos.top, right: menuPos.right }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {actionsView === "create-list" ? (
+                <div className="px-3 py-2 space-y-2">
                   <BackIconButton
                     size="sm"
-                    label={t('nav.back')}
-                    className="-ml-0.5"
+                    label={t("nav.back")}
+                    className="-ml-1 mb-1"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setActionsView('main');
+                      setActionsView("add-to-list");
+                      setCreateListError("");
+                      void loadPlaylists();
                     }}
                   />
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openCreateList();
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100"
-                >
-                  <Plus size={14} className="text-gray-500" />
-                  <span>{t('event.newList')}</span>
-                </button>
-                {playlistsLoading ? (
-                  <div className="px-3 py-3 text-sm text-gray-400">…</div>
-                ) : playlistsError ? (
-                  <div className="px-3 py-3 text-sm text-red-600">{playlistsError}</div>
-                ) : playlists.length === 0 ? (
-                  <div className="px-3 py-3 text-sm text-gray-500">{t('event.noLists')}</div>
-                ) : (
-                  <div className="max-h-56 overflow-y-auto">
-                    {playlists.map((list) => {
-                      const justAdded = addedToListId === list.id;
-                      const busy = addingToListId === list.id;
-                      return (
-                        <button
-                          key={list.id}
-                          type="button"
-                          disabled={busy || justAdded}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleAddToPlaylist(list.id);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between gap-2 disabled:opacity-60"
-                        >
-                          <span className="truncate">{list.name}</span>
-                          {justAdded ? (
-                            <Check size={14} className="text-green-600 shrink-0" />
-                          ) : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void openAddToList();
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <ListPlus size={14} className="shrink-0 text-gray-500" />
-                  <span>{t('event.addToList')}</span>
-                </button>
-                {listMembership ? (
+                  <input
+                    type="text"
+                    value={newListName}
+                    onChange={(e) => setNewListName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleCreateListAndAdd();
+                      }
+                    }}
+                    autoFocus
+                    className={`${formControlClass} ${formControlPaddingClass} ${formControlTextClass}`}
+                    aria-label={t("event.createList")}
+                  />
                   <button
                     type="button"
-                    disabled={removeFromListBusy}
+                    role="switch"
+                    aria-checked={newListPrivate}
+                    onClick={() => setNewListPrivate((v) => !v)}
+                    className="w-full flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 type-callout text-foreground hover:bg-muted"
+                  >
+                    <span>{t("event.listPrivate")}</span>
+                    <span
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${
+                        newListPrivate ? "bg-primary" : "bg-muted-foreground/40"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-card transition-transform ${
+                          newListPrivate ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                  {createListError ? (
+                    <p className={formErrorClass}>{createListError}</p>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={createListBusy}
                     onClick={(e) => {
                       e.stopPropagation();
-                      void handleRemoveFromList();
+                      void handleCreateListAndAdd();
                     }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
+                    className="w-full rounded-md bg-primary px-2 py-1.5 type-callout text-primary-foreground hover:opacity-90 disabled:opacity-50"
                   >
-                    <ListMinus size={14} className="shrink-0 text-gray-500" />
-                    <span>{t('event.removeFromList')}</span>
+                    {addedToListId
+                      ? t("event.addedToList")
+                      : t("event.createList")}
                   </button>
-                ) : null}
-                <div className="border-t border-gray-100 my-1" />
-                <button
-                  onClick={() => { copyToClipboard(shareLink, 'link'); setShowActionsMenu(false); }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <Share2 size={14} className="shrink-0 text-gray-500" />
-                  <span className="min-w-0 flex-1">Copy link</span>
-                  {shareCopied === 'link' && <span className="shrink-0 text-green-600 text-xs">Copied!</span>}
-                </button>
-                <button
-                  onClick={() => { copyToClipboard(embedLink, 'embed'); setShowActionsMenu(false); }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <Share2 size={14} className="shrink-0 text-gray-500" />
-                  <span>Copy embed URL</span>
-                </button>
-                <button
-                  onClick={() => { copyToClipboard(embedCode, 'embedcode'); setShowActionsMenu(false); }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <Share2 size={14} className="shrink-0 text-gray-500" />
-                  <span>Copy embed code</span>
-                </button>
-                <button
-                  onClick={() => { void copyEventEmailCard(); setShowActionsMenu(false); }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <Mail size={14} className="shrink-0 text-gray-500" />
-                  <span className="min-w-0 flex-1">Copy for email</span>
-                  {shareCopied === 'email' && <span className="shrink-0 text-green-600 text-xs">Copied!</span>}
-                </button>
-                {canReport ? (
-                  <>
-                    <div className="border-t border-gray-100 my-1" />
-                    <button
-                      type="button"
+                </div>
+              ) : actionsView === "add-to-list" ? (
+                <>
+                  <div className="border-b border-border px-2 py-1.5">
+                    <BackIconButton
+                      size="sm"
+                      label={t("nav.back")}
+                      className="-ml-0.5"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setReportOpen(true);
-                        setShowActionsMenu(false);
+                        setActionsView("main");
                       }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                    >
-                      <Flag size={14} className="shrink-0 text-gray-500" />
-                      <span>{t('safety.report.action')}</span>
-                    </button>
-                  </>
-                ) : null}
-                {canEdit && (
-                  <>
-                    <div className="border-t border-gray-100 my-1" />
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openCreateList();
+                    }}
+                    className="w-full text-left px-3 py-2 type-callout hover:bg-muted flex items-center gap-2 border-b border-border"
+                  >
+                    <Plus size={14} className="text-muted-foreground" />
+                    <span>{t("event.newList")}</span>
+                  </button>
+                  {playlistsLoading ? (
+                    <div className="px-3 py-3 type-callout text-muted-foreground">
+                      …
+                    </div>
+                  ) : playlistsError ? (
+                    <div className={`px-3 py-3 ${formErrorClass}`}>{playlistsError}</div>
+                  ) : playlists.length === 0 ? (
+                    <div className="px-3 py-3 type-callout text-muted-foreground">
+                      {t("event.noLists")}
+                    </div>
+                  ) : (
+                    <div className="max-h-56 overflow-y-auto">
+                      {playlists.map((list) => {
+                        const justAdded = addedToListId === list.id;
+                        const busy = addingToListId === list.id;
+                        return (
+                          <button
+                            key={list.id}
+                            type="button"
+                            disabled={busy || justAdded}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleAddToPlaylist(list.id);
+                            }}
+                            className="w-full text-left px-3 py-2 type-callout hover:bg-muted flex items-center justify-between gap-2 disabled:opacity-60"
+                          >
+                            <span className="truncate">{list.name}</span>
+                            {justAdded ? (
+                              <Check
+                                size={14}
+                                className="text-green-600 shrink-0"
+                              />
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void openAddToList();
+                    }}
+                    className="w-full text-left px-3 py-2 type-callout hover:bg-muted flex items-center gap-2"
+                  >
+                    <ListPlus
+                      size={14}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                    <span>{t("event.addToList")}</span>
+                  </button>
+                  {listMembership ? (
                     <button
-                      onClick={() => {
-                        onOpenEdit();
-                        setShowActionsMenu(false);
+                      type="button"
+                      disabled={removeFromListBusy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleRemoveFromList();
                       }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                      className="w-full text-left px-3 py-2 type-callout hover:bg-muted flex items-center gap-2 disabled:opacity-50"
                     >
-                      <Edit size={14} className="text-neutral-900" />
-                      <span>Edit show</span>
+                      <ListMinus
+                        size={14}
+                        className="shrink-0 text-muted-foreground"
+                      />
+                      <span>{t("event.removeFromList")}</span>
                     </button>
-                    <button
-                      onClick={() => { handleDelete(); setShowActionsMenu(false); }}
-                      disabled={isDeleting}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50 text-red-600"
-                    >
-                      <Trash2 size={14} />
-                      <span>Delete show</span>
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </>,
-        document.body,
-      )}
+                  ) : null}
+                  <div className="border-t border-border my-1" />
+                  <button
+                    onClick={() => {
+                      copyToClipboard(shareLink, "link");
+                      setShowActionsMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 type-callout hover:bg-muted flex items-center gap-2"
+                  >
+                    <Share2
+                      size={14}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                    <span className="min-w-0 flex-1">Copy link</span>
+                    {shareCopied === "link" && (
+                      <span className={`shrink-0 ${formSuccessClass}`}>
+                        Copied!
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      copyToClipboard(embedLink, "embed");
+                      setShowActionsMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 type-callout hover:bg-muted flex items-center gap-2"
+                  >
+                    <Share2
+                      size={14}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                    <span>Copy embed URL</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      copyToClipboard(embedCode, "embedcode");
+                      setShowActionsMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 type-callout hover:bg-muted flex items-center gap-2"
+                  >
+                    <Share2
+                      size={14}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                    <span>Copy embed code</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      void copyEventEmailCard();
+                      setShowActionsMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 type-callout hover:bg-muted flex items-center gap-2"
+                  >
+                    <Mail
+                      size={14}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                    <span className="min-w-0 flex-1">Copy for email</span>
+                    {shareCopied === "email" && (
+                      <span className={`shrink-0 ${formSuccessClass}`}>
+                        Copied!
+                      </span>
+                    )}
+                  </button>
+                  {canReport ? (
+                    <>
+                      <div className="border-t border-border my-1" />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReportOpen(true);
+                          setShowActionsMenu(false);
+                        }}
+                        className="w-full text-left px-3 py-2 type-callout hover:bg-muted flex items-center gap-2"
+                      >
+                        <Flag
+                          size={14}
+                          className="shrink-0 text-muted-foreground"
+                        />
+                        <span>{t("safety.report.action")}</span>
+                      </button>
+                    </>
+                  ) : null}
+                  {canEdit && (
+                    <>
+                      <div className="border-t border-border my-1" />
+                      <button
+                        onClick={() => {
+                          onOpenEdit();
+                          setShowActionsMenu(false);
+                        }}
+                        className="w-full text-left px-3 py-2 type-callout hover:bg-muted flex items-center gap-2"
+                      >
+                        <Edit size={14} className="text-foreground" />
+                        <span>Edit show</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleDelete();
+                          setShowActionsMenu(false);
+                        }}
+                        disabled={isDeleting}
+                        className="w-full text-left px-3 py-2 type-callout hover:bg-muted flex items-center gap-2 disabled:opacity-50 text-red-600"
+                      >
+                        <Trash2 size={14} />
+                        <span>Delete show</span>
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </>,
+          document.body,
+        )}
       {reportOpen ? (
         <ReportContentModal
           isOpen={reportOpen}

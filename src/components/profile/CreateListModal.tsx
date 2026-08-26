@@ -1,5 +1,5 @@
-import { Button, Input, Label } from '../ui';
-import { useT } from '../../hooks/useCopy';
+import { Button, Input, Label, Modal, formErrorClass, menuRowClass } from "../ui";
+import { useT } from "../../hooks/useCopy";
 
 interface CreateListModalProps {
   name: string;
@@ -27,66 +27,61 @@ export default function CreateListModal({
   const t = useT();
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+    <Modal
+      onClose={onClose}
+      title={t("event.createList")}
+      panelClassName="max-w-md sm:rounded-lg"
     >
-      <div
-        className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="mb-4 text-lg font-semibold text-foreground">{t('event.createList')}</h3>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="new-list-name">Name</Label>
-            <Input
-              id="new-list-name"
-              type="text"
-              value={name}
-              onChange={(e) => onNameChange(e.target.value)}
-              placeholder="e.g. Greatest shows of all time"
-              autoFocus
-            />
-          </div>
-          <div>
-            <Label htmlFor="new-list-description">Description</Label>
-            <Input
-              id="new-list-description"
-              type="text"
-              value={description}
-              onChange={(e) => onDescriptionChange(e.target.value)}
-              placeholder="e.g. My personal top 10"
-            />
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isPrivate}
-            onClick={() => onPrivateChange(!isPrivate)}
-            className="w-full flex items-center justify-between gap-2 rounded-xl border border-neutral-200 px-3 py-2.5 text-sm text-neutral-800 hover:bg-neutral-50"
+      <form onSubmit={onSubmit} className="space-y-4 p-4 sm:p-6">
+        <div>
+          <Label htmlFor="new-list-name">Name</Label>
+          <Input
+            id="new-list-name"
+            type="text"
+            value={name}
+            onChange={(e) => onNameChange(e.target.value)}
+            placeholder="e.g. Greatest shows of all time"
+            autoFocus
+          />
+        </div>
+        <div>
+          <Label htmlFor="new-list-description">Description</Label>
+          <Input
+            id="new-list-description"
+            type="text"
+            value={description}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            placeholder="e.g. My personal top 10"
+          />
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={isPrivate}
+          onClick={() => onPrivateChange(!isPrivate)}
+          className={`flex w-full items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5 ${menuRowClass} text-foreground hover:bg-muted`}
+        >
+          <span>{t("event.listPrivate")}</span>
+          <span
+            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${
+              isPrivate ? "bg-primary" : "bg-muted-foreground/40"
+            }`}
           >
-            <span>{t('event.listPrivate')}</span>
             <span
-              className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${
-                isPrivate ? 'bg-neutral-900' : 'bg-neutral-300'
+              className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-card transition-transform ${
+                isPrivate ? "translate-x-4" : "translate-x-0"
               }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                  isPrivate ? 'translate-x-4' : 'translate-x-0'
-                }`}
-              />
-            </span>
-          </button>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <div className="flex gap-2">
-            <Button type="submit">{t('event.createList')}</Button>
-            <Button type="button" variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+            />
+          </span>
+        </button>
+        {error ? <p className={formErrorClass}>{error}</p> : null}
+        <div className="flex gap-2">
+          <Button type="submit">{t("event.createList")}</Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

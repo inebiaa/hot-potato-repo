@@ -127,7 +127,7 @@ export default function AppShell({ setProfileBoardEvents }: AppShellProps) {
 
   if (!appSettings || !layoutNav) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <LoadingSpinner />
       </div>
     );

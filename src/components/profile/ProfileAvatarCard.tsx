@@ -17,7 +17,7 @@ export default function ProfileAvatarCard({ src, priority = false, preview = fal
 
   return (
     <div
-      className={`shrink-0 overflow-hidden rounded-lg bg-gray-200 shadow-md ring-4 ring-white ${sizeClass}`}
+      className={`shrink-0 overflow-hidden rounded-lg bg-muted shadow-md ring-4 ring-card ${sizeClass}`}
     >
       {image ? (
         <RemoteImg src={image} alt="" className="h-full w-full object-cover" priority={priority} />
@@ -25,7 +25,7 @@ export default function ProfileAvatarCard({ src, priority = false, preview = fal
         <div className="flex h-full w-full items-center justify-center">
           <User
             size={preview ? 28 : 36}
-            className="text-neutral-400"
+            className="text-muted-foreground"
             strokeWidth={1.5}
             aria-hidden
           />

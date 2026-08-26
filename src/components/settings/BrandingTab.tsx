@@ -1,14 +1,14 @@
-import type { AppSettings } from '../../types/appSettings';
+import type { AppSettings } from "../../types/appSettings";
 import {
   COPY_CATALOG,
   parseCopyOverrides,
   serializeCopyOverrides,
   type CopyKey,
   type CopyOverrides,
-} from '../../copy';
-import { Input, Label, Textarea } from '../ui';
-import BrandImageField from '../BrandImageField';
-import TagInput from '../TagInput';
+} from "../../copy";
+import { Input, Label, Textarea } from "../ui";
+import BrandImageField from "../BrandImageField";
+import TagInput from "../TagInput";
 
 type BrandingTabProps = {
   settings: AppSettings;
@@ -18,13 +18,26 @@ type BrandingTabProps = {
 };
 
 const HOME_COPY_KEYS: { key: CopyKey; label: string; long?: boolean }[] = [
-  { key: 'home.title', label: 'Home title' },
-  { key: 'home.subtitleSignedIn', label: 'Home subtitle (signed in)', long: true },
-  { key: 'home.subtitleSignedOut', label: 'Home subtitle (signed out)', long: true },
+  { key: "home.title", label: "Home title" },
+  {
+    key: "home.subtitleSignedIn",
+    label: "Home subtitle (signed in)",
+    long: true,
+  },
+  {
+    key: "home.subtitleSignedOut",
+    label: "Home subtitle (signed out)",
+    long: true,
+  },
 ];
 
 /** Admin branding fields — uses shared form controls. */
-export default function BrandingTab({ settings, onChange, pinnedArtistNames, onPinnedArtistsChange }: BrandingTabProps) {
+export default function BrandingTab({
+  settings,
+  onChange,
+  pinnedArtistNames,
+  onPinnedArtistsChange,
+}: BrandingTabProps) {
   const overrides = parseCopyOverrides(settings.copy_overrides);
 
   const setHomeCopy = (key: CopyKey, value: string) => {
@@ -37,7 +50,9 @@ export default function BrandingTab({ settings, onChange, pinnedArtistNames, onP
   return (
     <div className="space-y-6">
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-neutral-800 border-b border-neutral-200 pb-1">Name</h3>
+        <h3 className="text-sm font-semibold text-foreground border-b border-border pb-1">
+          Name
+        </h3>
         <div>
           <Label htmlFor="settings-app-name" required>
             App Name
@@ -62,7 +77,9 @@ export default function BrandingTab({ settings, onChange, pinnedArtistNames, onP
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-neutral-800 border-b border-neutral-200 pb-1">Home</h3>
+        <h3 className="text-sm font-semibold text-foreground border-b border-border pb-1">
+          Home
+        </h3>
         {HOME_COPY_KEYS.map(({ key, label, long }) => {
           const id = `settings-${key}`;
           const value = overrides[key] ?? COPY_CATALOG[key].default;
@@ -90,7 +107,9 @@ export default function BrandingTab({ settings, onChange, pinnedArtistNames, onP
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-neutral-800 border-b border-neutral-200 pb-1">Pinned artists</h3>
+        <h3 className="text-sm font-semibold text-foreground border-b border-border pb-1">
+          Pinned artists
+        </h3>
         <TagInput
           id="settings-pinned-artists"
           label="Header pills"
@@ -101,7 +120,9 @@ export default function BrandingTab({ settings, onChange, pinnedArtistNames, onP
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-neutral-800 border-b border-neutral-200 pb-1">Images</h3>
+        <h3 className="text-sm font-semibold text-foreground border-b border-border pb-1">
+          Images
+        </h3>
         <BrandImageField
           label="App icon"
           slot="icon"

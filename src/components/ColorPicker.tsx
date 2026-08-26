@@ -1,8 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
-import { Palette, Plus, X } from 'lucide-react';
-import { readableTextForBg } from '../lib/colorUtils';
-import { CUSTOM_COLORS_STORAGE_KEY, PRELOADED_HEX } from '../lib/tagColorPickerData';
-import { formControlClass, formControlPaddingClass, formControlTextClass } from './ui/field';
+import { useEffect, useRef, useState } from "react";
+import { Palette, Plus, X } from "lucide-react";
+import { readableTextForBg } from "../lib/colorUtils";
+import {
+  CUSTOM_COLORS_STORAGE_KEY,
+  PRELOADED_HEX,
+} from "../lib/tagColorPickerData";
+import {
+  formControlClass,
+  formControlPaddingClass,
+  formControlTextClass,
+} from "./ui/field";
 
 interface ColorPickerProps {
   label?: string;
@@ -11,10 +18,13 @@ interface ColorPickerProps {
   onBgChange: (value: string) => void;
   onTextChange: (value: string) => void;
   compact?: boolean;
-  activeScheme?: 'faded' | 'bright' | 'custom';
-  onApplyScheme?: (scheme: 'faded' | 'bright') => void;
-  onSaveSchemeDefault?: (scheme: 'faded' | 'bright') => void;
-  colorsByScheme?: Record<'faded' | 'bright', { name: string; bgHex: string }[]>;
+  activeScheme?: "faded" | "bright" | "custom";
+  onApplyScheme?: (scheme: "faded" | "bright") => void;
+  onSaveSchemeDefault?: (scheme: "faded" | "bright") => void;
+  colorsByScheme?: Record<
+    "faded" | "bright",
+    { name: string; bgHex: string }[]
+  >;
 }
 
 const uniqueHexList = (colors: string[]) => {
@@ -60,7 +70,9 @@ export default function ColorPicker({
   };
 
   const removeSaved = (hex: string) => {
-    persistSaved(savedColors.filter((c) => c.toLowerCase() !== hex.toLowerCase()));
+    persistSaved(
+      savedColors.filter((c) => c.toLowerCase() !== hex.toLowerCase()),
+    );
   };
 
   const startLongPress = () => {
@@ -80,7 +92,10 @@ export default function ColorPicker({
       if (!raw) return;
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        const valid = parsed.filter((v): v is string => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v));
+        const valid = parsed.filter(
+          (v): v is string =>
+            typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v),
+        );
         setSavedColors(uniqueHexList(valid));
       }
     } catch {
@@ -104,11 +119,15 @@ export default function ColorPicker({
     setIsOpen(false);
   };
 
-  const normalizedBg = (bgValue || '').toLowerCase();
+  const normalizedBg = (bgValue || "").toLowerCase();
 
   return (
-    <div className={compact ? '' : 'space-y-2'}>
-      {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+    <div className={compact ? "" : "space-y-2"}>
+      {label && (
+        <label className="block text-sm font-medium text-foreground mb-1">
+          {label}
+        </label>
+      )}
       <div className="relative">
         <button
           type="button"
@@ -118,43 +137,62 @@ export default function ColorPicker({
           aria-label="Pick color"
         >
           <span
-            className="w-8 h-8 sm:w-6 sm:h-6 rounded-md border border-gray-300 shrink-0"
+            className="w-8 h-8 sm:w-6 sm:h-6 rounded-md border border-input shrink-0"
             style={{ backgroundColor: bgValue, color: textValue }}
             aria-hidden="true"
           />
-          <span className="text-sm text-gray-600 truncate">{bgValue || 'Pick'}</span>
+          <span className="text-sm text-muted-foreground truncate">
+            {bgValue || "Pick"}
+          </span>
         </button>
 
         {isOpen && (
           <>
-            <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} aria-hidden="true" />
-            <div className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,300px)] max-h-80 overflow-y-auto overscroll-y-contain bg-white border border-gray-200 rounded-lg shadow-lg p-3">
-              <div className="text-xs font-medium text-gray-600 mb-2">Presets</div>
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => setIsOpen(false)}
+              aria-hidden="true"
+            />
+            <div className="absolute left-0 z-20 mt-1 min-w-[220px] w-max max-w-[min(100vw,300px)] max-h-80 overflow-y-auto overscroll-y-contain bg-card border border-border rounded-lg p-3">
+              <div className="text-xs font-medium text-muted-foreground mb-2">
+                Presets
+              </div>
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                 {PRELOADED_HEX.map((hex) => (
                   <button
                     key={hex}
                     type="button"
                     onClick={() => pick(hex)}
-                    className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 w-11 h-11 sm:w-8 sm:h-8 rounded-md border shrink-0 flex items-center justify-center text-xs motion-reduce:transition-none ${hex.toLowerCase() === normalizedBg ? 'ring-2 ring-gray-800 border-gray-800' : 'border-gray-200 hover:scale-105 motion-reduce:hover:scale-100'}`}
-                    style={{ backgroundColor: hex, color: readableTextForBg(hex) }}
+                    className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 w-11 h-11 sm:w-8 sm:h-8 rounded-md border shrink-0 flex items-center justify-center text-xs motion-reduce:transition-none ${hex.toLowerCase() === normalizedBg ? "ring-2 ring-foreground border-foreground" : "border-border hover:scale-105 motion-reduce:hover:scale-100"}`}
+                    style={{
+                      backgroundColor: hex,
+                      color: readableTextForBg(hex),
+                    }}
                     title={hex}
                   >
-                    {hex.toLowerCase() === normalizedBg ? '✓' : ''}
+                    {hex.toLowerCase() === normalizedBg ? "✓" : ""}
                   </button>
                 ))}
               </div>
 
               {savedColors.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="mt-3 pt-3 border-t border-border">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-gray-600">Saved</span>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Saved
+                    </span>
                     {manageMode ? (
-                      <button type="button" onClick={() => setManageMode(false)} className="text-xs text-neutral-900 hover:text-neutral-800 font-medium">
+                      <button
+                        type="button"
+                        onClick={() => setManageMode(false)}
+                        className="text-xs text-foreground hover:text-foreground font-medium"
+                      >
                         Done
                       </button>
                     ) : (
-                      <span className="text-[11px] text-gray-400">Long-press to remove</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Long-press to remove
+                      </span>
                     )}
                   </div>
                   <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
@@ -170,17 +208,20 @@ export default function ColorPicker({
                           onClick={() => {
                             if (!manageMode) pick(hex);
                           }}
-                          className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 w-11 h-11 sm:w-8 sm:h-8 rounded-md border shrink-0 flex items-center justify-center text-xs motion-reduce:transition-none ${hex === normalizedBg ? 'ring-2 ring-gray-800 border-gray-800' : 'border-gray-200 hover:scale-105 motion-reduce:hover:scale-100'}`}
-                          style={{ backgroundColor: hex, color: readableTextForBg(hex) }}
+                          className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 w-11 h-11 sm:w-8 sm:h-8 rounded-md border shrink-0 flex items-center justify-center text-xs motion-reduce:transition-none ${hex === normalizedBg ? "ring-2 ring-foreground border-foreground" : "border-border hover:scale-105 motion-reduce:hover:scale-100"}`}
+                          style={{
+                            backgroundColor: hex,
+                            color: readableTextForBg(hex),
+                          }}
                           title={hex}
                         >
-                          {hex === normalizedBg ? '✓' : ''}
+                          {hex === normalizedBg ? "✓" : ""}
                         </button>
                         {manageMode && (
                           <button
                             type="button"
                             onClick={() => removeSaved(hex)}
-                            className="absolute -top-1 -right-1 h-11 w-11 rounded-full bg-white border border-gray-300 text-gray-500 hover:text-red-600 flex items-center justify-center shadow-sm"
+                            className="absolute -top-1 -right-1 h-11 w-11 rounded-full bg-card border border-input text-muted-foreground hover:text-red-600 flex items-center justify-center "
                             aria-label="Delete"
                           >
                             <X size={16} strokeWidth={2} />
@@ -192,17 +233,17 @@ export default function ColorPicker({
                 </div>
               )}
 
-              <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
+              <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={addCurrent}
-                  className="inline-flex items-center justify-center gap-1.5 min-h-11 px-2.5 rounded-md bg-gray-100 text-gray-700 text-sm sm:text-xs font-medium hover:bg-gray-200"
+                  className="inline-flex items-center justify-center gap-1.5 min-h-11 px-2.5 rounded-md bg-muted text-foreground text-sm sm:text-xs font-medium hover:bg-muted"
                   title="Save current color to Saved"
                 >
                   <Plus size={14} className="shrink-0" />
                   Save current
                 </button>
-                <label className="inline-flex items-center justify-center gap-1.5 min-h-11 px-2.5 rounded-md border border-gray-200 hover:bg-gray-50 cursor-pointer text-sm sm:text-xs font-medium text-gray-700">
+                <label className="inline-flex items-center justify-center gap-1.5 min-h-11 px-2.5 rounded-md border border-border hover:bg-muted cursor-pointer text-sm sm:text-xs font-medium text-foreground">
                   <Palette size={14} className="shrink-0" />
                   Custom hex
                   <input
@@ -213,7 +254,10 @@ export default function ColorPicker({
                       onBgChange(v);
                       onTextChange(readableTextForBg(v));
                       const norm = v.toLowerCase();
-                      if (/^#[0-9a-fA-F]{6}$/.test(v) && !savedColors.includes(norm)) {
+                      if (
+                        /^#[0-9a-fA-F]{6}$/.test(v) &&
+                        !savedColors.includes(norm)
+                      ) {
                         persistSaved([norm, ...savedColors]);
                       }
                     }}

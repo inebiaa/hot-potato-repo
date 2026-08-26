@@ -11,6 +11,9 @@ import {
  * Shortest-column masonry for the home feed.
  * Each card mounts a ResizeObserver; fine for typical catalogs.
  * Past ~800–1000 visible cards, prefer virtualizing past shows or server search.
+ *
+ * Column width comes from the container (how many lanes fit), not from how many
+ * items are currently shown, so a short search result does not stretch cards.
  */
 export type MasonryLaneItem = { id: string; children: ReactNode };
 
@@ -108,6 +111,12 @@ function ItemMeasure({
   );
 }
 
+type LaneLayout = {
+  laneCount: number;
+  gapPx: number;
+  columnWidthPx: number;
+};
+
 export default function MasonryLaneFeed({
   items,
   columnMinWidthPx = 220,
@@ -117,8 +126,11 @@ export default function MasonryLaneFeed({
   className = '',
 }: MasonryLaneFeedProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [laneCount, setLaneCount] = useState(1);
-  const [layoutGapPx, setLayoutGapPx] = useState(gapPx);
+  const [layout, setLayout] = useState<LaneLayout>({
+    laneCount: 1,
+    gapPx,
+    columnWidthPx: columnMinWidthPx,
+  });
   const heightsRef = useRef<Map<string, number>>(new Map());
   const [lanes, setLanes] = useState<string[][]>([]);
 
@@ -145,8 +157,19 @@ export default function MasonryLaneFeed({
       const minW = mobile ? Math.min(columnMinWidthPx, 140) : columnMinWidthPx;
       const gap = mobile ? Math.min(gapPx, 12) : gapPx;
       const next = Math.max(1, Math.floor((w + gap) / (minW + gap)));
-      setLayoutGapPx((prev) => (prev !== gap ? gap : prev));
-      setLaneCount((prev) => (prev !== next ? next : prev));
+      const rawWidth = Math.floor((w - gap * (next - 1)) / next);
+      const colW =
+        columnMaxWidthPx > 0 ? Math.min(columnMaxWidthPx, rawWidth) : rawWidth;
+      setLayout((prev) => {
+        if (
+          prev.laneCount === next &&
+          prev.gapPx === gap &&
+          prev.columnWidthPx === colW
+        ) {
+          return prev;
+        }
+        return { laneCount: next, gapPx: gap, columnWidthPx: colW };
+      });
     };
 
     const scheduleLaneUpdate = () => {
@@ -169,26 +192,26 @@ export default function MasonryLaneFeed({
         laneRafRef.current = null;
       }
     };
-  }, [columnMinWidthPx, gapPx]);
+  }, [columnMinWidthPx, columnMaxWidthPx, gapPx]);
 
-  // Redistribute whenever the item list or column count changes so paging keeps
-  // chronological packing. Do not reshuffle on height-only updates.
+  // Pack into the full column count from the viewport so short result sets keep
+  // the same card width as a full feed (empty lanes are simply not painted).
   useLayoutEffect(() => {
     if (orderedIds.length === 0) {
       setLanes([]);
       return;
     }
-    const n = Math.min(Math.max(1, laneCount), orderedIds.length);
+    const n = Math.max(1, layout.laneCount);
     setLanes(
       distributeToLanes(
         orderedIds,
         n,
         heightsRef.current,
-        layoutGapPx,
+        layout.gapPx,
         defaultItemHeightPx,
       ),
     );
-  }, [orderedIds, laneCount, layoutGapPx, defaultItemHeightPx]);
+  }, [orderedIds, layout.laneCount, layout.gapPx, defaultItemHeightPx]);
 
   const onHeight = useCallback((id: string, height: number) => {
     const prev = heightsRef.current.get(id);
@@ -206,17 +229,18 @@ export default function MasonryLaneFeed({
     <div
       ref={containerRef}
       className={`flex w-full min-w-0 flex-row items-start justify-center ${className}`}
-      style={{ gap: layoutGapPx }}
+      style={{ gap: layout.gapPx }}
     >
       {lanes
         .filter((laneIds) => laneIds.length > 0)
         .map((laneIds, colIndex) => (
           <div
             key={`masonry-col-${colIndex}`}
-            className="flex min-w-0 flex-1 flex-col"
+            className="flex min-w-0 flex-col"
             style={{
-              gap: layoutGapPx,
-              maxWidth: columnMaxWidthPx > 0 ? `${columnMaxWidthPx}px` : undefined,
+              gap: layout.gapPx,
+              width: layout.columnWidthPx,
+              flex: `0 0 ${layout.columnWidthPx}px`,
             }}
           >
             {laneIds.map((id) => (

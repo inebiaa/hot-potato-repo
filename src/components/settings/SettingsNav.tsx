@@ -37,10 +37,10 @@ export default function SettingsNav({ items, activeTab, onChange }: SettingsNavP
               <button
                 type="button"
                 onClick={() => onChange(item.id)}
-                className={`rounded-md px-3 py-1.5 text-sm transition-colors md:w-full md:text-left ${
+                className={`rounded-md px-3 py-1.5 type-callout transition-colors md:w-full md:text-left ${
                   active
-                    ? 'bg-neutral-200 font-medium text-neutral-900'
-                    : 'bg-transparent text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                    ? 'bg-muted font-medium text-foreground'
+                    : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 {item.label}

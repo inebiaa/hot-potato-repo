@@ -52,6 +52,12 @@ export default function StatisticsPage({
   const home = useHomeCatalogOptional();
 
   useEffect(() => {
+    if (selectedType !== 'all' && selectedType !== 'designer' && selectedType !== 'artist') {
+      setSelectedType('all');
+    }
+  }, [selectedType]);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     void fetchAllEvents().then(async ({ data, error }) => {

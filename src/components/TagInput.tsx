@@ -1,12 +1,27 @@
-import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
-import { X, GripVertical, Plus } from 'lucide-react';
-import { fetchExistingTags, fetchCustomTagSuggestions, fetchExistingCities, fetchExistingVenues, TagColumn } from '../lib/tags';
-import { searchCities } from '../lib/cityPlaces';
-import { tagMatchesQuery } from '../lib/normalize';
-import TagPillSplitLabel, { tagPillSplitSegmentGroupClass } from './TagPillSplitLabel';
-import { TAG_INPUT_EDIT_PILL_COLORS, TAG_PILL_ROW_CLASS } from './tagPillShell';
-import { formControlClass, formControlPaddingClass } from './ui/field';
-import { cn } from '../lib/utils';
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from "react";
+import { X, GripVertical, Plus } from "lucide-react";
+import {
+  fetchExistingTags,
+  fetchCustomTagSuggestions,
+  fetchExistingCities,
+  fetchExistingVenues,
+  TagColumn,
+} from "../lib/tags";
+import { searchCities } from "../lib/cityPlaces";
+import { tagMatchesQuery } from "../lib/normalize";
+import TagPillSplitLabel, {
+  tagPillSplitSegmentGroupClass,
+} from "./TagPillSplitLabel";
+import { TAG_INPUT_EDIT_PILL_COLORS, TAG_PILL_ROW_CLASS } from "./tagPillShell";
+import { formControlClass, formControlPaddingClass } from "./ui/field";
+import { cn } from "../lib/utils";
 
 interface TagInputProps {
   value: string[];
@@ -42,7 +57,7 @@ export default function TagInput({
   useCitySuggestions = false,
   useVenueSuggestions = false,
   maxTags,
-  placeholder = '',
+  placeholder = "",
   required = false,
   id,
   label,
@@ -51,12 +66,14 @@ export default function TagInput({
   expandedExtras,
 }: TagInputProps) {
   const tags = useMemo(() => (Array.isArray(value) ? value : []), [value]);
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [expanded, setExpanded] = useState(() => !expandable || tags.length > 0);
+  const [expanded, setExpanded] = useState(
+    () => !expandable || tags.length > 0,
+  );
   const [citySearchLoading, setCitySearchLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
@@ -93,50 +110,67 @@ export default function TagInput({
         if (!cancelled) setAllTags(list);
       });
     }
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [tagColumn, customTagSlug, useCitySuggestions, useVenueSuggestions]);
 
-  const addTag = useCallback((tag: string) => {
-    const trimmed = tag.trim();
-    if (!trimmed || tags.includes(trimmed)) return;
-    if (maxTags === 1) {
-      onChange([trimmed]);
-    } else {
-      onChange([...tags, trimmed]);
-    }
-    setInputValue('');
-    setShowSuggestions(false);
-    setHighlightedIndex(-1);
-  }, [tags, onChange, maxTags]);
+  const addTag = useCallback(
+    (tag: string) => {
+      const trimmed = tag.trim();
+      if (!trimmed || tags.includes(trimmed)) return;
+      if (maxTags === 1) {
+        onChange([trimmed]);
+      } else {
+        onChange([...tags, trimmed]);
+      }
+      setInputValue("");
+      setShowSuggestions(false);
+      setHighlightedIndex(-1);
+    },
+    [tags, onChange, maxTags],
+  );
 
-  const removeTag = useCallback((index: number) => {
-    onChange(tags.filter((_, i) => i !== index));
-  }, [tags, onChange]);
+  const removeTag = useCallback(
+    (index: number) => {
+      onChange(tags.filter((_, i) => i !== index));
+    },
+    [tags, onChange],
+  );
 
   const canAddMore = maxTags == null || tags.length < maxTags;
 
-  const reorderTags = useCallback((fromIndex: number, toIndex: number) => {
-    if (maxTags === 1) return;
-    if (fromIndex === toIndex) return;
-    if (fromIndex < 0 || fromIndex >= tags.length || toIndex < 0 || toIndex >= tags.length) return;
-    try {
-      const next = [...tags];
-      const [removed] = next.splice(fromIndex, 1);
-      next.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, removed);
-      onChange(next);
-    } catch (err) {
-      console.error('Tag reorder error:', err);
-    }
-  }, [tags, onChange, maxTags]);
+  const reorderTags = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (maxTags === 1) return;
+      if (fromIndex === toIndex) return;
+      if (
+        fromIndex < 0 ||
+        fromIndex >= tags.length ||
+        toIndex < 0 ||
+        toIndex >= tags.length
+      )
+        return;
+      try {
+        const next = [...tags];
+        const [removed] = next.splice(fromIndex, 1);
+        next.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, removed);
+        onChange(next);
+      } catch (err) {
+        console.error("Tag reorder error:", err);
+      }
+    },
+    [tags, onChange, maxTags],
+  );
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDragIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', index.toString());
-    e.dataTransfer.setData('application/json', JSON.stringify({ index }));
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", index.toString());
+    e.dataTransfer.setData("application/json", JSON.stringify({ index }));
   };
 
   const handleDragEnd = () => {
@@ -146,7 +180,7 @@ export default function TagInput({
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = "move";
     if (dragIndex !== null && dragIndex !== index) setDropTargetIndex(index);
   };
 
@@ -158,8 +192,14 @@ export default function TagInput({
     e.preventDefault();
     e.stopPropagation();
     try {
-      const from = dragIndex ?? parseInt(e.dataTransfer.getData('text/plain') || '', 10);
-      if (Number.isNaN(from) || from < 0 || from >= tags.length || from === dropIndex) {
+      const from =
+        dragIndex ?? parseInt(e.dataTransfer.getData("text/plain") || "", 10);
+      if (
+        Number.isNaN(from) ||
+        from < 0 ||
+        from >= tags.length ||
+        from === dropIndex
+      ) {
         setDragIndex(null);
         setDropTargetIndex(null);
         return;
@@ -186,7 +226,7 @@ export default function TagInput({
 
     if (!useCitySuggestions) {
       const filtered = allTags.filter(
-        (t) => tagMatchesQuery(t, inputValue) && !tags.includes(t)
+        (t) => tagMatchesQuery(t, inputValue) && !tags.includes(t),
       );
       setSuggestions(filtered.slice(0, 8));
       setShowSuggestions(filtered.length > 0);
@@ -199,30 +239,35 @@ export default function TagInput({
     const handle = window.setTimeout(() => {
       const q = inputValue.trim();
       const fromExisting = allTags.filter(
-        (t) => tagMatchesQuery(t, q) && !tags.includes(t) && /,\s*[A-Za-z]{2}$/.test(t)
+        (t) =>
+          tagMatchesQuery(t, q) &&
+          !tags.includes(t) &&
+          /,\s*[A-Za-z]{2}$/.test(t),
       );
-      searchCities(q, 8).then((remote) => {
-        if (cancelled) return;
-        const seen = new Set<string>();
-        const merged: string[] = [];
-        for (const t of [...fromExisting, ...remote]) {
-          const key = t.trim().toLowerCase();
-          if (!key || seen.has(key) || tags.includes(t)) continue;
-          seen.add(key);
-          merged.push(t);
-          if (merged.length >= 8) break;
-        }
-        setSuggestions(merged);
-        setShowSuggestions(merged.length > 0);
-        setHighlightedIndex(merged.length > 0 ? 0 : -1);
-        setCitySearchLoading(false);
-      }).catch(() => {
-        if (cancelled) return;
-        setSuggestions(fromExisting.slice(0, 8));
-        setShowSuggestions(fromExisting.length > 0);
-        setHighlightedIndex(fromExisting.length > 0 ? 0 : -1);
-        setCitySearchLoading(false);
-      });
+      searchCities(q, 8)
+        .then((remote) => {
+          if (cancelled) return;
+          const seen = new Set<string>();
+          const merged: string[] = [];
+          for (const t of [...fromExisting, ...remote]) {
+            const key = t.trim().toLowerCase();
+            if (!key || seen.has(key) || tags.includes(t)) continue;
+            seen.add(key);
+            merged.push(t);
+            if (merged.length >= 8) break;
+          }
+          setSuggestions(merged);
+          setShowSuggestions(merged.length > 0);
+          setHighlightedIndex(merged.length > 0 ? 0 : -1);
+          setCitySearchLoading(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setSuggestions(fromExisting.slice(0, 8));
+          setShowSuggestions(fromExisting.length > 0);
+          setHighlightedIndex(fromExisting.length > 0 ? 0 : -1);
+          setCitySearchLoading(false);
+        });
     }, 280);
 
     return () => {
@@ -232,30 +277,34 @@ export default function TagInput({
   }, [inputValue, allTags, tags, useCitySuggestions]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
         addTag(suggestions[highlightedIndex]);
-      } else if (!requireSuggestionPick && inputValue.trim() && (canAddMore || maxTags === 1)) {
+      } else if (
+        !requireSuggestionPick &&
+        inputValue.trim() &&
+        (canAddMore || maxTags === 1)
+      ) {
         addTag(inputValue);
       } else if (requireSuggestionPick && suggestions.length === 1) {
         addTag(suggestions[0]);
       }
       return;
     }
-    if (e.key === 'Backspace' && !inputValue && tags.length > 0) {
+    if (e.key === "Backspace" && !inputValue && tags.length > 0) {
       removeTag(tags.length - 1);
       return;
     }
-    if (e.key === 'ArrowDown') {
+    if (e.key === "ArrowDown") {
       e.preventDefault();
       setHighlightedIndex((i) => (i < suggestions.length - 1 ? i + 1 : i));
     }
-    if (e.key === 'ArrowUp') {
+    if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlightedIndex((i) => (i > 0 ? i - 1 : -1));
     }
-    if (e.key === 'Escape') {
+    if (e.key === "Escape") {
       setShowSuggestions(false);
       setHighlightedIndex(-1);
     }
@@ -277,7 +326,9 @@ export default function TagInput({
     return (
       <div className="flex items-center gap-2">
         {label ? (
-          <span className="min-w-0 flex-1 text-sm font-medium text-foreground">{label}</span>
+          <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
+            {label}
+          </span>
         ) : (
           <span className="min-w-0 flex-1" />
         )}
@@ -285,12 +336,12 @@ export default function TagInput({
           type="button"
           onClick={openExpanded}
           className={cn(
-            'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-dashed border-input',
-            'bg-card text-muted-foreground transition-colors hover:border-neutral-400 hover:bg-muted hover:text-foreground',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-dashed border-input",
+            "bg-card text-muted-foreground transition-colors hover:border-input hover:bg-muted hover:text-foreground",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           )}
-          aria-label={label ? `Add ${label}` : 'Add tags'}
-          title={label ? `Add ${label}` : 'Add'}
+          aria-label={label ? `Add ${label}` : "Add tags"}
+          title={label ? `Add ${label}` : "Add"}
         >
           <Plus size={16} strokeWidth={2} />
         </button>
@@ -304,8 +355,12 @@ export default function TagInput({
       {(label || headerAction) && (
         <div className="mb-1 flex items-center gap-2">
           {label ? (
-            <label htmlFor={id} className="min-w-0 flex-1 text-sm font-medium text-foreground">
-              {label} {required && <span className="text-muted-foreground">*</span>}
+            <label
+              htmlFor={id}
+              className="min-w-0 flex-1 text-sm font-medium text-foreground"
+            >
+              {label}{" "}
+              {required && <span className="text-muted-foreground">*</span>}
             </label>
           ) : (
             <span className="min-w-0 flex-1" />
@@ -319,7 +374,7 @@ export default function TagInput({
           formControlClass,
           formControlPaddingClass,
           TAG_PILL_ROW_CLASS,
-          'min-h-10 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring',
+          "min-h-10 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring",
         )}
         onClick={() => inputRef.current?.focus()}
       >
@@ -328,16 +383,24 @@ export default function TagInput({
             key={`${tag}-${idx}`}
             data-tag-pill
             draggable={maxTags !== 1}
-            onDragStart={maxTags !== 1 ? (e) => handleDragStart(e, idx) : undefined}
+            onDragStart={
+              maxTags !== 1 ? (e) => handleDragStart(e, idx) : undefined
+            }
             onDragEnd={handleDragEnd}
-            onDragOver={maxTags !== 1 ? (e) => handleDragOver(e, idx) : undefined}
+            onDragOver={
+              maxTags !== 1 ? (e) => handleDragOver(e, idx) : undefined
+            }
             onDragLeave={handleDragLeave}
             onDrop={maxTags !== 1 ? (e) => handleDrop(e, idx) : undefined}
             className={cn(
               /* Same group + segment shells as EventCard — character split, not field-width blobs */
               `${tagPillSplitSegmentGroupClass} p-0 text-xs select-none`,
-              maxTags === 1 ? '' : dragIndex === idx ? 'cursor-grabbing opacity-60' : 'cursor-grab',
-              dropTargetIndex === idx ? 'ring-2 ring-ring ring-offset-1' : '',
+              maxTags === 1
+                ? ""
+                : dragIndex === idx
+                  ? "cursor-grabbing opacity-60"
+                  : "cursor-grab",
+              dropTargetIndex === idx ? "ring-2 ring-ring ring-offset-1" : "",
             )}
           >
             <TagPillSplitLabel
@@ -345,7 +408,11 @@ export default function TagInput({
               segmentColors={TAG_INPUT_EDIT_PILL_COLORS}
               leadingSlot={
                 maxTags !== 1 ? (
-                  <GripVertical size={12} className="text-neutral-500" aria-hidden />
+                  <GripVertical
+                    size={12}
+                    className="text-muted-foreground"
+                    aria-hidden
+                  />
                 ) : undefined
               }
               trailingSlot={
@@ -356,7 +423,7 @@ export default function TagInput({
                     removeTag(idx);
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="inline-flex items-center justify-center p-0 text-neutral-500 hover:text-neutral-800"
+                  className="inline-flex items-center justify-center p-0 text-muted-foreground hover:text-foreground"
                   aria-label={`Remove ${tag}`}
                 >
                   <X size={12} strokeWidth={2.5} />
@@ -374,7 +441,7 @@ export default function TagInput({
           onKeyDown={handleKeyDown}
           onBlur={handleBlur}
           onFocus={() => inputValue.trim() && setShowSuggestions(true)}
-          placeholder={tags.length === 0 ? placeholder : ''}
+          placeholder={tags.length === 0 ? placeholder : ""}
           required={required && tags.length === 0}
           className="min-w-[7rem] flex-1 bg-transparent py-0.5 text-sm outline-none placeholder:text-muted-foreground"
         />
@@ -382,15 +449,15 @@ export default function TagInput({
       {showSuggestions && suggestions.length > 0 && (
         <div
           ref={suggestionsRef}
-          className="absolute z-50 mt-1 max-h-40 w-full overflow-auto rounded-lg border border-border bg-card py-1 shadow-lg"
+          className="absolute z-50 mt-1 max-h-40 w-full overflow-auto rounded-lg border border-border bg-card py-1 "
         >
           {suggestions.map((s, i) => (
             <button
               key={s}
               type="button"
               className={cn(
-                'min-h-[44px] w-full px-3 py-3 text-left text-base hover:bg-muted sm:min-h-0 sm:py-2 sm:text-sm',
-                i === highlightedIndex ? 'bg-muted' : '',
+                "min-h-[44px] w-full px-3 py-3 text-left text-base hover:bg-muted sm:min-h-0 sm:py-2 sm:text-sm",
+                i === highlightedIndex ? "bg-muted" : "",
               )}
               onMouseDown={(e) => {
                 e.preventDefault();

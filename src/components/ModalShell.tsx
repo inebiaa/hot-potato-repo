@@ -24,6 +24,9 @@ type ModalShellProps = {
 /**
  * Shared modal frame: safe-area insets, dynamic viewport height, Escape, backdrop click, close control.
  */
+const modalCloseButtonClass =
+  'inline-flex shrink-0 items-center justify-center min-h-[44px] min-w-[44px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40';
+
 export default function ModalShell({
   onClose,
   ariaLabel = 'Dialog',
@@ -31,7 +34,7 @@ export default function ModalShell({
   titleId = 'modal-shell-title',
   children,
   zClass = 'z-50',
-  panelClassName = 'max-w-2xl sm:rounded-xl',
+  panelClassName = 'max-w-2xl sm:rounded-lg',
   backdropClassName = '',
   hideTitleBar = false,
   bodyClassName = 'min-h-0 flex-1 overflow-y-auto overscroll-y-contain',
@@ -54,7 +57,7 @@ export default function ModalShell({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        className={`relative w-full ${panelClassName} mx-auto flex min-h-0 max-h-[min(100dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] flex-col bg-white shadow-xl sm:max-h-[min(90dvh,900px)] overflow-hidden`}
+        className={`relative w-full ${panelClassName} mx-auto flex min-h-0 max-h-[min(100dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] flex-col bg-card shadow-xl sm:max-h-[min(90dvh,900px)] overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         {hideTitleBar ? (
@@ -62,30 +65,30 @@ export default function ModalShell({
             <button
               type="button"
               onClick={onClose}
-              className="absolute top-2 right-2 z-10 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 bg-white/90 shadow-sm border border-gray-100"
+              className={`absolute right-1 top-1 z-10 sm:right-2 sm:top-2 ${modalCloseButtonClass}`}
               aria-label="Close dialog"
             >
-              <X size={22} strokeWidth={2} />
+              <X size={20} strokeWidth={2} />
             </button>
             <div className={`pt-2 ${bodyClassName}`}>{children}</div>
           </>
         ) : (
           <>
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-3 py-2 sm:px-4">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2 sm:px-4">
               {title ? (
-                <h2 id={titleId} className="text-lg font-semibold text-gray-900 truncate pr-2">
+                <h2 id={titleId} className="type-headline truncate pr-2 text-foreground">
                   {title}
                 </h2>
               ) : (
-                <span className="flex-1 min-w-0" />
+                <span className="min-w-0 flex-1" />
               )}
               <button
                 type="button"
                 onClick={onClose}
-                className="shrink-0 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100"
+                className={`-mr-1 sm:-mr-2 ${modalCloseButtonClass}`}
                 aria-label="Close dialog"
               >
-                <X size={22} strokeWidth={2} />
+                <X size={20} strokeWidth={2} />
               </button>
             </div>
             <div className={bodyClassName}>{children}</div>

@@ -1,18 +1,18 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Star, ChevronDown, ChevronUp, Flag } from 'lucide-react';
-import { supabase, Event, type Rating as DbRating } from '../lib/supabase';
-import RatingModal from './RatingModal';
-import CommentWithTags from './CommentWithTags';
-import ReportContentModal from './ReportContentModal';
-import ModalShell from './ModalShell';
-import { Button, LoadingSpinner } from './ui';
-import { useT } from '../hooks/useCopy';
-import { useAuth } from '../contexts/AuthContext';
-import { useAppSettings } from '../hooks/useAppSettings';
-import { isUserBlocked, ratingAuthorLabel } from '../lib/ugcSafety';
-import { setAppModalParams } from '../lib/searchParamsModal';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { Star, ChevronDown, ChevronUp, Flag } from "lucide-react";
+import { supabase, Event, type Rating as DbRating } from "../lib/supabase";
+import RatingModal from "./RatingModal";
+import CommentWithTags from "./CommentWithTags";
+import ReportContentModal from "./ReportContentModal";
+import ModalShell from "./ModalShell";
+import { Button, LoadingSpinner } from "./ui";
+import { useT } from "../hooks/useCopy";
+import { useAuth } from "../contexts/AuthContext";
+import { useAppSettings } from "../hooks/useAppSettings";
+import { isUserBlocked, ratingAuthorLabel } from "../lib/ugcSafety";
+import { setAppModalParams } from "../lib/searchParamsModal";
 
 type Rating = DbRating & { username?: string };
 
@@ -44,7 +44,11 @@ interface ViewRatingsModalProps {
     optional_tags_bg_color?: string;
     optional_tags_text_color?: string;
   };
-  customPerformerTags?: { slug: string; bg_color: string; text_color: string }[];
+  customPerformerTags?: {
+    slug: string;
+    bg_color: string;
+    text_color: string;
+  }[];
   singleUserId?: string;
   /** When set, shows a "View full event" button that opens the event card */
   onViewEvent?: (eventId: string) => void;
@@ -84,9 +88,9 @@ export default function ViewRatingsModal({
   const promptSignInToReview = () => {
     navigate({
       pathname: location.pathname,
-      search: setAppModalParams(searchParams, 'auth', {
-        authMode: 'signin',
-        authPrompt: t('auth.prompt.leaveReview'),
+      search: setAppModalParams(searchParams, "auth", {
+        authMode: "signin",
+        authPrompt: t("auth.prompt.leaveReview"),
       }),
     });
   };
@@ -95,34 +99,41 @@ export default function ViewRatingsModal({
     setLoading(true);
     try {
       const { data: ratingsData, error: ratingsError } = await supabase
-        .from('ratings')
-        .select('*')
-        .eq('event_id', eventId)
-        .order('rating', { ascending: false });
+        .from("ratings")
+        .select("*")
+        .eq("event_id", eventId)
+        .order("rating", { ascending: false });
 
       if (ratingsError) throw ratingsError;
 
-      const userIds = [...new Set((ratingsData || []).map((r) => r.user_id).filter(Boolean))];
+      const userIds = [
+        ...new Set((ratingsData || []).map((r) => r.user_id).filter(Boolean)),
+      ];
       const profilesByUserId = new Map<string, string>();
       if (userIds.length > 0) {
         const { data: profilesData, error: profilesError } = await supabase
-          .from('user_profiles')
-          .select('user_id, username')
-          .in('user_id', userIds);
+          .from("user_profiles")
+          .select("user_id, username")
+          .in("user_id", userIds);
 
         if (profilesError) throw profilesError;
         for (const p of profilesData || []) {
-          if (p.user_id) profilesByUserId.set(p.user_id, p.username || 'Unknown User');
+          if (p.user_id)
+            profilesByUserId.set(p.user_id, p.username || "Unknown User");
         }
       }
 
       const ratingsWithUsernames = (ratingsData || []).map((rating) => ({
         ...rating,
-        username: rating.user_id ? profilesByUserId.get(rating.user_id) || undefined : undefined,
+        username: rating.user_id
+          ? profilesByUserId.get(rating.user_id) || undefined
+          : undefined,
       }));
 
       let filteredRatings = singleUserId
-        ? ratingsWithUsernames.filter((rating) => rating.user_id === singleUserId)
+        ? ratingsWithUsernames.filter(
+            (rating) => rating.user_id === singleUserId,
+          )
         : ratingsWithUsernames;
 
       filteredRatings = filteredRatings.filter(
@@ -131,7 +142,7 @@ export default function ViewRatingsModal({
 
       setRatings(filteredRatings);
     } catch (error) {
-      console.error('Error fetching ratings:', error);
+      console.error("Error fetching ratings:", error);
     } finally {
       setLoading(false);
     }
@@ -145,10 +156,10 @@ export default function ViewRatingsModal({
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
   };
 
@@ -159,11 +170,14 @@ export default function ViewRatingsModal({
   };
 
   const seasonLabel = Array.isArray(event?.season)
-    ? event.season.join(', ')
-    : (event?.season || 'Season TBD');
+    ? event.season.join(", ")
+    : event?.season || "Season TBD";
   const currentUserRating = useMemo(
-    () => (currentUserId ? ratings.find((rating) => rating.user_id === currentUserId) : undefined),
-    [ratings, currentUserId]
+    () =>
+      currentUserId
+        ? ratings.find((rating) => rating.user_id === currentUserId)
+        : undefined,
+    [ratings, currentUserId],
   );
 
   if (!isOpen) return null;
@@ -172,60 +186,77 @@ export default function ViewRatingsModal({
     <>
       <ModalShell
         onClose={onClose}
-        title={singleUserId ? 'Your review' : 'All Ratings'}
+        title={singleUserId ? "Your review" : "All Ratings"}
         zClass="z-[100]"
-        panelClassName="max-w-2xl sm:rounded-xl"
+        panelClassName="max-w-2xl sm:rounded-lg"
         bodyClassName="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-0"
       >
         {!singleUserId ? (
           <div className="px-4 sm:px-6 py-4 border-b">
-            <p className="text-gray-600">{eventName}</p>
+            <p className="text-muted-foreground">{eventName}</p>
           </div>
         ) : null}
 
         {!singleUserId ? (
-          <div className="p-6 border-b bg-gradient-to-br from-neutral-50 to-neutral-100">
+          <div className="p-6 border-b bg-muted">
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <Star className="text-yellow-400 fill-yellow-400" size={32} />
-                <span className="text-4xl font-bold text-gray-900">{getAverageRating()}</span>
+                <span className="text-4xl font-bold text-foreground">
+                  {getAverageRating()}
+                </span>
               </div>
-              <p className="text-gray-600">
-                Average rating from {ratings.length} {ratings.length === 1 ? 'user' : 'users'}
+              <p className="text-muted-foreground">
+                Average rating from {ratings.length}{" "}
+                {ratings.length === 1 ? "user" : "users"}
               </p>
             </div>
           </div>
         ) : null}
 
         {singleUserId && ratings.length > 0 ? (
-          <div className="px-6 py-5 border-b bg-gray-50/70">
+          <div className="px-6 py-5 border-b bg-muted/70">
             <div className="flex items-end justify-between gap-3">
               <div className="flex items-center gap-2">
-              {[1, 2, 3, 4, 5].map((s) => (
-                allowRatingEdits ? (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setEditingRating({ ...ratings[0], rating: s })}
-                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500"
-                  aria-label={`Set rating to ${s}`}
-                >
-                  <Star
-                    size={92}
-                    className={s <= ratings[0].rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}
-                  />
-                </button>
-                ) : (
-                <span key={s} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center" aria-hidden>
-                  <Star
-                    size={92}
-                    className={s <= ratings[0].rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}
-                  />
-                </span>
-                )
-              ))}
+                {[1, 2, 3, 4, 5].map((s) =>
+                  allowRatingEdits ? (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() =>
+                        setEditingRating({ ...ratings[0], rating: s })
+                      }
+                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Set rating to ${s}`}
+                    >
+                      <Star
+                        size={92}
+                        className={
+                          s <= ratings[0].rating
+                            ? "text-yellow-400 fill-yellow-400"
+                            : "text-muted-foreground/40"
+                        }
+                      />
+                    </button>
+                  ) : (
+                    <span
+                      key={s}
+                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center"
+                      aria-hidden
+                    >
+                      <Star
+                        size={92}
+                        className={
+                          s <= ratings[0].rating
+                            ? "text-yellow-400 fill-yellow-400"
+                            : "text-muted-foreground/40"
+                        }
+                      />
+                    </span>
+                  ),
+                )}
               </div>
-              <span className="text-xs text-gray-500">{eventName}</span>
+              <span className="text-xs text-muted-foreground">{eventName}</span>
             </div>
           </div>
         ) : null}
@@ -236,7 +267,9 @@ export default function ViewRatingsModal({
           </div>
         ) : ratings.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-gray-500 italic">No ratings yet for this event</p>
+            <p className="text-muted-foreground italic">
+              No ratings yet for this event
+            </p>
           </div>
         ) : (
           <div className="p-6">
@@ -244,44 +277,56 @@ export default function ViewRatingsModal({
               {ratings.map((rating) => (
                 <div
                   key={rating.id}
-                  className={singleUserId ? 'rounded-2xl bg-white/90 px-5 py-4 border border-neutral-200 shadow-sm overflow-hidden' : 'bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors overflow-hidden'}
+                  className={
+                    singleUserId
+                      ? "rounded-lg bg-card/90 px-5 py-4 border border-border overflow-hidden"
+                      : "bg-muted rounded-lg hover:bg-muted transition-colors overflow-hidden"
+                  }
                 >
                   <div
-                    className={`p-4 ${!singleUserId && (rating.comment || (allowRatingEdits && currentUserId && rating.user_id === currentUserId)) ? 'cursor-pointer' : ''}`}
+                    className={`p-4 ${!singleUserId && (rating.comment || (allowRatingEdits && currentUserId && rating.user_id === currentUserId)) ? "cursor-pointer" : ""}`}
                     onClick={() => {
                       if (singleUserId) return;
-                      if (allowRatingEdits && currentUserId && rating.user_id === currentUserId) {
+                      if (
+                        allowRatingEdits &&
+                        currentUserId &&
+                        rating.user_id === currentUserId
+                      ) {
                         setEditingRating(rating);
                         return;
                       }
                       if (rating.comment) {
-                        setExpandedRatingId(expandedRatingId === rating.id ? null : rating.id);
+                        setExpandedRatingId(
+                          expandedRatingId === rating.id ? null : rating.id,
+                        );
                       }
                     }}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="inline-block text-xs px-2 py-1 rounded-md transition-colors bg-gray-100 text-gray-700">
+                          <span className="inline-block text-xs px-2 py-1 rounded-md transition-colors bg-muted text-foreground">
                             {ratingAuthorLabel(rating)}
                           </span>
                           {singleUserId ? (
-                            <span className="inline-block text-xs px-2 py-1 rounded-md transition-colors bg-gray-100 text-gray-700">
+                            <span className="inline-block text-xs px-2 py-1 rounded-md transition-colors bg-muted text-foreground">
                               {seasonLabel}
                             </span>
                           ) : (
-                            <span className="inline-block text-xs px-2 py-1 rounded-md transition-colors bg-gray-100 text-gray-700">
+                            <span className="inline-block text-xs px-2 py-1 rounded-md transition-colors bg-muted text-foreground">
                               {formatDate(rating.created_at)}
                             </span>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {currentUserId && rating.user_id && rating.user_id !== currentUserId ? (
+                        {currentUserId &&
+                        rating.user_id &&
+                        rating.user_id !== currentUserId ? (
                           <button
                             type="button"
-                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
-                            aria-label={t('safety.report.action')}
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                            aria-label={t("safety.report.action")}
                             onClick={(e) => {
                               e.stopPropagation();
                               setReportRating(rating);
@@ -292,47 +337,68 @@ export default function ViewRatingsModal({
                         ) : null}
                         {!singleUserId ? (
                           <div className="flex items-center gap-1">
-                            <Star className="text-yellow-400 fill-yellow-400" size={20} />
-                            <span className="text-xl font-bold text-gray-900">{rating.rating}</span>
-                            <span className="text-gray-500">/5</span>
+                            <Star
+                              className="text-yellow-400 fill-yellow-400"
+                              size={20}
+                            />
+                            <span className="text-xl font-bold text-foreground">
+                              {rating.rating}
+                            </span>
+                            <span className="text-muted-foreground">/5</span>
                           </div>
                         ) : null}
                         {rating.comment && !singleUserId && (
                           <div className="ml-2">
                             {expandedRatingId === rating.id ? (
-                              <ChevronUp size={20} className="text-gray-400" />
+                              <ChevronUp
+                                size={20}
+                                className="text-muted-foreground"
+                              />
                             ) : (
-                              <ChevronDown size={20} className="text-gray-400" />
+                              <ChevronDown
+                                size={20}
+                                className="text-muted-foreground"
+                              />
                             )}
                           </div>
                         )}
                       </div>
                     </div>
                   </div>
-                  {rating.comment && (singleUserId || expandedRatingId === rating.id) && (
-                    <div
-                      className={`px-4 pb-4 pt-0 border-t border-gray-200 ${allowRatingEdits && singleUserId && currentUserId && rating.user_id === currentUserId ? 'cursor-pointer' : ''}`}
-                      onClick={() => {
-                        if (allowRatingEdits && singleUserId && currentUserId && rating.user_id === currentUserId) {
-                          setEditingRating(rating);
-                        }
-                      }}
-                    >
-                      <p className="mt-3 text-base text-gray-700 italic">
-                        {event ? (
-                          <>"<CommentWithTags
-                            comment={rating.comment}
-                            event={event}
-                            tagColors={tagColors}
-                            customPerformerTags={customPerformerTags}
-                            onTagClick={onTagClick}
-                          />"</>
-                        ) : (
-                          <>"{rating.comment}"</>
-                        )}
-                      </p>
-                    </div>
-                  )}
+                  {rating.comment &&
+                    (singleUserId || expandedRatingId === rating.id) && (
+                      <div
+                        className={`px-4 pb-4 pt-0 border-t border-border ${allowRatingEdits && singleUserId && currentUserId && rating.user_id === currentUserId ? "cursor-pointer" : ""}`}
+                        onClick={() => {
+                          if (
+                            allowRatingEdits &&
+                            singleUserId &&
+                            currentUserId &&
+                            rating.user_id === currentUserId
+                          ) {
+                            setEditingRating(rating);
+                          }
+                        }}
+                      >
+                        <p className="mt-3 text-base text-foreground italic">
+                          {event ? (
+                            <>
+                              "
+                              <CommentWithTags
+                                comment={rating.comment}
+                                event={event}
+                                tagColors={tagColors}
+                                customPerformerTags={customPerformerTags}
+                                onTagClick={onTagClick}
+                              />
+                              "
+                            </>
+                          ) : (
+                            <>"{rating.comment}"</>
+                          )}
+                        </p>
+                      </div>
+                    )}
                 </div>
               ))}
             </div>
@@ -357,17 +423,17 @@ export default function ViewRatingsModal({
                   setIsCreatingRating(true);
                 }}
               >
-                {currentUserRating ? 'Update' : 'Rate Show'}
+                {currentUserRating ? "Update" : "Rate Show"}
               </Button>
             ) : null}
             {onViewEvent ? (
-            <Button
-              type="button"
-              className="min-h-[44px] flex-1"
-              onClick={() => onViewEvent(eventId)}
-            >
-              View full event
-            </Button>
+              <Button
+                type="button"
+                className="min-h-[44px] flex-1"
+                onClick={() => onViewEvent(eventId)}
+              >
+                View full event
+              </Button>
             ) : null}
           </div>
         ) : null}
@@ -379,7 +445,11 @@ export default function ViewRatingsModal({
           onClose={() => setEditingRating(null)}
           event={event}
           existingRating={editingRating}
-          onRatingSubmitted={() => { setEditingRating(null); void fetchRatings(); onRatingSubmitted?.(); }}
+          onRatingSubmitted={() => {
+            setEditingRating(null);
+            void fetchRatings();
+            onRatingSubmitted?.();
+          }}
           tagColors={tagColors}
           customPerformerTags={customPerformerTags}
           zClass="z-[110]"
@@ -390,7 +460,11 @@ export default function ViewRatingsModal({
           isOpen={true}
           onClose={() => setIsCreatingRating(false)}
           event={event}
-          onRatingSubmitted={() => { setIsCreatingRating(false); void fetchRatings(); onRatingSubmitted?.(); }}
+          onRatingSubmitted={() => {
+            setIsCreatingRating(false);
+            void fetchRatings();
+            onRatingSubmitted?.();
+          }}
           tagColors={tagColors}
           customPerformerTags={customPerformerTags}
           zClass="z-[110]"
@@ -409,6 +483,6 @@ export default function ViewRatingsModal({
         />
       ) : null}
     </>,
-    document.body
+    document.body,
   );
 }

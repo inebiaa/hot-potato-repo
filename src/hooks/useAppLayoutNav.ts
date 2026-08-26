@@ -32,32 +32,35 @@ export function useAppLayoutNav({
   const home = useHomeCatalog();
   const pathname = location.pathname;
 
+  const resetCatalogNav = useCallback(() => {
+    setProfileBoardEvents(null);
+    home.clearFilters();
+  }, [setProfileBoardEvents, home]);
+
   const goHome = useCallback(() => {
     setProfileBoardEvents(null);
     home.goHome();
   }, [setProfileBoardEvents, home]);
 
   const goBack = useCallback(() => {
-    if (location.key === 'default') {
-      navigate('/');
-      scrollTop();
-      return;
-    }
-    navigate(-1);
-  }, [navigate, location.key]);
+    goHome();
+  }, [goHome]);
 
   const openSettings = useCallback(() => {
+    resetCatalogNav();
     navigate('/settings');
     scrollTop();
-  }, [navigate]);
+  }, [resetCatalogNav, navigate]);
 
   const openStats = useCallback(() => {
+    resetCatalogNav();
     navigate('/stats');
     scrollTop();
-  }, [navigate]);
+  }, [resetCatalogNav, navigate]);
 
   const openProfile = useCallback(() => {
     void (async () => {
+      resetCatalogNav();
       if (user) {
         const { data } = await supabase
           .from('user_profiles')
@@ -73,7 +76,7 @@ export function useAppLayoutNav({
       navigate('/profile');
       scrollTop();
     })();
-  }, [navigate, user]);
+  }, [resetCatalogNav, navigate, user]);
 
   const layoutNav = useMemo(
     () =>

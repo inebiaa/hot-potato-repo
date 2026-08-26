@@ -11,7 +11,7 @@ import { useT } from '../hooks/useCopy';
 import { compareEventsForFeed } from '../lib/eventsFeed';
 import { isEventUpcoming } from '../lib/eventDates';
 import { eventPagePath } from '../lib/siteBase';
-import { LoadingSpinner } from '../components/ui';
+import { LoadingSpinner, typeTitle, typeHeadline, typeCallout } from '../components/ui';
 
 const PRIORITY_FEED_IMAGES = 6;
 
@@ -29,8 +29,8 @@ export default function HomePage() {
     loading,
     events,
     eventsError,
-    setEventsError,
     fetchEvents,
+    loadMoreError,
     filtering,
     catalogStillLoading,
     filteredEvents,
@@ -118,53 +118,40 @@ export default function HomePage() {
 
   return (
     <div className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
-      <div className="mb-8 overflow-visible">
-        <h2 className="mb-2 text-3xl font-bold text-gray-900">{t('home.title')}</h2>
-        <p className="max-w-2xl text-gray-600">
-          {user ? t('home.subtitleSignedIn') : t('home.subtitleSignedOut')}
-        </p>
-      </div>
-
-      {eventsError && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 flex items-start justify-between gap-4">
-          <div>
-            <p className="font-medium text-red-800">{t('home.loadErrorTitle')}</p>
-            <p className="text-sm text-red-700 mt-1 font-mono">{eventsError}</p>
-          </div>
-          <div className="flex gap-2 shrink-0">
-            <button
-              onClick={() => {
-                setEventsError(null);
-                void fetchEvents();
-              }}
-              className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
-            >
-              {t('home.loadErrorRetry')}
-            </button>
-            <button
-              onClick={() => setEventsError(null)}
-              className="px-3 py-1.5 border border-red-300 rounded hover:bg-red-100 text-red-700 text-sm"
-            >
-              {t('home.loadErrorDismiss')}
-            </button>
-          </div>
+      {!user ? (
+        <div className="mb-8 overflow-visible">
+          <h2 className={`mb-2 ${typeTitle} text-foreground`}>{t('home.title')}</h2>
+          <p className={`max-w-2xl ${typeCallout} text-muted-foreground`}>
+            {t('home.subtitleSignedOut')}
+          </p>
         </div>
-      )}
+      ) : null}
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <LoadingSpinner />
         </div>
+      ) : events.length === 0 && eventsError ? (
+        <div className="py-16 text-center">
+          <p className={`${typeCallout} text-muted-foreground`}>{t('home.loadErrorTitle')}</p>
+          <button
+            type="button"
+            onClick={() => void fetchEvents({ force: true })}
+            className="mt-4 rounded-lg bg-primary px-6 py-3 text-primary-foreground transition-colors hover:opacity-90"
+          >
+            {t('home.loadErrorRetry')}
+          </button>
+        </div>
       ) : events.length === 0 && !eventsError ? (
         <div className="text-center py-12">
-          <div className="bg-white rounded-lg shadow-md p-8 max-w-md mx-auto">
-            <Sparkles size={48} className="mx-auto text-gray-400 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">{t('empty.noShows.title')}</h3>
-            <p className="text-gray-600 mb-4">{t('empty.noShows.body')}</p>
+          <div className="mx-auto max-w-md rounded-lg bg-card p-8 shadow-md">
+            <Sparkles size={48} className="mx-auto mb-4 text-muted-foreground" />
+            <h3 className={`mb-2 ${typeHeadline} text-foreground`}>{t('empty.noShows.title')}</h3>
+            <p className={`mb-4 ${typeCallout} text-muted-foreground`}>{t('empty.noShows.body')}</p>
             {user && (
               <button
                 onClick={onAddEvent}
-                className="rounded-lg bg-primary px-6 py-3 text-primary-foreground transition-colors hover:bg-neutral-800"
+                className="rounded-lg bg-primary px-6 py-3 text-primary-foreground transition-colors hover:opacity-90"
               >
                 {t('empty.noShows.cta')}
               </button>
@@ -177,13 +164,13 @@ export default function HomePage() {
         </div>
       ) : filteredEvents.length === 0 ? (
         <div className="text-center py-12">
-          <div className="bg-white rounded-lg shadow-md p-8 max-w-md mx-auto">
-            <Search size={48} className="mx-auto text-gray-400 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">{t('empty.noMatch.title')}</h3>
-            <p className="text-gray-600 mb-4">{t('empty.noMatch.body')}</p>
+          <div className="mx-auto max-w-md rounded-lg bg-card p-8 shadow-md">
+            <Search size={48} className="mx-auto mb-4 text-muted-foreground" />
+            <h3 className={`mb-2 ${typeHeadline} text-foreground`}>{t('empty.noMatch.title')}</h3>
+            <p className={`mb-4 ${typeCallout} text-muted-foreground`}>{t('empty.noMatch.body')}</p>
             <button
               onClick={clearFilters}
-              className="rounded-lg bg-primary px-6 py-3 text-primary-foreground transition-colors hover:bg-neutral-800"
+              className="rounded-lg bg-primary px-6 py-3 text-primary-foreground transition-colors hover:opacity-90"
             >
               {t('empty.noMatch.cta')}
             </button>
@@ -192,7 +179,19 @@ export default function HomePage() {
       ) : (
         <div className="w-full">
           <MasonryLaneFeed items={laneItems} columnMinWidthPx={220} gapPx={24} />
-          {hasMoreEvents && browsing && (
+          {loadMoreError ? (
+            <div className="py-8 text-center">
+              <p className={`${typeCallout} text-muted-foreground`}>{t('home.loadMoreError')}</p>
+              <button
+                type="button"
+                  onClick={() => void fetchEvents({ append: true })}
+                className="mt-2 text-sm text-foreground underline underline-offset-2 hover:opacity-80"
+              >
+                {t('home.loadErrorRetry')}
+              </button>
+            </div>
+          ) : null}
+          {hasMoreEvents && browsing && !loadMoreError && (
             <div ref={feedSentinelRef} className="h-1 w-full" aria-hidden />
           )}
         </div>

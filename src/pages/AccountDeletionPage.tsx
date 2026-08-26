@@ -13,7 +13,7 @@ export default function AccountDeletionPage() {
   return (
     <div className={routePageShellClass('narrow')}>
       <PageBack className="mb-6" />
-      <h1 className="mb-4 text-2xl font-semibold tracking-tight text-foreground">
+      <h1 className="mb-4 type-title text-foreground">
         {t('auth.deleteAccountPage.title')}
       </h1>
       <p className="mb-4 text-sm text-muted-foreground">{t('auth.deleteAccountPage.body')}</p>

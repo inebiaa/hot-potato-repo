@@ -1,16 +1,39 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Plus, LogOut, LogIn, Sparkles, BarChart3, User, Settings, Home, MoreVertical } from 'lucide-react';
-import type { AppSettings } from '../types/appSettings';
-import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
-import { useT } from '../hooks/useCopy';
-import ModalShell from './ModalShell';
-import { Button } from './ui';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  Plus,
+  LogOut,
+  LogIn,
+  Sparkles,
+  BarChart3,
+  User,
+  Settings,
+  Home,
+  MoreVertical,
+} from "lucide-react";
+import type { AppSettings } from "../types/appSettings";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
+import { useT } from "../hooks/useCopy";
+import ModalShell from "./ModalShell";
+import {
+  Button,
+  typeCaption,
+  typeCaptionEmphasis,
+  typeCallout,
+  typeWordmark,
+} from "./ui";
 
-export type AppHeaderActiveView = 'home' | 'stats' | 'profile' | 'settings';
+export type AppHeaderActiveView = "home" | "stats" | "profile" | "settings";
 
 /** Primary actions: no chrome box — icon / text only, tint on hover. */
 const ctaGhost =
-  'text-neutral-900 hover:bg-neutral-100 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
+  "text-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card";
 
 interface AppHeaderProps {
   pathname: string;
@@ -33,11 +56,11 @@ interface AppHeaderProps {
 
 /** Icon tools: no border or card — hover wash only. */
 const iconBtn =
-  'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card";
 
 export default function AppHeader({
   pathname: _pathname,
-  activeView = 'home',
+  activeView = "home",
   desktopLikePointer,
   appSettings,
   user,
@@ -77,10 +100,10 @@ export default function AppHeader({
   useEffect(() => {
     if (!drawerOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeDrawer();
+      if (e.key === "Escape") closeDrawer();
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [drawerOpen, closeDrawer]);
 
   useEffect(() => {
@@ -88,7 +111,7 @@ export default function AppHeader({
       drawerWasOpenRef.current = true;
       const t = window.setTimeout(() => {
         const panel = drawerPanelRef.current;
-        const first = panel?.querySelector<HTMLElement>('button, a, [href]');
+        const first = panel?.querySelector<HTMLElement>("button, a, [href]");
         first?.focus({ preventScroll: true });
       }, 0);
       return () => window.clearTimeout(t);
@@ -100,8 +123,8 @@ export default function AppHeader({
   }, [drawerOpen]);
 
   const navItemClass = (active: boolean) =>
-    `flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
-      active ? 'text-neutral-900' : 'text-gray-600 hover:text-gray-900'
+    `flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 ${typeCaptionEmphasis} transition-colors ${
+      active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
     }`;
 
   const runAndClose = (fn: () => void) => {
@@ -110,109 +133,185 @@ export default function AppHeader({
   };
 
   const showPhoneBottomNav = !desktopLikePointer;
-  const drawerFullNavClass = desktopLikePointer ? 'flex flex-col gap-1' : 'hidden flex-col gap-1 md:flex';
-  const drawerMobileOverflowClass = desktopLikePointer ? 'hidden' : 'flex flex-col gap-1 md:hidden';
+  const drawerFullNavClass = desktopLikePointer
+    ? "flex flex-col gap-1"
+    : "hidden flex-col gap-1 md:flex";
+  const drawerMobileOverflowClass = desktopLikePointer
+    ? "hidden"
+    : "flex flex-col gap-1 md:hidden";
 
   return (
     <>
-      <header className="sticky top-0 z-40 shrink-0 border-b border-gray-200 bg-white shadow-sm">
+      <header className="sticky top-0 z-40 shrink-0 border-b border-border bg-card shadow-sm">
         <div className="mx-auto max-w-[2400px] px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
               <div className="flex flex-col gap-2 sm:gap-3 lg:contents">
-              <div className="flex min-w-0 items-center justify-between gap-2 pr-2 lg:shrink-0 lg:pr-0">
-                <div className="flex min-w-0 items-center gap-3">
-                  {appSettings.app_logo_url ? (
+                <div className="flex min-w-0 items-center justify-between gap-2 pr-2 lg:shrink-0 lg:pr-0">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {appSettings.app_logo_url ? (
+                      <button
+                        type="button"
+                        onClick={onGoHome}
+                        className="shrink-0 cursor-pointer border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                      >
+                        <img
+                          src={appSettings.app_logo_url}
+                          alt={appSettings.app_name}
+                          className="h-9 object-contain sm:h-10"
+                        />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={onGoHome}
+                        className="flex min-w-0 max-w-[70vw] items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:max-w-none lg:max-w-md"
+                      >
+                        {appSettings.app_icon_url ? (
+                          <img
+                            src={appSettings.app_icon_url}
+                            alt="App Icon"
+                            className="h-9 w-9 shrink-0 sm:h-10 sm:w-10"
+                          />
+                        ) : (
+                          <div className="shrink-0 bg-primary p-2">
+                            <Sparkles
+                              className="text-primary-foreground"
+                              size={22}
+                            />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <h1
+                            className={`truncate ${typeWordmark} text-foreground`}
+                          >
+                            {appSettings.app_name}
+                          </h1>
+                          {appSettings.tagline ? (
+                            <p
+                              className={`truncate ${typeCaption} text-muted-foreground`}
+                            >
+                              {appSettings.tagline}
+                            </p>
+                          ) : null}
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 lg:hidden">
                     <button
+                      ref={menuButtonRef}
                       type="button"
-                      onClick={onGoHome}
-                      className="shrink-0 cursor-pointer border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                      className={iconBtn}
+                      aria-expanded={drawerOpen}
+                      aria-controls={menuId}
+                      aria-haspopup="dialog"
+                      aria-label={drawerOpen ? "Close menu" : "Open menu"}
+                      onClick={() => setDrawerOpen((o) => !o)}
                     >
-                      <img src={appSettings.app_logo_url} alt={appSettings.app_name} className="h-9 object-contain sm:h-10" />
+                      <MoreVertical size={22} strokeWidth={2} />
                     </button>
+                  </div>
+                </div>
+
+                {searchBar ? (
+                  <div className="min-w-0 w-full lg:flex-1 lg:min-w-0">
+                    {searchBar}
+                  </div>
+                ) : null}
+
+                <div className="hidden shrink-0 items-center gap-1 lg:flex lg:pl-1">
+                  <button
+                    type="button"
+                    onClick={onGoHome}
+                    className={iconBtn}
+                    title="Home"
+                  >
+                    <Home
+                      size={20}
+                      strokeWidth={activeView === "home" ? 2.25 : 2}
+                      className={activeView === "home" ? "text-foreground" : ""}
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onOpenStats}
+                    className={iconBtn}
+                    title="Statistics"
+                  >
+                    <BarChart3
+                      size={20}
+                      strokeWidth={activeView === "stats" ? 2.25 : 2}
+                      className={
+                        activeView === "stats" ? "text-foreground" : ""
+                      }
+                    />
+                  </button>
+                  {user ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={onOpenProfile}
+                        className={iconBtn}
+                        title="My profile"
+                      >
+                        <User
+                          size={20}
+                          strokeWidth={activeView === "profile" ? 2.25 : 2}
+                          className={
+                            activeView === "profile" ? "text-foreground" : ""
+                          }
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onOpenSettings}
+                        className={iconBtn}
+                        title="Settings"
+                      >
+                        <Settings
+                          size={20}
+                          strokeWidth={activeView === "settings" ? 2.25 : 2}
+                          className={
+                            activeView === "settings" ? "text-foreground" : ""
+                          }
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onAddEvent}
+                        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition ${ctaGhost}`}
+                        title="Add show"
+                      >
+                        <Plus size={20} strokeWidth={2.5} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={requestSignOut}
+                        className={iconBtn}
+                        title={t("nav.signOut")}
+                      >
+                        <LogOut size={20} strokeWidth={2} />
+                      </button>
+                    </>
                   ) : (
                     <button
                       type="button"
-                      onClick={onGoHome}
-                      className="flex min-w-0 max-w-[70vw] items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 sm:max-w-none lg:max-w-md"
+                      onClick={onSignIn}
+                      className={iconBtn}
+                      title={t("nav.signIn")}
+                      aria-label={t("nav.signIn")}
                     >
-                      {appSettings.app_icon_url ? (
-                        <img src={appSettings.app_icon_url} alt="App Icon" className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" />
-                      ) : (
-                        <div className="shrink-0 bg-neutral-900 p-2">
-                          <Sparkles className="text-white" size={22} />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <h1 className="truncate text-lg font-bold text-gray-900 sm:text-2xl">{appSettings.app_name}</h1>
-                        {appSettings.tagline ? (
-                          <p className="truncate text-xs text-gray-500">{appSettings.tagline}</p>
-                        ) : null}
-                      </div>
+                      <LogIn size={20} strokeWidth={2.5} />
                     </button>
                   )}
                 </div>
-                <div className="flex shrink-0 lg:hidden">
-                  <button
-                    ref={menuButtonRef}
-                    type="button"
-                    className={iconBtn}
-                    aria-expanded={drawerOpen}
-                    aria-controls={menuId}
-                    aria-haspopup="dialog"
-                    aria-label={drawerOpen ? 'Close menu' : 'Open menu'}
-                    onClick={() => setDrawerOpen((o) => !o)}
-                  >
-                    <MoreVertical size={22} strokeWidth={2} />
-                  </button>
-                </div>
-              </div>
-
-              {searchBar ? <div className="min-w-0 w-full lg:flex-1 lg:min-w-0">{searchBar}</div> : null}
-
-              <div className="hidden shrink-0 items-center gap-1 lg:flex lg:pl-1">
-                <button type="button" onClick={onGoHome} className={iconBtn} title="Home">
-                  <Home size={20} strokeWidth={activeView === 'home' ? 2.25 : 2} className={activeView === 'home' ? 'text-neutral-900' : ''} />
-                </button>
-                <button type="button" onClick={onOpenStats} className={iconBtn} title="Statistics">
-                  <BarChart3 size={20} strokeWidth={activeView === 'stats' ? 2.25 : 2} className={activeView === 'stats' ? 'text-neutral-900' : ''} />
-                </button>
-                {user ? (
-                  <>
-                    <button type="button" onClick={onOpenProfile} className={iconBtn} title="My profile">
-                      <User size={20} strokeWidth={activeView === 'profile' ? 2.25 : 2} className={activeView === 'profile' ? 'text-neutral-900' : ''} />
-                    </button>
-                    <button type="button" onClick={onOpenSettings} className={iconBtn} title="Settings">
-                      <Settings size={20} strokeWidth={activeView === 'settings' ? 2.25 : 2} className={activeView === 'settings' ? 'text-neutral-900' : ''} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onAddEvent}
-                      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition ${ctaGhost}`}
-                      title="Add show"
-                    >
-                      <Plus size={20} strokeWidth={2.5} />
-                    </button>
-                    <button type="button" onClick={requestSignOut} className={iconBtn} title={t('nav.signOut')}>
-                      <LogOut size={20} strokeWidth={2} />
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={onSignIn}
-                    className={iconBtn}
-                    title={t('nav.signIn')}
-                    aria-label={t('nav.signIn')}
-                  >
-                    <LogIn size={20} strokeWidth={2.5} />
-                  </button>
-                )}
-              </div>
               </div>
             </div>
             {pinnedArtistBar ? (
-              <div className="min-w-0 border-t border-gray-100 pt-3">{pinnedArtistBar}</div>
+              <div className="min-w-0 border-t border-border pt-3">
+                {pinnedArtistBar}
+              </div>
             ) : null}
           </div>
         </div>
@@ -220,50 +319,86 @@ export default function AppHeader({
 
       {/* Touch phones: bottom tab bar. Narrow desktop windows keep this hidden (desktopLikePointer). */}
       <nav
-        className={`fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] ${showPhoneBottomNav ? 'md:hidden' : 'hidden'}`}
+        className={`fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] ${showPhoneBottomNav ? "md:hidden" : "hidden"}`}
         aria-label="Primary"
       >
         <div className="mx-auto flex max-w-lg items-stretch justify-around">
-          <button type="button" className={navItemClass(activeView === 'home')} onClick={onGoHome}>
-            <Home size={22} strokeWidth={activeView === 'home' ? 2.5 : 2} />
-            <span>{t('nav.home')}</span>
+          <button
+            type="button"
+            className={navItemClass(activeView === "home")}
+            onClick={onGoHome}
+          >
+            <Home size={22} strokeWidth={activeView === "home" ? 2.5 : 2} />
+            <span>{t("nav.home")}</span>
           </button>
-          <button type="button" className={navItemClass(activeView === 'stats')} onClick={onOpenStats}>
-            <BarChart3 size={22} strokeWidth={activeView === 'stats' ? 2.5 : 2} />
-            <span>{t('nav.stats')}</span>
+          <button
+            type="button"
+            className={navItemClass(activeView === "stats")}
+            onClick={onOpenStats}
+          >
+            <BarChart3
+              size={22}
+              strokeWidth={activeView === "stats" ? 2.5 : 2}
+            />
+            <span>{t("nav.stats")}</span>
           </button>
           {user ? (
-            <button type="button" className={navItemClass(activeView === 'profile')} onClick={onOpenProfile}>
-              <User size={22} strokeWidth={activeView === 'profile' ? 2.5 : 2} />
-              <span>{t('nav.profile')}</span>
+            <button
+              type="button"
+              className={navItemClass(activeView === "profile")}
+              onClick={onOpenProfile}
+            >
+              <User
+                size={22}
+                strokeWidth={activeView === "profile" ? 2.5 : 2}
+              />
+              <span>{t("nav.profile")}</span>
             </button>
           ) : (
-            <button type="button" className={navItemClass(false)} onClick={onSignIn}>
+            <button
+              type="button"
+              className={navItemClass(false)}
+              onClick={onSignIn}
+            >
               <LogIn size={22} />
-              <span>{t('nav.signIn')}</span>
+              <span>{t("nav.signIn")}</span>
             </button>
           )}
-          <button type="button" className={navItemClass(false)} onClick={onAddEvent}>
+          <button
+            type="button"
+            className={navItemClass(false)}
+            onClick={onAddEvent}
+          >
             <Plus size={22} />
-            <span>{t('nav.add')}</span>
+            <span>{t("nav.add")}</span>
           </button>
         </div>
       </nav>
 
       {drawerOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" role="presentation">
-          <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close menu" onClick={closeDrawer} />
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close menu"
+            onClick={closeDrawer}
+          />
           <div
             ref={drawerPanelRef}
             id={menuId}
             role="dialog"
             aria-modal="true"
             aria-label="More options"
-            className="absolute right-0 top-0 flex h-full w-[min(20rem,88vw)] flex-col border-l border-gray-200 bg-white shadow-xl"
+            className="absolute right-0 top-0 flex h-full w-[min(20rem,88vw)] flex-col border-l border-border bg-card shadow-xl"
           >
-            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <span className="text-sm font-semibold text-gray-900">Menu</span>
-              <button type="button" className="rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="Close" onClick={closeDrawer}>
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <span className="type-headline text-foreground">Menu</span>
+              <button
+                type="button"
+                className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
+                aria-label="Close"
+                onClick={closeDrawer}
+              >
                 <span className="text-lg leading-none">×</span>
               </button>
             </div>
@@ -272,66 +407,88 @@ export default function AppHeader({
               <div className={drawerFullNavClass}>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-foreground hover:bg-muted"
                   onClick={() => runAndClose(onGoHome)}
                 >
-                  <Home size={20} className="shrink-0 text-gray-600" />
-                  <span className="text-sm font-medium">Home</span>
+                  <Home size={20} className="shrink-0 text-muted-foreground" />
+                  <span className="type-body font-medium">Home</span>
                 </button>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-foreground hover:bg-muted"
                   onClick={() => runAndClose(onOpenStats)}
                 >
-                  <BarChart3 size={20} className="shrink-0 text-gray-600" />
-                  <span className="text-sm font-medium">Statistics</span>
+                  <BarChart3
+                    size={20}
+                    className="shrink-0 text-muted-foreground"
+                  />
+                  <span className="type-body font-medium">Statistics</span>
                 </button>
                 {user ? (
                   <button
                     type="button"
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-foreground hover:bg-muted"
                     onClick={() => runAndClose(onOpenProfile)}
                   >
-                    <User size={20} className="shrink-0 text-gray-600" />
-                    <span className="text-sm font-medium">My profile</span>
+                    <User
+                      size={20}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                    <span className="type-body font-medium">My profile</span>
                   </button>
                 ) : null}
                 <button
                   type="button"
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-foreground hover:bg-muted"
                   onClick={() => runAndClose(onAddEvent)}
                 >
-                  <Plus size={20} className="shrink-0 text-gray-600" />
-                  <span className="text-sm font-medium">Add show</span>
+                  <Plus size={20} className="shrink-0 text-muted-foreground" />
+                  <span className="type-body font-medium">Add show</span>
                 </button>
                 {!user ? (
                   <button
                     type="button"
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-foreground hover:bg-muted"
                     onClick={() => runAndClose(onSignIn)}
                   >
-                    <LogIn size={20} className="shrink-0 text-gray-600" />
-                    <span className="text-sm font-medium">{t('nav.signIn')}</span>
+                    <LogIn
+                      size={20}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                    <span className="type-body font-medium">
+                      {t("nav.signIn")}
+                    </span>
                   </button>
                 ) : null}
                 {user ? (
                   <>
-                    <div className="my-2 border-t border-gray-100" role="separator" />
+                    <div
+                      className="my-2 border-t border-border"
+                      role="separator"
+                    />
                     <button
                       type="button"
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-foreground hover:bg-muted"
                       onClick={() => runAndClose(onOpenSettings)}
                     >
-                      <Settings size={20} className="shrink-0 text-gray-600" />
-                      <span className="text-sm font-medium">Settings</span>
+                      <Settings
+                        size={20}
+                        className="shrink-0 text-muted-foreground"
+                      />
+                      <span className="type-body font-medium">Settings</span>
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-foreground hover:bg-muted"
                       onClick={() => runAndClose(requestSignOut)}
                     >
-                      <LogOut size={20} className="shrink-0 text-gray-600" />
-                      <span className="text-sm font-medium">{t('nav.signOut')}</span>
+                      <LogOut
+                        size={20}
+                        className="shrink-0 text-muted-foreground"
+                      />
+                      <span className="type-body font-medium">
+                        {t("nav.signOut")}
+                      </span>
                     </button>
                   </>
                 ) : null}
@@ -343,29 +500,42 @@ export default function AppHeader({
                   <>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-foreground hover:bg-muted"
                       onClick={() => runAndClose(onOpenSettings)}
                     >
-                      <Settings size={20} className="shrink-0 text-gray-600" />
-                      <span className="text-sm font-medium">Settings</span>
+                      <Settings
+                        size={20}
+                        className="shrink-0 text-muted-foreground"
+                      />
+                      <span className="type-body font-medium">Settings</span>
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-foreground hover:bg-muted"
                       onClick={() => runAndClose(requestSignOut)}
                     >
-                      <LogOut size={20} className="shrink-0 text-gray-600" />
-                      <span className="text-sm font-medium">{t('nav.signOut')}</span>
+                      <LogOut
+                        size={20}
+                        className="shrink-0 text-muted-foreground"
+                      />
+                      <span className="type-body font-medium">
+                        {t("nav.signOut")}
+                      </span>
                     </button>
                   </>
                 ) : (
                   <button
                     type="button"
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-gray-800 hover:bg-gray-50"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-foreground hover:bg-muted"
                     onClick={() => runAndClose(onSignIn)}
                   >
-                    <LogIn size={20} className="shrink-0 text-gray-600" />
-                    <span className="text-sm font-medium">{t('nav.signIn')}</span>
+                    <LogIn
+                      size={20}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                    <span className="type-body font-medium">
+                      {t("nav.signIn")}
+                    </span>
                   </button>
                 )}
               </div>
@@ -377,18 +547,24 @@ export default function AppHeader({
       {signOutConfirmOpen ? (
         <ModalShell
           onClose={() => setSignOutConfirmOpen(false)}
-          title={t('nav.signOutConfirmTitle')}
-          panelClassName="max-w-sm sm:rounded-xl"
+          title={t("nav.signOutConfirmTitle")}
+          panelClassName="max-w-sm sm:rounded-lg"
           zClass="z-[60]"
         >
           <div className="space-y-4 p-4">
-            <p className="text-sm text-neutral-700">{t('nav.signOutConfirmBody')}</p>
+            <p className={`${typeCallout} text-muted-foreground`}>
+              {t("nav.signOutConfirmBody")}
+            </p>
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button type="button" variant="secondary" onClick={() => setSignOutConfirmOpen(false)}>
-                {t('nav.signOutConfirmCancel')}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setSignOutConfirmOpen(false)}
+              >
+                {t("nav.signOutConfirmCancel")}
               </Button>
               <Button type="button" onClick={confirmSignOut}>
-                {t('nav.signOutConfirmAction')}
+                {t("nav.signOutConfirmAction")}
               </Button>
             </div>
           </div>

@@ -48,7 +48,7 @@ export default function AppLayout({
   const mainRef =
     isHomeCatalogRoute(location.pathname) && home ? home.feedScrollRef : undefined;
   return (
-    <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-50">
+    <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-background">
       <AppHeader
         pathname={pathname}
         activeView={activeView}

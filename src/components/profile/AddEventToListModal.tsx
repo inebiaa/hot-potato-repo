@@ -1,7 +1,7 @@
-import { ChevronRight } from 'lucide-react';
-import type { Event } from '../../lib/supabase';
-import { Input } from '../ui';
-import { useT } from '../../hooks/useCopy';
+import { ChevronRight } from "lucide-react";
+import type { Event } from "../../lib/supabase";
+import { Button, Input, Label, Modal, formErrorClass, typeCallout } from "../ui";
+import { useT } from "../../hooks/useCopy";
 
 interface AddEventToListModalProps {
   search: string;
@@ -23,47 +23,42 @@ export default function AddEventToListModal({
   const t = useT();
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+    <Modal
+      onClose={onClose}
+      title={t("event.addShow")}
+      panelClassName="max-w-lg sm:rounded-lg"
+      bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden p-0"
     >
-      <div className="relative max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-white rounded-xl w-full max-h-[80vh] flex flex-col">
-          <div className="p-4 border-b">
-            <h3 className="font-semibold">{t('event.addShow')}</h3>
-          </div>
-          {error && (
-            <p className="px-4 py-2 text-sm text-red-600 bg-red-50">{error}</p>
-          )}
-          <div className="p-4 border-b">
-            <Input
-              type="text"
-              placeholder="Search shows..."
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <ul className="overflow-y-auto flex-1 p-4 space-y-1">
-            {events.slice(0, 50).map((event) => (
-              <li key={event.id}>
-                <button
-                  onClick={() => onAdd(event.id)}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 flex items-center justify-between"
-                >
-                  <span className="font-medium text-gray-900">{event.name}</span>
-                  <ChevronRight size={16} className="text-gray-400" />
-                </button>
-              </li>
-            ))}
-            {events.length === 0 && (
-              <li className="text-gray-500 py-4 text-sm">
-                No matching shows or all are already in this list.
-              </li>
-            )}
-          </ul>
-        </div>
+      {error && (
+        <p className={`px-4 py-2 ${formErrorClass} bg-red-50`}>{error}</p>
+      )}
+      <div className="shrink-0 border-b p-4">
+        <Input
+          type="text"
+          placeholder="Search shows..."
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          autoFocus
+        />
       </div>
-    </div>
+      <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto p-4">
+        {events.slice(0, 50).map((event) => (
+          <li key={event.id}>
+            <button
+              onClick={() => onAdd(event.id)}
+              className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-muted"
+            >
+              <span className="font-medium text-foreground">{event.name}</span>
+              <ChevronRight size={16} className="text-muted-foreground" />
+            </button>
+          </li>
+        ))}
+        {events.length === 0 ? (
+          <li className={`py-4 ${typeCallout} text-muted-foreground`}>
+            No matching shows or all are already in this list.
+          </li>
+        ) : null}
+      </ul>
+    </Modal>
   );
 }

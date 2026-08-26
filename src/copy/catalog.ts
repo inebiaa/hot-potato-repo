@@ -11,7 +11,7 @@ export type CopyKey =
   | 'home.subtitleSignedOut'
   | 'home.loadErrorTitle'
   | 'home.loadErrorRetry'
-  | 'home.loadErrorDismiss'
+  | 'home.loadMoreError'
   | 'auth.prompt.leaveReview'
   | 'auth.prompt.saveShow'
   | 'auth.prompt.addToList'
@@ -77,6 +77,7 @@ export type CopyKey =
   | 'event.ratedListNameForUser'
   | 'event.saveToLiked'
   | 'event.removeFromLiked'
+  | 'event.openShow'
   | 'event.removeFromList'
   | 'event.addToList'
   | 'event.addedToList'
@@ -226,9 +227,9 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     label: 'Home load error retry',
     group: 'home',
   },
-  'home.loadErrorDismiss': {
-    default: 'Dismiss',
-    label: 'Home load error dismiss',
+  'home.loadMoreError': {
+    default: 'Could not load more shows.',
+    label: 'Home load more error',
     group: 'home',
   },
   'settings.title': {
@@ -367,6 +368,11 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
   'event.removeFromLiked': {
     default: 'Saved',
     label: 'Remove from Liked (saved state)',
+    group: 'event',
+  },
+  'event.openShow': {
+    default: 'Open {name}',
+    label: 'Open show (photo button)',
     group: 'event',
   },
   'event.removeFromList': {

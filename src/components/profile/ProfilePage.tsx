@@ -35,7 +35,7 @@ import ProfileLibraryBoards from './ProfileLibraryBoards';
 import ProfileBoardView from './ProfileBoardView';
 import CreateListModal from './CreateListModal';
 import PageBack from '../layout/PageBack';
-import { LoadingSpinner } from '../ui';
+import { LoadingSpinner, typeCallout } from '../ui';
 import ReportContentModal from '../ReportContentModal';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { isUserBlocked } from '../../lib/ugcSafety';
@@ -845,7 +845,7 @@ export default function ProfilePage({
       />
 
       {viewerBlockedProfile ? (
-        <p className="text-sm text-muted-foreground">{t('safety.block.hiddenBody')}</p>
+        <p className={`${typeCallout} text-muted-foreground`}>{t('safety.block.hiddenBody')}</p>
       ) : (
         <ProfileLibraryBoards
           isOwnProfile={isOwnProfile}

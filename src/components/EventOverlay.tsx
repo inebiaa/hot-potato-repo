@@ -1,17 +1,19 @@
-import { useEffect, useId, useRef } from 'react';
-import { X } from 'lucide-react';
-import type { Event, Rating } from '../lib/supabase';
-import type { AppSettings } from '../types/appSettings';
-import EventCard from './EventCard/EventCard';
-import { LoadingSpinner } from './ui';
+import { useEffect, useId, useRef } from "react";
+import { X } from "lucide-react";
+import type { Event, Rating } from "../lib/supabase";
+import type { AppSettings } from "../types/appSettings";
+import EventCard from "./EventCard/EventCard";
+import { LoadingSpinner } from "./ui";
 
 type EventOverlayProps = {
   eventId: string;
-  event: (Event & {
-    average_rating: number;
-    rating_count: number;
-    user_rating?: Rating;
-  }) | null;
+  event:
+    | (Event & {
+        average_rating: number;
+        rating_count: number;
+        user_rating?: Rating;
+      })
+    | null;
   elevated?: boolean;
   appSettings: AppSettings;
   onClose: () => void;
@@ -24,7 +26,9 @@ function getFocusable(container: HTMLElement): HTMLElement[] {
   const nodes = container.querySelectorAll<HTMLElement>(
     'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
   );
-  return [...nodes].filter((el) => !el.hasAttribute('disabled') && el.tabIndex !== -1);
+  return [...nodes].filter(
+    (el) => !el.hasAttribute("disabled") && el.tabIndex !== -1,
+  );
 }
 
 /**
@@ -47,7 +51,9 @@ export default function EventOverlay({
 
   useEffect(() => {
     previouslyFocusedRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     return () => {
       previouslyFocusedRef.current?.focus({ preventScroll: true });
     };
@@ -59,12 +65,12 @@ export default function EventOverlay({
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.preventDefault();
         onClose();
         return;
       }
-      if (e.key !== 'Tab' || !panelRef.current) return;
+      if (e.key !== "Tab" || !panelRef.current) return;
       const focusable = getFocusable(panelRef.current);
       if (focusable.length === 0) {
         e.preventDefault();
@@ -84,16 +90,16 @@ export default function EventOverlay({
         first.focus();
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const label = event?.name?.trim() || 'Event details';
+  const label = event?.name?.trim() || "Event details";
 
   return (
     <div
       className={`fixed inset-0 flex items-center justify-center p-4 bg-black/50 overflow-y-auto ${
-        elevated ? 'z-[75]' : 'z-[60]'
+        elevated ? "z-[75]" : "z-[60]"
       }`}
       onClick={(e) => {
         if (e.target !== e.currentTarget) return;
@@ -102,7 +108,7 @@ export default function EventOverlay({
       role="dialog"
       aria-modal="true"
       aria-labelledby={event ? titleId : undefined}
-      aria-label={event ? undefined : 'Event details'}
+      aria-label={event ? undefined : "Event details"}
       data-testid="event-overlay"
     >
       {event ? (
@@ -116,10 +122,10 @@ export default function EventOverlay({
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-2 right-2 z-10 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 bg-white/90 shadow-sm border border-gray-100"
+            className="absolute right-1 top-1 z-10 inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:right-2 sm:top-2"
             aria-label="Close dialog"
           >
-            <X size={22} strokeWidth={2} />
+            <X size={20} strokeWidth={2} />
           </button>
           <span id={titleId} className="sr-only">
             {label}

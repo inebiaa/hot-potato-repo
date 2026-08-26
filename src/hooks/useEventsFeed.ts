@@ -30,6 +30,8 @@ export function useEventsFeed({ userId, enabled = true }: UseEventsFeedOptions) 
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
   const [eventsError, setEventsError] = useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const loadMoreErrorRef = useRef<string | null>(null);
   const [hasMoreEvents, setHasMoreEvents] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [deepLinkFailed, setDeepLinkFailed] = useState(false);
@@ -48,22 +50,31 @@ export function useEventsFeed({ userId, enabled = true }: UseEventsFeedOptions) 
   const catalogFullyLoadedRef = useRef(false);
 
   const fetchEvents = useCallback(
-    async (opts?: { append?: boolean }) => {
+    async (opts?: { append?: boolean; force?: boolean }) => {
       if (!enabledRef.current) return;
       const append = opts?.append ?? false;
-      const silent = hasLoadedEventsRef.current;
+      const force = opts?.force ?? false;
+      const silent = hasLoadedEventsRef.current && !force && !append;
       if (!append && !silent) setLoading(true);
       if (append) {
         if (loadingMoreRef.current || !hasMoreEventsRef.current) return;
         loadingMoreRef.current = true;
         setLoadingMore(true);
+        setLoadMoreError(null);
+        loadMoreErrorRef.current = null;
       } else if (!silent) {
         setEventsError(null);
+        setLoadMoreError(null);
+        loadMoreErrorRef.current = null;
         eventsOffsetRef.current = 0;
         hasMoreEventsRef.current = true;
         setHasMoreEvents(true);
         beyondHorizonLoadedRef.current = false;
         catalogFullyLoadedRef.current = false;
+      } else if (force) {
+        setEventsError(null);
+        setLoadMoreError(null);
+        loadMoreErrorRef.current = null;
       }
 
       try {
@@ -82,31 +93,35 @@ export function useEventsFeed({ userId, enabled = true }: UseEventsFeedOptions) 
           ]);
 
           if (upcomingRes.error) {
-            setEventsError(upcomingRes.error.message);
-            setEvents([]);
+            if (!silent) {
+              setEventsError(upcomingRes.error.message);
+              setEvents([]);
+            }
             return;
           }
           if (pastRes.error) {
-            setEventsError(pastRes.error.message);
-            setEvents([]);
-            return;
-          }
-          if (userRatingsRes.error) {
-            setEventsError(userRatingsRes.error.message);
-            setEvents([]);
+            if (!silent) {
+              setEventsError(pastRes.error.message);
+              setEvents([]);
+            }
             return;
           }
 
-          userRatingsCacheRef.current = userRatingsRes.data;
+          if (userRatingsRes.error) {
+            console.error('Error fetching user ratings:', userRatingsRes.error);
+            userRatingsCacheRef.current = new Map();
+          } else {
+            userRatingsCacheRef.current = userRatingsRes.data;
+          }
+
           const pageRows = [...upcomingRes.data, ...pastRes.data];
           const statsRes = await fetchEventRatingStats(pageRows.map((e) => e.id));
+          const statsMap = statsRes.error ? new Map() : statsRes.data;
           if (statsRes.error) {
-            setEventsError(statsRes.error.message);
-            setEvents([]);
-            return;
+            console.error('Error fetching event rating stats:', statsRes.error);
           }
 
-          const mapped = mapEventsWithStats(pageRows, statsRes.data, userRatingsCacheRef.current).sort(
+          const mapped = mapEventsWithStats(pageRows, statsMap, userRatingsCacheRef.current).sort(
             (a, b) => compareEventsForFeed(a, b),
           );
 
@@ -126,10 +141,15 @@ export function useEventsFeed({ userId, enabled = true }: UseEventsFeedOptions) 
             setHasMoreEvents(pastRes.hasMore);
             setEvents(mapped);
           }
+
+          setEventsError(null);
+          setLoadMoreError(null);
+        loadMoreErrorRef.current = null;
         } else {
           const pastRes = await fetchPastEventsPage(eventsOffsetRef.current, FEED_PAGE_SIZE);
           if (pastRes.error) {
-            setEventsError(pastRes.error.message);
+            setLoadMoreError(pastRes.error.message);
+            loadMoreErrorRef.current = pastRes.error.message;
             return;
           }
 
@@ -138,18 +158,25 @@ export function useEventsFeed({ userId, enabled = true }: UseEventsFeedOptions) 
           setHasMoreEvents(pastRes.hasMore);
 
           const statsRes = await fetchEventRatingStats(pastRes.data.map((e) => e.id));
+          const statsMap = statsRes.error ? new Map() : statsRes.data;
           if (statsRes.error) {
-            setEventsError(statsRes.error.message);
-            return;
+            console.error('Error fetching event rating stats:', statsRes.error);
           }
 
-          const pageMapped = mapEventsWithStats(pastRes.data, statsRes.data, userRatingsCacheRef.current);
+          const pageMapped = mapEventsWithStats(pastRes.data, statsMap, userRatingsCacheRef.current);
           setEvents((prev) => mergeEventsByFeedOrder(prev, pageMapped));
+          setLoadMoreError(null);
+        loadMoreErrorRef.current = null;
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        setEventsError(message);
-        if (!append) setEvents([]);
+        if (append) {
+          setLoadMoreError(message);
+          loadMoreErrorRef.current = message;
+        } else if (!silent) {
+          setEventsError(message);
+          setEvents([]);
+        }
         console.error('Error fetching events:', error);
       } finally {
         hasLoadedEventsRef.current = true;
@@ -165,6 +192,7 @@ export function useEventsFeed({ userId, enabled = true }: UseEventsFeedOptions) 
   );
 
   const loadMoreEvents = useCallback(() => {
+    if (loadMoreErrorRef.current) return;
     void fetchEvents({ append: true });
   }, [fetchEvents]);
 
@@ -316,6 +344,8 @@ export function useEventsFeed({ userId, enabled = true }: UseEventsFeedOptions) 
     loading,
     eventsError,
     setEventsError,
+    loadMoreError,
+    setLoadMoreError,
     hasMoreEvents,
     loadingMore,
     catalogHydrating,

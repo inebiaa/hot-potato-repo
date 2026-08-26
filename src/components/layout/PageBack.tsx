@@ -8,7 +8,7 @@ type PageBackProps = {
   onClick?: () => void;
 };
 
-/** Standard page back: previous screen, or home when there is no history. */
+/** Standard page back: home feed (not browser history). */
 export default function PageBack({ className, onClick }: PageBackProps) {
   const t = useT();
   const { goBack } = useAppChrome();

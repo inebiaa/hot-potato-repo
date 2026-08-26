@@ -4,6 +4,7 @@ import PageBack from '../components/layout/PageBack';
 import RouteLoading from '../components/layout/RouteLoading';
 import RouteMessage from '../components/layout/RouteMessage';
 import { routePageShellClass } from '../components/layout/routePageShell';
+import { typeCallout, typeTitle } from '../components/ui';
 import { useAppChrome } from '../contexts/AppChromeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppSettings } from '../hooks/useAppSettings';
@@ -28,7 +29,7 @@ export default function SettingsRoutePage() {
   if (!user) {
     return (
       <RouteMessage>
-        <p className="mb-4 text-gray-700">{t('settings.signInToOpen')}</p>
+        <p className={`mb-4 ${typeCallout} text-foreground`}>{t('settings.signInToOpen')}</p>
       </RouteMessage>
     );
   }
@@ -36,7 +37,7 @@ export default function SettingsRoutePage() {
   return (
     <div className={`${routePageShellClass('wide')} py-8`}>
       <PageBack className="mb-6" />
-      <h1 className="mb-8 text-3xl font-bold tracking-tight text-gray-900">{t('settings.title')}</h1>
+      <h1 className={`mb-8 ${typeTitle} text-foreground`}>{t('settings.title')}</h1>
       <SettingsPage
         onSettingsUpdated={() => {
           void fetchSettings();
