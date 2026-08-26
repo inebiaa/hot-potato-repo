@@ -51,9 +51,6 @@ export type CopyKey =
   | 'auth.deleteAccountPage.stepApp'
   | 'auth.deleteAccountPage.openSettings'
   | 'search.placeholder'
-  | 'search.summary'
-  | 'search.showSingular'
-  | 'search.showPlural'
   | 'nav.home'
   | 'nav.stats'
   | 'nav.profile'
@@ -252,21 +249,6 @@ export const COPY_CATALOG: Record<CopyKey, CopyEntry> = {
     label: 'Search placeholder',
     group: 'search',
 
-  },
-  'search.summary': {
-    default: 'Showing {filtered} of {total} {unit}',
-    label: 'Search result summary',
-    group: 'search',
-  },
-  'search.showSingular': {
-    default: 'show',
-    label: 'Search summary: show (singular)',
-    group: 'search',
-  },
-  'search.showPlural': {
-    default: 'shows',
-    label: 'Search summary: shows (plural)',
-    group: 'search',
   },
   'nav.home': { default: 'Home', label: 'Nav: Home', group: 'nav' },
   'nav.stats': { default: 'Stats', label: 'Nav: Stats', group: 'nav' },

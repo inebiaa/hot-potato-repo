@@ -11,6 +11,7 @@ Source of truth: CSS variables + utilities in `src/index.css`, Tailwind color ma
 
 - Use semantic tokens only for app chrome: `background`, `foreground`, `muted`, `muted-foreground`, `card`, `border`, `input`, `ring`, `primary`, `secondary`, `accent`, `destructive`.
 - Prefer classes like `bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `hover:bg-muted`, `focus-visible:ring-ring`.
+- `--ring` is a **light grey** for focus rings (prior `gray-300`), not near-black. Use `ring-ring` on fields and buttons; use `ring-ring/40` only when you need an extra-soft chrome control (header icon buttons).
 - Do **not** add new Tailwind `gray-*`, `neutral-*`, `slate-*`, or raw hex greys for chrome (header, layout, cards shell, modals, menus, settings, profile chrome).
 - Page fill is **flat** `bg-background` (no grey page gradients).
 - Scrollbars and theme color follow the same tokens.

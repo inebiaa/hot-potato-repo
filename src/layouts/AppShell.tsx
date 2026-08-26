@@ -30,11 +30,6 @@ export default function AppShell({ setProfileBoardEvents }: AppShellProps) {
   const home = useHomeCatalog();
   const { appSettings } = useAppSettings();
 
-  const [headerSearchCounts, setHeaderSearchCounts] = useState<{
-    filtered: number;
-    total: number;
-  } | null>(null);
-
   const {
     overlayEventId,
     overlaySource,
@@ -144,8 +139,6 @@ export default function AppShell({ setProfileBoardEvents }: AppShellProps) {
     onTagClick: handleTagClick,
     onAddEvent: openAddEventModal,
     setProfileBoardEvents,
-    headerSearchCounts,
-    setHeaderSearchCounts,
     goBack,
     refreshHomeCatalog: () => {
       void home.fetchEvents();

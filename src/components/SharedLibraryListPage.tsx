@@ -88,7 +88,7 @@ export default function SharedLibraryListPage({
   const { appSettings } = useAppSettings();
   const navigate = useNavigate();
   const home = useHomeCatalogOptional();
-  const { setProfileBoardEvents, setHeaderSearchCounts } = useAppChrome();
+  const { setProfileBoardEvents } = useAppChrome();
   const [list, setList] = useState<UserList | null>(null);
   const [ownerUsername, setOwnerUsername] = useState("");
   const [ownerHandle, setOwnerHandle] = useState("");
@@ -296,18 +296,6 @@ export default function SharedLibraryListPage({
       );
     });
   }, [rows, searchActive, searchQuery, selectedTags, tagMap]);
-
-  useEffect(() => {
-    if (!searchActive) {
-      setHeaderSearchCounts(null);
-      return;
-    }
-    setHeaderSearchCounts({ filtered: visibleRows.length, total: rows.length });
-  }, [searchActive, visibleRows.length, rows.length, setHeaderSearchCounts]);
-
-  useEffect(() => {
-    return () => setHeaderSearchCounts(null);
-  }, [setHeaderSearchCounts]);
 
   const title = useMemo(() => {
     if (!list) return "";

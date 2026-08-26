@@ -2,9 +2,10 @@ import { Link } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import { typeHeadline } from '../ui';
 
-const EVENT_TITLE_CLASS = `inline min-w-0 ${typeHeadline} text-foreground`;
+/** Inline + leading-snug pairs with the floated action row (h-[1.375em]). */
+const EVENT_TITLE_CLASS = `inline min-w-0 ${typeHeadline} leading-snug text-foreground`;
 const EVENT_TITLE_INTERACTIVE_CLASS =
-  'cursor-pointer text-left hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm';
+  'cursor-pointer hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm';
 
 interface EventCardTitleProps {
   name: string;
@@ -21,13 +22,20 @@ export default function EventCardTitle({
 }: EventCardTitleProps) {
   if (onViewClick) {
     return (
-      <button
-        type="button"
+      <h3
+        role="button"
+        tabIndex={0}
         onClick={() => onViewClick(eventId)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onViewClick(eventId);
+          }
+        }}
         className={cn(EVENT_TITLE_CLASS, EVENT_TITLE_INTERACTIVE_CLASS)}
       >
         {name}
-      </button>
+      </h3>
     );
   }
 

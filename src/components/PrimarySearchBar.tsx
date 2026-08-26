@@ -24,17 +24,11 @@ interface TagSuggestion {
 
 interface PrimarySearchBarProps {
   appSettings: AppSettings;
-  embeddedInHeader?: boolean;
   customPerformerTags?: CustomPerformerTagDef[];
   searchDragOver: boolean;
   selectedTags: TagFilter[];
   searchQuery: string;
   tagSuggestions: TagSuggestion[];
-  filteredCount?: number;
-  totalCount?: number;
-  summaryLabelSingular?: string;
-  summaryLabelPlural?: string;
-  summaryOverride?: string;
   onSearchDrop: (e: DragEvent) => void;
   onSearchDragOver: (e: DragEvent) => void;
   onSearchDragLeave: () => void;
@@ -122,17 +116,11 @@ function pillColorsForFilter(
 
 export default function PrimarySearchBar({
   appSettings,
-  embeddedInHeader = false,
   customPerformerTags,
   searchDragOver,
   selectedTags,
   searchQuery,
   tagSuggestions,
-  filteredCount,
-  totalCount,
-  summaryLabelSingular = 'show',
-  summaryLabelPlural = 'shows',
-  summaryOverride,
   onSearchDrop,
   onSearchDragOver,
   onSearchDragLeave,
@@ -178,23 +166,6 @@ export default function PrimarySearchBar({
     const option = listboxRef.current?.querySelector<HTMLElement>(`[data-suggestion-index="${activeIndex}"]`);
     option?.scrollIntoView({ block: 'nearest' });
   }, [activeIndex]);
-
-  const hasFilterActivity = Boolean(searchQuery) || selectedTags.length > 0;
-  const showCounts =
-    hasFilterActivity &&
-    typeof filteredCount === 'number' &&
-    typeof totalCount === 'number';
-
-  const unitLabel =
-    totalCount === 1
-      ? summaryLabelSingular ?? t('search.showSingular')
-      : summaryLabelPlural ?? t('search.showPlural');
-  const countSummary =
-    summaryOverride ||
-    t('search.summary')
-      .replace('{filtered}', String(filteredCount))
-      .replace('{total}', String(totalCount))
-      .replace('{unit}', unitLabel);
 
   const showTagSuggestions = fieldFocused && tagSuggestions.length > 0;
   const activeOptionId =
@@ -260,16 +231,14 @@ export default function PrimarySearchBar({
     }
   };
 
-  const searchFieldClass = embeddedInHeader
-    ? `relative flex min-h-10 w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1 type-body text-foreground shadow-sm transition-shadow focus-within:border-input focus-within:ring-1 focus-within:ring-ring ${searchDragOver ? 'bg-muted ring-2 ring-ring' : ''}`
-    : `relative flex min-h-[2.5rem] w-full min-w-[200px] flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 type-body shadow-sm transition-shadow focus-within:border-input focus-within:ring-1 focus-within:ring-ring ${searchDragOver ? 'bg-muted ring-2 ring-ring' : ''}`;
+  const searchFieldClass = `relative flex min-h-10 w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1 type-body text-foreground shadow-sm transition-shadow focus-within:border-input focus-within:ring-1 focus-within:ring-ring ${searchDragOver ? 'bg-muted ring-2 ring-ring' : ''}`;
 
   const chipsAndInputRow =
     'flex min-h-0 min-w-0 flex-1 flex-wrap items-center gap-1';
 
   return (
-    <div className={embeddedInHeader ? 'w-full min-w-0' : 'mb-6 border-b border-border pb-4'}>
-      <div className={embeddedInHeader ? 'w-full' : 'flex flex-wrap items-center gap-3'}>
+    <div className="w-full min-w-0">
+      <div className="w-full">
         <div
           ref={fieldRef}
           className={searchFieldClass}
@@ -383,16 +352,6 @@ export default function PrimarySearchBar({
           ) : null}
         </div>
       </div>
-
-      {showCounts ? (
-        <div
-          className={
-            embeddedInHeader ? 'mt-1 type-caption text-muted-foreground' : 'mt-3 type-callout text-muted-foreground'
-          }
-        >
-          {countSummary}
-        </div>
-      ) : null}
     </div>
   );
 }

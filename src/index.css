@@ -49,7 +49,8 @@
   --muted-foreground: 115 115 115;
   --border: 229 229 229;
   --input: 212 212 212;
-  --ring: 64 64 64;
+  /* Focus rings / focus borders: light grey, not foreground strength */
+  --ring: 209 213 219;
   --primary: 23 23 23;
   --primary-foreground: 250 250 250;
   --secondary: 245 245 245;

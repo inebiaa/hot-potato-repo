@@ -4,16 +4,14 @@ import PrimarySearchBar from '../PrimarySearchBar';
 import { useAppChrome } from '../../contexts/AppChromeContext';
 import { useHomeCatalog } from '../../contexts/HomeCatalogContext';
 import { useAppSettings } from '../../hooks/useAppSettings';
-import { headerSearchOpensHome, isListPageRoute, isProfilePageRoute } from '../../lib/homeCatalogRoute';
+import { headerSearchOpensHome } from '../../lib/homeCatalogRoute';
 
 /** Header search. Opens home, except on stats, profile, and lists. */
 export default function HomeHeaderSearch() {
   const { appSettings } = useAppSettings();
   const { pathname } = useLocation();
-  const { overlayEventId, closeEventOverlay, headerSearchCounts } = useAppChrome();
+  const { overlayEventId, closeEventOverlay } = useAppChrome();
   const {
-    events,
-    filteredEvents,
     searchQuery,
     setSearchQuery,
     selectedTags,
@@ -29,19 +27,6 @@ export default function HomeHeaderSearch() {
   } = useHomeCatalog();
 
   const searchGoesHome = headerSearchOpensHome(pathname);
-  const pageScopedCounts = isProfilePageRoute(pathname) || isListPageRoute(pathname);
-  const hasFilterActivity = Boolean(searchQuery.trim()) || selectedTags.length > 0;
-
-  const filteredCount = pageScopedCounts
-    ? headerSearchCounts?.filtered
-    : hasFilterActivity
-      ? filteredEvents.length
-      : undefined;
-  const totalCount = pageScopedCounts
-    ? headerSearchCounts?.total
-    : hasFilterActivity
-      ? events.length
-      : undefined;
 
   const onSelectTagFilter = useCallback(
     (type: string, value: string, explicitLabel?: string) => {
@@ -73,14 +58,11 @@ export default function HomeHeaderSearch() {
 
   return (
     <PrimarySearchBar
-      embeddedInHeader
       appSettings={appSettings}
       searchDragOver={searchDragOver}
       selectedTags={selectedTags}
       searchQuery={searchQuery}
       tagSuggestions={tagSuggestions}
-      filteredCount={filteredCount}
-      totalCount={totalCount}
       onSearchDrop={onSearchDrop}
       onSearchDragOver={handleSearchDragOver}
       onSearchDragLeave={handleSearchDragLeave}
