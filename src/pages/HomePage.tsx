@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { Sparkles, Search } from 'lucide-react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import EventCard from '../components/EventCard/EventCard';
@@ -6,6 +6,7 @@ import MasonryLaneFeed, { type MasonryLaneItem } from '../components/MasonryLane
 import { useAppChrome } from '../contexts/AppChromeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useHomeCatalog } from '../contexts/HomeCatalogContext';
+import { useRegisterPullToRefresh } from '../contexts/PullToRefreshContext';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { useT } from '../hooks/useCopy';
 import { compareEventsForFeed } from '../lib/eventsFeed';
@@ -42,6 +43,9 @@ export default function HomePage() {
     clearFilters,
     mergeDeepLinkedEvent,
   } = useHomeCatalog();
+
+  const refreshFeed = useCallback(() => fetchEvents({ force: true }), [fetchEvents]);
+  useRegisterPullToRefresh(refreshFeed);
 
   useEffect(() => {
     if (embedMode || !eventIdFromUrl || loading || events.length === 0) return;

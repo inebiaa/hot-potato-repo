@@ -9,6 +9,7 @@ import { useAppModals } from '../hooks/useAppModals';
 import { useEventOverlayNavigation } from '../hooks/useEventOverlayNavigation';
 import { useAppLayoutNav } from '../hooks/useAppLayoutNav';
 import { useAppSettings } from '../hooks/useAppSettings';
+import { PullToRefreshProvider } from '../contexts/PullToRefreshContext';
 import AppLayout from './AppLayout';
 import { headerActiveView, headerSearchOpensHome, isHomeCatalogRoute } from '../lib/homeCatalogRoute';
 import { useHomeCatalog } from '../contexts/HomeCatalogContext';
@@ -182,10 +183,11 @@ export default function AppShell({ setProfileBoardEvents }: AppShellProps) {
   };
 
   return (
-    <LikedEventsProvider>
-      <AppChromeProvider value={chromeValue}>
-        <CopyProvider settings={appSettings}>
-          <AppLayout
+    <PullToRefreshProvider>
+      <LikedEventsProvider>
+        <AppChromeProvider value={chromeValue}>
+          <CopyProvider settings={appSettings}>
+            <AppLayout
             {...layoutNav}
             activeView={activeView}
             isPlusActive={isAddEventModalOpen || isCreateListModalOpen}
@@ -207,5 +209,6 @@ export default function AppShell({ setProfileBoardEvents }: AppShellProps) {
         </CopyProvider>
       </AppChromeProvider>
     </LikedEventsProvider>
+    </PullToRefreshProvider>
   );
 }

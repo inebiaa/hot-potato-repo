@@ -17,6 +17,7 @@ import { clearAppModalParams, parseAppModal, setAppModalParams } from '../lib/se
 import type { AppSettings } from '../types/appSettings';
 import StatisticsPageContent from './StatisticsPageContent';
 import { useHomeCatalogOptional } from '../contexts/HomeCatalogContext';
+import { useRegisterPullToRefresh } from '../contexts/PullToRefreshContext';
 
 export interface TagStats {
   name: string;
@@ -51,17 +52,9 @@ export default function StatisticsPage({
   const [loading, setLoading] = useState(true);
   const home = useHomeCatalogOptional();
 
-  useEffect(() => {
-    if (selectedType !== 'all' && selectedType !== 'designer' && selectedType !== 'artist') {
-      setSelectedType('all');
-    }
-  }, [selectedType]);
-
-  useEffect(() => {
-    let cancelled = false;
+  const reloadStats = useCallback(() => {
     setLoading(true);
     void fetchAllEvents().then(async ({ data, error }) => {
-      if (cancelled) return;
       if (error) {
         console.error('Error fetching events:', error);
         setEvents([]);
@@ -71,12 +64,21 @@ export default function StatisticsPage({
       setEvents(data);
       setLoading(false);
       const map = await fetchTagResolutionForEvents(data);
-      if (!cancelled) setTagResolutionMap(map);
+      setTagResolutionMap(map);
     });
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useRegisterPullToRefresh(reloadStats);
+
+  useEffect(() => {
+    if (selectedType !== 'all' && selectedType !== 'designer' && selectedType !== 'artist') {
+      setSelectedType('all');
+    }
+  }, [selectedType]);
+
+  useEffect(() => {
+    reloadStats();
+  }, [reloadStats]);
 
   const eventsInView = useMemo(() => {
     if (!home || home.browsing) return events;

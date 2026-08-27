@@ -1,7 +1,10 @@
-import type { ReactNode } from 'react';
+import { useCallback, useState, type MutableRefObject, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import AppHeader, { type AppHeaderActiveView } from '../components/AppHeader';
+import PullToRefreshIndicator from '../components/layout/PullToRefreshIndicator';
+import { usePullToRefreshControl } from '../contexts/PullToRefreshContext';
 import { useHomeCatalogOptional } from '../contexts/HomeCatalogContext';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { isHomeCatalogRoute } from '../lib/homeCatalogRoute';
 import type { AppSettings } from '../types/appSettings';
 
@@ -49,8 +52,25 @@ export default function AppLayout({
 }: AppLayoutProps) {
   const location = useLocation();
   const home = useHomeCatalogOptional();
-  const mainRef =
-    isHomeCatalogRoute(location.pathname) && home ? home.feedScrollRef : undefined;
+  const { runRefresh } = usePullToRefreshControl();
+  const [mainScrollEl, setMainScrollEl] = useState<HTMLElement | null>(null);
+
+  const assignMainRef = useCallback(
+    (node: HTMLElement | null) => {
+      setMainScrollEl(node);
+      if (isHomeCatalogRoute(location.pathname) && home) {
+        (home.feedScrollRef as MutableRefObject<HTMLElement | null>).current = node;
+      }
+    },
+    [home, location.pathname],
+  );
+
+  const { pull, refreshing, pullThreshold } = usePullToRefresh({
+    scrollEl: mainScrollEl,
+    enabled: !desktopLikePointer,
+    onRefresh: runRefresh,
+  });
+
   return (
     <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-background">
       <AppHeader
@@ -73,11 +93,16 @@ export default function AppLayout({
         pinnedArtistBar={pinnedArtistBar}
       />
       <main
-        ref={mainRef}
-        className={`flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden ${
+        ref={assignMainRef}
+        className={`relative flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain ${
           desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'
         }`}
       >
+        <PullToRefreshIndicator
+          pull={pull}
+          refreshing={refreshing}
+          pullThreshold={pullThreshold}
+        />
         {children}
       </main>
     </div>

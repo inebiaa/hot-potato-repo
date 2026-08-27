@@ -11,6 +11,7 @@ import EventCard from "./EventCard/EventCard";
 import MasonryLaneFeed, { type MasonryLaneItem } from "./MasonryLaneFeed";
 import { TagDisplayProvider } from "../contexts/TagDisplayContext";
 import { useHomeCatalogOptional } from "../contexts/HomeCatalogContext";
+import { useRegisterPullToRefresh } from "../contexts/PullToRefreshContext";
 import {
   fetchTagResolutionForEvents,
   type TagResolutionMap,
@@ -96,6 +97,7 @@ export default function SharedLibraryListPage({
   const [tagMap, setTagMap] = useState<TagResolutionMap | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
   const [listMenuOpen, setListMenuOpen] = useState(false);
   const listMenuRef = useRef<HTMLDivElement | null>(null);
@@ -113,6 +115,10 @@ export default function SharedLibraryListPage({
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [listMenuOpen]);
+
+  useRegisterPullToRefresh(() => {
+    setReloadToken((token) => token + 1);
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -251,7 +257,7 @@ export default function SharedLibraryListPage({
     return () => {
       cancelled = true;
     };
-  }, [listId, user?.id]);
+  }, [listId, user?.id, reloadToken]);
 
   // Canonical path is /:handle/list/:id (rewrite legacy /list/:id and wrong handles).
   useEffect(() => {
