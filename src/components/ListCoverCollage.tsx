@@ -7,6 +7,9 @@ type ListCoverCollageProps = {
   className?: string;
 };
 
+const tileClass =
+  "h-full w-full min-h-0 min-w-0 object-cover [transform:scale(1.02)]";
+
 export default function ListCoverCollage({
   urls,
   className = "",
@@ -31,33 +34,49 @@ export default function ListCoverCollage({
   if (pics.length === 2) {
     return (
       <div
-        className={`grid grid-cols-2 gap-px overflow-hidden bg-muted ${className}`.trim()}
+        className={`grid grid-cols-2 overflow-hidden ${className}`.trim()}
       >
         {pics.map((src) => (
           <RemoteImg
             key={src}
             src={src}
             alt=""
-            className="h-full w-full min-h-0 min-w-0 object-cover"
+            className={tileClass}
           />
         ))}
       </div>
     );
   }
 
+  if (pics.length === 3) {
+    return (
+      <div
+        className={`grid grid-cols-2 grid-rows-2 overflow-hidden ${className}`.trim()}
+      >
+        <RemoteImg key={pics[0]} src={pics[0]} alt="" className={tileClass} />
+        <RemoteImg key={pics[1]} src={pics[1]} alt="" className={tileClass} />
+        <RemoteImg
+          key={pics[2]}
+          src={pics[2]}
+          alt=""
+          className={`${tileClass} col-span-2`}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`grid grid-cols-2 grid-rows-2 gap-px overflow-hidden bg-muted ${className}`.trim()}
+      className={`grid grid-cols-2 grid-rows-2 overflow-hidden ${className}`.trim()}
     >
       {pics.slice(0, 4).map((src) => (
         <RemoteImg
           key={src}
           src={src}
           alt=""
-          className="h-full w-full min-h-0 min-w-0 object-cover"
+          className={tileClass}
         />
       ))}
-      {pics.length === 3 ? <div className="bg-muted" aria-hidden /> : null}
     </div>
   );
 }
