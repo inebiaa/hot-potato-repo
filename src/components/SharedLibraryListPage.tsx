@@ -11,7 +11,7 @@ import EventCard from "./EventCard/EventCard";
 import MasonryLaneFeed, { type MasonryLaneItem } from "./MasonryLaneFeed";
 import { TagDisplayProvider } from "../contexts/TagDisplayContext";
 import { useHomeCatalogOptional } from "../contexts/HomeCatalogContext";
-import { usePullRefreshing, useRegisterPullToRefresh } from "../contexts/PullToRefreshContext";
+import { usePagePullToRefresh, usePullRefreshing } from "../contexts/PullToRefreshContext";
 import {
   fetchTagResolutionForEvents,
   type TagResolutionMap,
@@ -102,6 +102,7 @@ export default function SharedLibraryListPage({
   const [listMenuOpen, setListMenuOpen] = useState(false);
   const listMenuRef = useRef<HTMLDivElement | null>(null);
   const pullReloadRef = useRef(false);
+  const ptrResolveRef = useRef<(() => void) | null>(null);
   const pullRefreshing = usePullRefreshing();
 
   useEffect(() => {
@@ -118,15 +119,23 @@ export default function SharedLibraryListPage({
     return () => document.removeEventListener("mousedown", close);
   }, [listMenuOpen]);
 
-  useRegisterPullToRefresh(() => {
-    pullReloadRef.current = true;
-    setReloadToken((token) => token + 1);
-  });
+  usePagePullToRefresh(
+    () =>
+      new Promise<void>((resolve) => {
+        ptrResolveRef.current = resolve;
+        pullReloadRef.current = true;
+        setReloadToken((token) => token + 1);
+      }),
+  );
 
   useEffect(() => {
     let cancelled = false;
     const silent = pullReloadRef.current;
     pullReloadRef.current = false;
+    const finishPtr = () => {
+      ptrResolveRef.current?.();
+      ptrResolveRef.current = null;
+    };
     (async () => {
       if (!silent) {
         setLoading(true);
@@ -145,6 +154,7 @@ export default function SharedLibraryListPage({
         setList(null);
         setRows([]);
         setLoading(false);
+        finishPtr();
         return;
       }
       const listRow = listRes.data as UserList;
@@ -154,6 +164,7 @@ export default function SharedLibraryListPage({
         setList(listRow);
         setRows([]);
         setLoading(false);
+        finishPtr();
         return;
       }
       setList(listRow);
@@ -259,10 +270,12 @@ export default function SharedLibraryListPage({
         );
         if (!cancelled) setRows(board);
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
+      if (!cancelled) finishPtr();
     })();
     return () => {
       cancelled = true;
+      finishPtr();
     };
   }, [listId, user?.id, reloadToken]);
 

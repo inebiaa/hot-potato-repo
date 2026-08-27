@@ -8,7 +8,7 @@ export type { LabelProps } from './Label';
 export { default as Textarea } from './Textarea';
 export type { TextareaProps } from './Textarea';
 export { default as Modal } from './Modal';
-export { default as LoadingSpinner } from './LoadingSpinner';
+export { default as LoadingSpinner, APP_LOADER_SIZE } from './LoadingSpinner';
 export {
  formControlClass,
  formControlPaddingClass,

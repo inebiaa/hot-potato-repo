@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
-/** Compact PTR indicator (separate from full-page LoadingSpinner at 28px). */
-export const PTR_HAMMER_SIZE = 20;
-/** Fixed slot height while refresh runs. */
-export const PTR_REFRESH_HOLD_PX = 36;
+/** Fixed slot height while refresh runs (fits APP_LOADER_SIZE hammer spin). */
+export const PTR_REFRESH_HOLD_PX = 48;
 const PULL_THRESHOLD_PX = 50;
 const MAX_PULL_PX = 72;
 const PULL_DAMPING = 0.42;
-const MIN_REFRESH_MS = 400;
+/** At least one full hammer rotation (see .loading-hammer-spin). */
+const MIN_REFRESH_MS = 600;
 
 type UsePullToRefreshOptions = {
   scrollEl: HTMLElement | null;
@@ -85,12 +84,7 @@ export function usePullToRefresh({
     const syncScrollTop = () => {
       const atTop = el.scrollTop <= 0;
       setAtScrollTop(atTop);
-      if (atTop) return;
-      if (refreshingRef.current) {
-        setPullHeight(0);
-        setPull(0);
-        return;
-      }
+      if (atTop || refreshingRef.current) return;
       resetPull();
     };
 

@@ -32,7 +32,7 @@ export function PullToRefreshProvider({ children }: { children: ReactNode }) {
   const runRefresh = useCallback(async () => {
     const handler = handlerRef.current;
     if (!handler) return;
-    await handler();
+    await Promise.resolve(handler());
   }, []);
 
   const value = useMemo(
@@ -60,6 +60,19 @@ export function useRegisterPullToRefresh(handler: PullHandler | null) {
   }, [ctx, handler]);
 }
 
+/**
+ * Register a page refresh handler for pull-to-refresh.
+ * Handler must return a Promise that resolves when the page data is fully updated.
+ * Use silent/background refresh inside the handler (no page-level LoadingSpinner).
+ */
+export function usePagePullToRefresh(refresh: () => void | Promise<void>) {
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+
+  const handler = useCallback(() => Promise.resolve(refreshRef.current()), []);
+  useRegisterPullToRefresh(handler);
+}
+
 export function usePullToRefreshControl() {
   const ctx = useContext(PullToRefreshContext);
   if (!ctx) {
@@ -68,7 +81,7 @@ export function usePullToRefreshControl() {
   return ctx;
 }
 
-/** True during pull-to-refresh; hide inline page loaders so only the PTR hammer shows. */
+/** True during pull-to-refresh; hide inline page loaders so only the AppLayout PTR slot shows. */
 export function usePullRefreshing(): boolean {
   const ctx = useContext(PullToRefreshContext);
   return ctx?.refreshing ?? false;

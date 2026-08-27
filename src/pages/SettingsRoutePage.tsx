@@ -7,7 +7,7 @@ import { routePageShellClass } from '../components/layout/routePageShell';
 import { typeCallout, typeTitle } from '../components/ui';
 import { useAppChrome } from '../contexts/AppChromeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useRegisterPullToRefresh } from '../contexts/PullToRefreshContext';
+import { usePagePullToRefresh } from '../contexts/PullToRefreshContext';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { useT } from '../hooks/useCopy';
 
@@ -18,7 +18,7 @@ export default function SettingsRoutePage() {
   const { refreshHomeCatalog } = useAppChrome();
 
   const refreshSettings = useCallback(() => fetchSettings(), [fetchSettings]);
-  useRegisterPullToRefresh(refreshSettings);
+  usePagePullToRefresh(refreshSettings);
 
   useEffect(() => {
     return () => {

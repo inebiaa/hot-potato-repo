@@ -17,7 +17,7 @@ import { clearAppModalParams, parseAppModal, setAppModalParams } from '../lib/se
 import type { AppSettings } from '../types/appSettings';
 import StatisticsPageContent from './StatisticsPageContent';
 import { useHomeCatalogOptional } from '../contexts/HomeCatalogContext';
-import { useRegisterPullToRefresh } from '../contexts/PullToRefreshContext';
+import { usePagePullToRefresh } from '../contexts/PullToRefreshContext';
 
 export interface TagStats {
   name: string;
@@ -52,24 +52,25 @@ export default function StatisticsPage({
   const [loading, setLoading] = useState(true);
   const home = useHomeCatalogOptional();
 
-  const reloadStats = useCallback((opts?: { silent?: boolean }) => {
+  const reloadStats = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
     if (!silent) setLoading(true);
-    void fetchAllEvents().then(async ({ data, error }) => {
+    try {
+      const { data, error } = await fetchAllEvents();
       if (error) {
         console.error('Error fetching events:', error);
         setEvents([]);
-        setLoading(false);
         return;
       }
       setEvents(data);
-      setLoading(false);
       const map = await fetchTagResolutionForEvents(data);
       setTagResolutionMap(map);
-    });
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
 
-  useRegisterPullToRefresh(() => reloadStats({ silent: true }));
+  usePagePullToRefresh(() => reloadStats({ silent: true }));
 
   useEffect(() => {
     if (selectedType !== 'all' && selectedType !== 'designer' && selectedType !== 'artist') {

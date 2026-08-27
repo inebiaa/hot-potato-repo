@@ -1,12 +1,11 @@
-import { HammerSpin } from '../ui/HammerSpin';
-import { PTR_HAMMER_SIZE } from '../../hooks/usePullToRefresh';
+import LoadingSpinner from '../ui/LoadingSpinner';
 
 type PullToRefreshIndicatorProps = {
   isRefreshing: boolean;
   pullProgress: number;
 };
 
-/** Compact hammer: same motion as app loader, smaller footprint for PTR only. */
+/** Pull-to-refresh uses the same LoadingSpinner as the rest of the app. */
 export default function PullToRefreshIndicator({
   isRefreshing,
   pullProgress,
@@ -15,14 +14,13 @@ export default function PullToRefreshIndicator({
 
   return (
     <div
-      className="flex items-center justify-center overflow-visible text-muted-foreground"
+      className="flex items-center justify-center overflow-visible"
       style={{ opacity: reveal }}
-      {...(isRefreshing ? { role: 'status' as const, 'aria-label': 'Refreshing' } : { 'aria-hidden': true })}
     >
-      <HammerSpin
-        size={PTR_HAMMER_SIZE}
+      <LoadingSpinner
         animate={isRefreshing}
-        rotation={isRefreshing ? 0 : pullProgress * 360}
+        rotation={pullProgress * 360}
+        label={isRefreshing ? 'Refreshing' : false}
       />
     </div>
   );

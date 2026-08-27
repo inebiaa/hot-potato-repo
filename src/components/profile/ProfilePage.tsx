@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, UserList, Rating, Event } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { usePullRefreshing, useRegisterPullToRefresh } from '../../contexts/PullToRefreshContext';
+import { usePagePullToRefresh, usePullRefreshing } from '../../contexts/PullToRefreshContext';
 import {
   addEventToListAndLiked,
   createUserPlaylist,
@@ -243,9 +243,7 @@ export default function ProfilePage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, refreshTrigger]);
 
-  useRegisterPullToRefresh(() => {
-    void fetchProfile({ silent: true });
-  });
+  usePagePullToRefresh(() => fetchProfile({ silent: true }));
 
   useEffect(() => {
     let cancelled = false;

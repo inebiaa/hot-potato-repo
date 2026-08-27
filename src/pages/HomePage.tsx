@@ -6,7 +6,7 @@ import MasonryLaneFeed, { type MasonryLaneItem } from '../components/MasonryLane
 import { useAppChrome } from '../contexts/AppChromeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useHomeCatalog } from '../contexts/HomeCatalogContext';
-import { usePullRefreshing, useRegisterPullToRefresh } from '../contexts/PullToRefreshContext';
+import { usePullRefreshing, usePagePullToRefresh } from '../contexts/PullToRefreshContext';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { useT } from '../hooks/useCopy';
 import { compareEventsForFeed } from '../lib/eventsFeed';
@@ -48,7 +48,7 @@ export default function HomePage() {
     () => fetchEvents({ force: true, silent: true }),
     [fetchEvents],
   );
-  useRegisterPullToRefresh(refreshFeed);
+  usePagePullToRefresh(refreshFeed);
   const pullRefreshing = usePullRefreshing();
 
   useEffect(() => {
