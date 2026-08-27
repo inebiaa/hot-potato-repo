@@ -11,7 +11,7 @@ import EventCard from "./EventCard/EventCard";
 import MasonryLaneFeed, { type MasonryLaneItem } from "./MasonryLaneFeed";
 import { TagDisplayProvider } from "../contexts/TagDisplayContext";
 import { useHomeCatalogOptional } from "../contexts/HomeCatalogContext";
-import { useRegisterPullToRefresh } from "../contexts/PullToRefreshContext";
+import { usePullRefreshing, useRegisterPullToRefresh } from "../contexts/PullToRefreshContext";
 import {
   fetchTagResolutionForEvents,
   type TagResolutionMap,
@@ -101,6 +101,7 @@ export default function SharedLibraryListPage({
   const [reportOpen, setReportOpen] = useState(false);
   const [listMenuOpen, setListMenuOpen] = useState(false);
   const listMenuRef = useRef<HTMLDivElement | null>(null);
+  const pullRefreshing = usePullRefreshing();
 
   useEffect(() => {
     if (!listMenuOpen) return;
@@ -360,7 +361,7 @@ export default function SharedLibraryListPage({
     error,
   ]);
 
-  if (loading) {
+  if (loading && !pullRefreshing) {
     return (
       <div className="flex items-center justify-center py-24">
         <LoadingSpinner />

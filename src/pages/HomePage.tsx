@@ -6,7 +6,7 @@ import MasonryLaneFeed, { type MasonryLaneItem } from '../components/MasonryLane
 import { useAppChrome } from '../contexts/AppChromeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useHomeCatalog } from '../contexts/HomeCatalogContext';
-import { useRegisterPullToRefresh } from '../contexts/PullToRefreshContext';
+import { usePullRefreshing, useRegisterPullToRefresh } from '../contexts/PullToRefreshContext';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { useT } from '../hooks/useCopy';
 import { compareEventsForFeed } from '../lib/eventsFeed';
@@ -46,6 +46,7 @@ export default function HomePage() {
 
   const refreshFeed = useCallback(() => fetchEvents({ force: true }), [fetchEvents]);
   useRegisterPullToRefresh(refreshFeed);
+  const pullRefreshing = usePullRefreshing();
 
   useEffect(() => {
     if (embedMode || !eventIdFromUrl || loading || events.length === 0) return;
@@ -131,7 +132,7 @@ export default function HomePage() {
         </div>
       ) : null}
 
-      {(loading && events.length === 0) ? (
+      {(loading && events.length === 0 && !pullRefreshing) ? (
         <div className="flex items-center justify-center py-12">
           <LoadingSpinner />
         </div>
@@ -162,7 +163,7 @@ export default function HomePage() {
             )}
           </div>
         </div>
-      ) : filtering && catalogStillLoading && filteredEvents.length === 0 ? (
+      ) : filtering && catalogStillLoading && filteredEvents.length === 0 && !pullRefreshing ? (
         <div className="flex items-center justify-center py-12">
           <LoadingSpinner />
         </div>

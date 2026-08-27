@@ -4,6 +4,7 @@ import TagPillSplitLabel, { tagPillSplitContainerClass } from "./TagPillSplitLab
 import StatsFilterBar from "./stats/StatsFilterBar";
 import { TAG_PILL_ROW_CLASS, tagPillShellClass } from "./tagPillShell";
 import { cn } from "../lib/utils";
+import { usePullRefreshing } from "../contexts/PullToRefreshContext";
 import { LoadingSpinner, typeCallout, typeHeadline } from "./ui";
 import { useT } from "../hooks/useCopy";
 
@@ -43,6 +44,7 @@ export default function StatisticsPageContent({
   handleTagClick,
 }: StatisticsPageContentProps) {
   const t = useT();
+  const pullRefreshing = usePullRefreshing();
   const showCount = events.length;
   const tagsUnit =
     tagStats.length === 1 ? t("stats.tagSingular") : t("stats.tagPlural");
@@ -71,7 +73,7 @@ export default function StatisticsPageContent({
       />
 
       <div>
-        {loading ? (
+        {loading && !pullRefreshing ? (
           <div className="flex items-center justify-center py-12">
             <LoadingSpinner />
           </div>

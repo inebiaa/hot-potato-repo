@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, UserList, Rating, Event } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { useRegisterPullToRefresh } from '../../contexts/PullToRefreshContext';
+import { usePullRefreshing, useRegisterPullToRefresh } from '../../contexts/PullToRefreshContext';
 import {
   addEventToListAndLiked,
   createUserPlaylist,
@@ -95,9 +95,14 @@ export default function ProfilePage({
   const editListCoverOriginalRef = useRef('');
   const boardMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const fetchProfile = async () => {
-    setLoading(true);
-    setSavedLibraryEvents([]);
+  const pullRefreshing = usePullRefreshing();
+
+  const fetchProfile = async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+    if (!silent) {
+      setLoading(true);
+      setSavedLibraryEvents([]);
+    }
     try {
       if (currentUser?.id === userId) {
         try {
@@ -239,7 +244,7 @@ export default function ProfilePage({
   }, [userId, refreshTrigger]);
 
   useRegisterPullToRefresh(() => {
-    void fetchProfile();
+    void fetchProfile({ silent: true });
   });
 
   useEffect(() => {
@@ -702,7 +707,7 @@ export default function ProfilePage({
   const listDisplayName = (list: ListWithCount | undefined) =>
     formatListDisplayName(list, { isOwnProfile, username, t });
 
-  if (loading) {
+  if (loading && !pullRefreshing) {
     return (
       <>
         <PageBack className="mb-6" />

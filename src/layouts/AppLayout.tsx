@@ -52,7 +52,7 @@ export default function AppLayout({
 }: AppLayoutProps) {
   const location = useLocation();
   const home = useHomeCatalogOptional();
-  const { runRefresh } = usePullToRefreshControl();
+  const { runRefresh, setRefreshing } = usePullToRefreshControl();
   const [mainScrollEl, setMainScrollEl] = useState<HTMLElement | null>(null);
 
   const assignMainRef = useCallback(
@@ -65,10 +65,11 @@ export default function AppLayout({
     [home, location.pathname],
   );
 
-  const { pull, refreshing, pullThreshold } = usePullToRefresh({
+  const { bandHeight, isRefreshing, pullProgress } = usePullToRefresh({
     scrollEl: mainScrollEl,
     enabled: !desktopLikePointer,
     onRefresh: runRefresh,
+    setRefreshing,
   });
 
   return (
@@ -99,19 +100,11 @@ export default function AppLayout({
         }`}
       >
         <PullToRefreshIndicator
-          pull={pull}
-          refreshing={refreshing}
-          pullThreshold={pullThreshold}
+          bandHeight={bandHeight}
+          isRefreshing={isRefreshing}
+          pullProgress={pullProgress}
         />
-        <div
-          style={{
-            transform: pull > 0 ? `translateY(${pull}px)` : undefined,
-            transition:
-              pull === 0 && !refreshing ? 'transform 0.2s ease-out' : 'none',
-          }}
-        >
-          {children}
-        </div>
+        {children}
       </main>
     </div>
   );

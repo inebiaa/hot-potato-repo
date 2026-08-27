@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type ReactNode,
 } from 'react';
 
@@ -13,12 +14,16 @@ type PullHandler = () => void | Promise<void>;
 type PullToRefreshContextValue = {
   register: (handler: PullHandler | null) => void;
   runRefresh: () => Promise<void>;
+  /** True while a pull-triggered refresh is in flight (suppress page body spinners). */
+  refreshing: boolean;
+  setRefreshing: (refreshing: boolean) => void;
 };
 
 const PullToRefreshContext = createContext<PullToRefreshContextValue | null>(null);
 
 export function PullToRefreshProvider({ children }: { children: ReactNode }) {
   const handlerRef = useRef<PullHandler | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const register = useCallback((handler: PullHandler | null) => {
     handlerRef.current = handler;
@@ -31,8 +36,8 @@ export function PullToRefreshProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ register, runRefresh }),
-    [register, runRefresh],
+    () => ({ register, runRefresh, refreshing, setRefreshing }),
+    [register, runRefresh, refreshing],
   );
 
   return (
@@ -61,4 +66,10 @@ export function usePullToRefreshControl() {
     throw new Error('usePullToRefreshControl must be used inside PullToRefreshProvider');
   }
   return ctx;
+}
+
+/** True during pull-to-refresh; hide inline page loaders so only the PTR hammer shows. */
+export function usePullRefreshing(): boolean {
+  const ctx = useContext(PullToRefreshContext);
+  return ctx?.refreshing ?? false;
 }
