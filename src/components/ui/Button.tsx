@@ -12,9 +12,9 @@ const variants = {
 } as const;
 
 const sizes = {
-  sm: 'min-h-9 px-3 py-1.5 type-callout',
-  md: 'min-h-10 px-4 py-2 type-body',
-  lg: 'min-h-11 px-6 py-3 type-body',
+  sm: 'min-h-9 px-3 py-1.5 type-callout max-sm:min-h-[44px]',
+  md: 'min-h-10 px-4 py-2 type-body max-sm:min-h-[44px]',
+  lg: 'min-h-11 px-6 py-3 type-body max-sm:min-h-[44px]',
 } as const;
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {

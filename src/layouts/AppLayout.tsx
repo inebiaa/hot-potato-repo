@@ -1,11 +1,10 @@
 import { useCallback, useState, type MutableRefObject, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
 import AppHeader, { type AppHeaderActiveView } from '../components/AppHeader';
 import PullToRefreshIndicator from '../components/layout/PullToRefreshIndicator';
 import { usePullToRefreshControl } from '../contexts/PullToRefreshContext';
 import { useHomeCatalogOptional } from '../contexts/HomeCatalogContext';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
-import { isHomeCatalogRoute } from '../lib/homeCatalogRoute';
+import { setAppMainScrollElement } from '../lib/appMainScroll';
 import type { AppSettings } from '../types/appSettings';
 
 type AppLayoutProps = {
@@ -50,7 +49,6 @@ export default function AppLayout({
   pinnedArtistBar,
   children,
 }: AppLayoutProps) {
-  const location = useLocation();
   const home = useHomeCatalogOptional();
   const { runRefresh, setRefreshing } = usePullToRefreshControl();
   const [mainScrollEl, setMainScrollEl] = useState<HTMLElement | null>(null);
@@ -58,19 +56,32 @@ export default function AppLayout({
   const assignMainRef = useCallback(
     (node: HTMLElement | null) => {
       setMainScrollEl(node);
-      if (isHomeCatalogRoute(location.pathname) && home) {
+      setAppMainScrollElement(node);
+      if (home) {
         (home.feedScrollRef as MutableRefObject<HTMLElement | null>).current = node;
       }
     },
-    [home, location.pathname],
+    [home],
   );
 
-  const { bandHeight, isRefreshing, pullProgress } = usePullToRefresh({
+  const { contentOffset, isRefreshing, isPulling, pullProgress } = usePullToRefresh({
     scrollEl: mainScrollEl,
     enabled: !desktopLikePointer,
     onRefresh: runRefresh,
     setRefreshing,
   });
+
+  const contentShift =
+    contentOffset > 0
+      ? {
+          transform: `translateY(${contentOffset}px)`,
+          transition: isPulling
+            ? 'none'
+            : 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
+        }
+      : {
+          transition: 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
+        };
 
   return (
     <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-background">
@@ -95,16 +106,18 @@ export default function AppLayout({
       />
       <main
         ref={assignMainRef}
-        className={`relative flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain ${
-          desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'
+        className={`relative flex-1 min-h-0 min-w-0 overflow-y-auto overscroll-y-contain ${
+          desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]'
         }`}
       >
         <PullToRefreshIndicator
-          bandHeight={bandHeight}
+          offset={contentOffset}
           isRefreshing={isRefreshing}
           pullProgress={pullProgress}
         />
-        {children}
+        <div className="min-h-full overflow-x-clip" style={contentShift}>
+          {children}
+        </div>
       </main>
     </div>
   );

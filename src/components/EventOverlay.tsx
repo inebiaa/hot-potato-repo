@@ -101,7 +101,7 @@ export default function EventOverlay({
 
   return (
     <div
-      className={`fixed inset-0 flex items-center justify-center p-4 bg-black/50 overflow-y-auto ${
+      className={`fixed inset-0 flex flex-col justify-end bg-black/50 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] sm:justify-center sm:p-4 ${
         elevated ? "z-[75]" : "z-[60]"
       }`}
       onClick={(e) => {
@@ -118,14 +118,14 @@ export default function EventOverlay({
         <div
           ref={panelRef}
           tabIndex={-1}
-          className={`relative ${EVENT_FEED_CARD_MAX_WIDTH_CLASS} w-full my-8 flex-shrink-0 outline-none`}
+          className={`relative ${EVENT_FEED_CARD_MAX_WIDTH_CLASS} mx-auto w-full max-h-[min(100dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] flex-shrink-0 overflow-y-auto overscroll-y-contain outline-none sm:max-h-[min(90dvh,900px)] sm:rounded-lg`}
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-1 top-1 z-10 inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:right-2 sm:top-2"
+            className="absolute right-1 top-1 z-10 inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:right-2 sm:top-2"
             aria-label={t("chrome.closeDialog")}
           >
             <X size={20} strokeWidth={2} />
@@ -150,7 +150,7 @@ export default function EventOverlay({
         <div
           ref={panelRef}
           tabIndex={-1}
-          className="flex items-center justify-center py-16 outline-none"
+          className="flex flex-1 items-center justify-center py-16 outline-none sm:flex-none"
           aria-busy="true"
         >
           <LoadingSpinner className="text-white" />

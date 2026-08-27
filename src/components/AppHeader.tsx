@@ -57,9 +57,9 @@ interface AppHeaderProps {
   pinnedArtistBar?: ReactNode;
 }
 
-/** Icon tools: no border or card — hover wash only. */
+/** Icon tools: 44pt minimum touch target on phones. */
 const iconBtn =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card";
+  "inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card";
 
 export default function AppHeader({
   pathname: _pathname,
@@ -176,10 +176,10 @@ export default function AppHeader({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") closeAddMenu();
     };
-    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [addMenuOpen, closeAddMenu]);
@@ -210,7 +210,7 @@ export default function AppHeader({
   }, [drawerOpen]);
 
   const navItemClass = (active: boolean) =>
-    `flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 ${typeCaptionEmphasis} transition-colors ${
+    `flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 min-h-[44px] py-1 ${typeCaptionEmphasis} transition-colors active:opacity-70 ${
       active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
     }`;
 
@@ -220,16 +220,16 @@ export default function AppHeader({
   };
 
   const showPhoneBottomNav = !desktopLikePointer;
-  const drawerFullNavClass = desktopLikePointer
-    ? "flex flex-col gap-1"
-    : "hidden flex-col gap-1 md:flex";
-  const drawerMobileOverflowClass = desktopLikePointer
+  const drawerFullNavClass = showPhoneBottomNav
     ? "hidden"
-    : "flex flex-col gap-1 md:hidden";
+    : "flex flex-col gap-1";
+  const drawerMobileOverflowClass = showPhoneBottomNav
+    ? "flex flex-col gap-1"
+    : "hidden";
 
   return (
     <>
-      <header className="sticky top-0 z-40 shrink-0 border-b border-border bg-card shadow-sm">
+      <header className="sticky top-0 z-40 shrink-0 border-b border-border bg-card pt-[env(safe-area-inset-top)] shadow-sm">
         <div className="mx-auto max-w-[2400px] px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
@@ -417,7 +417,7 @@ export default function AppHeader({
 
       {/* Touch phones: bottom tab bar. Narrow desktop windows keep this hidden (desktopLikePointer). */}
       <nav
-        className={`fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] ${showPhoneBottomNav ? "md:hidden" : "hidden"}`}
+        className={`fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] ${showPhoneBottomNav ? "" : "hidden"}`}
         aria-label="Primary"
       >
         <div className="mx-auto flex max-w-lg items-stretch justify-around">
@@ -491,13 +491,13 @@ export default function AppHeader({
             role="dialog"
             aria-modal="true"
             aria-label="More options"
-            className="absolute right-0 top-0 flex h-full w-[min(20rem,88vw)] flex-col border-l border-border bg-card shadow-xl"
+            className="absolute right-0 top-0 flex h-full w-[min(20rem,88vw)] flex-col border-l border-border bg-card pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-xl animate-drawer-in"
           >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <span className="type-headline text-foreground">Menu</span>
               <button
                 type="button"
-                className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-muted-foreground hover:bg-muted active:opacity-70"
                 aria-label="Close"
                 onClick={closeDrawer}
               >

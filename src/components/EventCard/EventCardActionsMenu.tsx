@@ -366,7 +366,7 @@ export default function EventCardActionsMenu({
           }
           setShowActionsMenu(true);
         }}
-        className="inline-flex shrink-0 items-center p-0.5 leading-none text-muted-foreground hover:text-muted-foreground rounded transition-colors"
+        className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md leading-none text-muted-foreground transition-colors hover:text-foreground active:opacity-70"
         title="Actions"
         aria-haspopup="true"
         aria-expanded={showActionsMenu}

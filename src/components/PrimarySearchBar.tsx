@@ -66,7 +66,7 @@ function tagLabel(type: string, value = ''): string {
 
 /** Lucide X on the query-clear control (filter chips use TagPillSplitLabel trailingSlot). */
 const queryClearBtn =
-  'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-80 transition-opacity hover:bg-muted hover:opacity-100';
+  'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-80 transition-opacity hover:bg-muted hover:opacity-100 active:opacity-70 sm:min-h-6 sm:min-w-6';
 
 function suggestionTypeLabel(type: string, value?: string): string {
   if (type === 'header_tags') return 'Genre';
@@ -234,7 +234,7 @@ export default function PrimarySearchBar({
     }
   };
 
-  const searchFieldClass = `group relative flex min-h-10 w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1 type-body text-foreground shadow-sm transition-shadow focus-within:border-input focus-within:ring-1 focus-within:ring-ring ${searchDragOver ? 'bg-muted ring-2 ring-ring' : ''}`;
+  const searchFieldClass = `group relative flex min-h-[44px] w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1 max-sm:text-base max-sm:leading-normal type-body text-foreground shadow-sm transition-shadow focus-within:border-input focus-within:ring-1 focus-within:ring-ring ${searchDragOver ? 'bg-muted ring-2 ring-ring' : ''}`;
 
   const searchPlaceholder = t('search.placeholder');
   const searchFieldEmpty = selectedTags.length === 0 && !searchQuery.trim();

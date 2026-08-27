@@ -6,7 +6,7 @@ export const formControlClass =
 
 export const formControlPaddingClass = 'px-3 py-2';
 
-export const formControlTextClass = 'type-body';
+export const formControlTextClass = 'type-body max-sm:text-base max-sm:leading-normal';
 
 /** Form hints, upload progress, legal footnotes (12px). */
 export const formHintClass = 'type-caption text-muted-foreground';

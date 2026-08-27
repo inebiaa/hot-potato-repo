@@ -122,7 +122,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="max-w-[2400px] mx-auto px-4 py-8 sm:px-6 lg:px-8 my-8">
+    <div className="max-w-[2400px] mx-auto px-4 py-6 sm:px-6 sm:py-8 lg:px-8 my-4 sm:my-8">
       {!user ? (
         <div className="mb-8 overflow-visible">
           <h2 className={`mb-2 ${typeTitle} text-foreground`}>{t('home.title')}</h2>

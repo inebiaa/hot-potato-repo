@@ -3,7 +3,7 @@ import type { ButtonHTMLAttributes } from 'react';
 import { cn } from '../../lib/utils';
 
 const shellClass =
-  'inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card';
+  'inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card';
 
 type BackIconButtonProps = {
   label: string;
@@ -20,7 +20,7 @@ export default function BackIconButton({
   type = 'button',
   ...props
 }: BackIconButtonProps) {
-  const dim = size === 'sm' ? 'h-8 w-8' : 'h-9 w-9';
+  const dim = size === 'sm' ? 'h-8 w-8' : 'min-h-[44px] min-w-[44px]';
   const iconSize = size === 'sm' ? 18 : 20;
   const classes = cn(shellClass, dim, className);
   const icon = <ArrowLeft size={iconSize} strokeWidth={2} aria-hidden />;

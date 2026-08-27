@@ -189,7 +189,7 @@ export default function RatingModal({
                       key={`${tag.type}:${tag.value}`}
                       type="button"
                       onClick={() => insertTag(tag.value)}
-                      className={`min-h-[44px] max-sm:min-h-[40px] ${tagPillSplitSegmentGroupClass} p-0 text-xs hover:opacity-90 sm:min-h-0 sm:py-1`}
+                      className={`min-h-[44px] ${tagPillSplitSegmentGroupClass} p-0 text-xs hover:opacity-90 active:opacity-80 sm:min-h-0 sm:py-1`}
                     >
                       <TagPillSplitLabel text={tag.value} segmentColors={colors} />
                     </button>

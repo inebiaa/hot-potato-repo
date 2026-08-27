@@ -2,35 +2,41 @@ import { HammerSpin } from '../ui/HammerSpin';
 import { PTR_HAMMER_SIZE } from '../../hooks/usePullToRefresh';
 
 type PullToRefreshIndicatorProps = {
-  bandHeight: number;
+  offset: number;
   isRefreshing: boolean;
   pullProgress: number;
 };
 
+/** Hammer in the overscroll gap above content. No band chrome: same loader as the rest of the app. */
 export default function PullToRefreshIndicator({
-  bandHeight,
+  offset,
   isRefreshing,
   pullProgress,
 }: PullToRefreshIndicatorProps) {
-  if (bandHeight <= 0) return null;
+  if (offset <= 0) return null;
+
+  const reveal = Math.min(offset / 36, 1);
 
   return (
     <div
-      className="pointer-events-none sticky top-0 z-10 flex items-center justify-center overflow-visible bg-background text-muted-foreground"
-      style={{
-        height: bandHeight,
-        transition: isRefreshing
-          ? 'height 0.15s ease-out'
-          : bandHeight > 0
-            ? 'none'
-            : 'height 0.2s ease-out',
-      }}
+      className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-center overflow-visible text-muted-foreground"
+      style={{ height: offset }}
+      aria-hidden={!isRefreshing}
+      {...(isRefreshing ? { role: 'status' as const, 'aria-label': 'Refreshing' } : {})}
     >
-      <HammerSpin
-        size={PTR_HAMMER_SIZE}
-        animate={isRefreshing}
-        rotation={pullProgress * 360}
-      />
+      <div
+        className="flex items-center justify-center overflow-visible"
+        style={{
+          opacity: isRefreshing ? 1 : reveal,
+          transform: isRefreshing ? undefined : `scale(${0.85 + pullProgress * 0.15})`,
+        }}
+      >
+        <HammerSpin
+          size={PTR_HAMMER_SIZE}
+          animate={isRefreshing}
+          rotation={pullProgress * 360}
+        />
+      </div>
     </div>
   );
 }

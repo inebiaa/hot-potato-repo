@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { profilePagePath } from '../lib/siteBase';
+import { scrollAppMainToTop } from '../lib/appMainScroll';
 import { useDesktopLikePointer } from './useDesktopLikePointer';
 import { useAppSettings } from './useAppSettings';
 import { useHomeCatalog } from '../contexts/HomeCatalogContext';
@@ -17,7 +18,7 @@ type UseAppLayoutNavOptions = {
 };
 
 function scrollTop() {
-  window.scrollTo(0, 0);
+  scrollAppMainToTop();
 }
 
 /** Header nav targets and AppLayout prop bundle. */

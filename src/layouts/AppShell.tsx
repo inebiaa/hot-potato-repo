@@ -21,6 +21,7 @@ import EventOverlayHost from '../components/layout/EventOverlayHost';
 import EmbedEventView from '../components/layout/EmbedEventView';
 import AppSharedModals from '../components/layout/AppSharedModals';
 import EventPanelModalsHost from '../components/layout/EventPanelModalsHost';
+import { scrollAppMainToTop } from '../lib/appMainScroll';
 import { LoadingSpinner } from '../components/ui';
 
 type AppShellProps = {
@@ -82,7 +83,7 @@ export default function AppShell({ setProfileBoardEvents }: AppShellProps) {
 
   useEffect(() => {
     const sync = () => {
-      if (typeof window !== 'undefined') window.scrollTo(0, 0);
+      scrollAppMainToTop();
     };
     sync();
     window.addEventListener('popstate', sync);

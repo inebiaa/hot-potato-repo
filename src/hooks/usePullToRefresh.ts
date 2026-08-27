@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 
 export const PTR_HAMMER_SIZE = 28;
-export const PTR_REFRESH_BAND_PX = 52;
-const PULL_THRESHOLD_PX = 64;
-const MAX_PULL_PX = 96;
+/** Held distance while refresh runs (matches loader footprint). */
+export const PTR_REFRESH_HOLD_PX = 56;
+const PULL_THRESHOLD_PX = 72;
+const MAX_PULL_PX = 112;
 
 type UsePullToRefreshOptions = {
   scrollEl: HTMLElement | null;
@@ -19,8 +20,9 @@ export function usePullToRefresh({
   setRefreshing,
 }: UsePullToRefreshOptions) {
   const [pull, setPull] = useState(0);
-  const [bandHeight, setBandHeight] = useState(0);
+  const [contentOffset, setContentOffset] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
   const pullRef = useRef(0);
   const startYRef = useRef(0);
   const pullingRef = useRef(false);
@@ -32,8 +34,9 @@ export function usePullToRefresh({
       pullingRef.current = false;
       refreshingRef.current = false;
       setPull(0);
-      setBandHeight(0);
+      setContentOffset(0);
       setIsRefreshing(false);
+      setIsPulling(false);
       setRefreshing(false);
     }
   }, [enabled, setRefreshing]);
@@ -47,9 +50,10 @@ export function usePullToRefresh({
     const resetPull = () => {
       if (refreshingRef.current) return;
       pullingRef.current = false;
+      setIsPulling(false);
       pullRef.current = 0;
       setPull(0);
-      setBandHeight(0);
+      setContentOffset(0);
     };
 
     const onTouchStart = (e: TouchEvent) => {
@@ -57,6 +61,7 @@ export function usePullToRefresh({
       if (el.scrollTop > 0) return;
       startYRef.current = e.touches[0]?.clientY ?? 0;
       pullingRef.current = true;
+      setIsPulling(true);
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -71,39 +76,40 @@ export function usePullToRefresh({
       if (delta <= 0) {
         pullRef.current = 0;
         setPull(0);
-        setBandHeight(0);
+        setContentOffset(0);
         return;
       }
 
-      const next = Math.min(delta * 0.45, MAX_PULL_PX);
+      const next = Math.min(delta * 0.5, MAX_PULL_PX);
       pullRef.current = next;
       setPull(next);
-      setBandHeight(next);
+      setContentOffset(next);
       if (next > 0) e.preventDefault();
     };
 
     const finishPull = () => {
       if (!pullingRef.current) return;
       pullingRef.current = false;
+      setIsPulling(false);
       const releasePull = pullRef.current;
       const shouldRefresh = releasePull >= PULL_THRESHOLD_PX;
       pullRef.current = 0;
       setPull(0);
       if (!shouldRefresh || refreshingRef.current) {
-        setBandHeight(0);
+        setContentOffset(0);
         return;
       }
 
       refreshingRef.current = true;
       setIsRefreshing(true);
       setRefreshing(true);
-      setBandHeight(Math.max(releasePull, PTR_REFRESH_BAND_PX));
+      setContentOffset(Math.max(releasePull, PTR_REFRESH_HOLD_PX));
 
       void Promise.resolve(onRefresh()).finally(() => {
         refreshingRef.current = false;
         setIsRefreshing(false);
         setRefreshing(false);
-        setBandHeight(0);
+        setContentOffset(0);
       });
     };
 
@@ -123,8 +129,9 @@ export function usePullToRefresh({
   return {
     pull,
     pullProgress: Math.min(pull / PULL_THRESHOLD_PX, 1),
-    bandHeight,
+    contentOffset,
     isRefreshing,
+    isPulling,
     pullThreshold: PULL_THRESHOLD_PX,
   };
 }

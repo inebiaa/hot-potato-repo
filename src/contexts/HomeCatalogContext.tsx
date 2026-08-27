@@ -22,6 +22,7 @@ import {
 } from '../lib/tagDisplayResolution';
 import type { SelectedTagFilter } from '../lib/eventTagFilter';
 import { filterByBlockedCreators } from '../lib/ugcSafety';
+import { scrollAppMainToTop } from '../lib/appMainScroll';
 import { TagDisplayProvider } from './TagDisplayContext';
 
 /**
@@ -102,7 +103,10 @@ export function HomeCatalogProvider({ children, profileBoardEvents }: HomeCatalo
  catalogHydrating: feed.catalogHydrating,
  browsingRef: feed.browsingRef,
  ensureFullCatalog: feed.ensureFullCatalog,
- scrollFeedToTop: () => feed.feedScrollRef.current?.scrollTo({ top: 0 }),
+ scrollFeedToTop: () => {
+  feed.feedScrollRef.current?.scrollTo({ top: 0 });
+  scrollAppMainToTop();
+ },
  catalogActive,
  });
 
@@ -142,13 +146,13 @@ export function HomeCatalogProvider({ children, profileBoardEvents }: HomeCatalo
  const goHome = useCallback(() => {
  filters.clearFilters();
  navigate('/');
- window.scrollTo(0, 0);
+ scrollAppMainToTop();
  }, [filters.clearFilters, navigate]);
 
  const showHomeFeed = useCallback(() => {
  if (isHomeCatalogRoute(location.pathname)) return;
  navigate('/');
- window.scrollTo(0, 0);
+ scrollAppMainToTop();
  }, [navigate, location.pathname]);
 
  const visibleFilteredEvents = useMemo(
