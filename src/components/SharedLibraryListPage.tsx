@@ -101,6 +101,7 @@ export default function SharedLibraryListPage({
   const [reportOpen, setReportOpen] = useState(false);
   const [listMenuOpen, setListMenuOpen] = useState(false);
   const listMenuRef = useRef<HTMLDivElement | null>(null);
+  const pullReloadRef = useRef(false);
   const pullRefreshing = usePullRefreshing();
 
   useEffect(() => {
@@ -118,16 +119,21 @@ export default function SharedLibraryListPage({
   }, [listMenuOpen]);
 
   useRegisterPullToRefresh(() => {
+    pullReloadRef.current = true;
     setReloadToken((token) => token + 1);
   });
 
   useEffect(() => {
     let cancelled = false;
+    const silent = pullReloadRef.current;
+    pullReloadRef.current = false;
     (async () => {
-      setLoading(true);
-      setError(null);
-      setOwnerUsername("");
-      setOwnerHandle("");
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+        setOwnerUsername("");
+        setOwnerHandle("");
+      }
       const listRes = await supabase
         .from("user_lists")
         .select("*")

@@ -44,7 +44,10 @@ export default function HomePage() {
     mergeDeepLinkedEvent,
   } = useHomeCatalog();
 
-  const refreshFeed = useCallback(() => fetchEvents({ force: true }), [fetchEvents]);
+  const refreshFeed = useCallback(
+    () => fetchEvents({ force: true, silent: true }),
+    [fetchEvents],
+  );
   useRegisterPullToRefresh(refreshFeed);
   const pullRefreshing = usePullRefreshing();
 

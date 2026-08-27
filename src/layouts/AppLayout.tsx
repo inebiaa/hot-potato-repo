@@ -64,25 +64,13 @@ export default function AppLayout({
     [home],
   );
 
-  const { contentOffset, isRefreshing, isPulling, pullProgress, showIndicator } =
-    usePullToRefresh({
-      scrollEl: mainScrollEl,
-      enabled: !desktopLikePointer,
-      onRefresh: runRefresh,
-      setRefreshing,
-    });
-
-  const contentPad =
-    contentOffset > 0
-      ? {
-          paddingTop: contentOffset,
-          transition: isPulling
-            ? 'none'
-            : 'padding-top 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
-        }
-      : {
-          transition: 'padding-top 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
-        };
+  const { pullHeight, isRefreshing, isPulling, pullProgress, visible } = usePullToRefresh({
+    scrollEl: mainScrollEl,
+    enabled: !desktopLikePointer,
+    routeKey: pathname,
+    onRefresh: runRefresh,
+    setRefreshing,
+  });
 
   return (
     <div className="flex max-h-dvh min-h-dvh flex-col overflow-hidden bg-background">
@@ -111,13 +99,20 @@ export default function AppLayout({
           desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]'
         }`}
       >
-        <div className="min-h-full overflow-x-clip" style={contentPad}>
-          {showIndicator ? (
-            <PullToRefreshIndicator
-              offset={contentOffset}
-              isRefreshing={isRefreshing}
-              pullProgress={pullProgress}
-            />
+        <div className="min-h-full overflow-x-clip">
+          {visible ? (
+            <div
+              className="flex shrink-0 items-center justify-center overflow-visible"
+              style={{
+                height: pullHeight,
+                transition: isPulling ? 'none' : 'height 0.22s ease-out',
+              }}
+            >
+              <PullToRefreshIndicator
+                isRefreshing={isRefreshing}
+                pullProgress={pullProgress}
+              />
+            </div>
           ) : null}
           {children}
         </div>

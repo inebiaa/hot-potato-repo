@@ -46,7 +46,7 @@ export type HomeCatalogValue = {
  feedScrollRef: RefObject<HTMLElement | null>;
  feedSentinelRef: RefObject<HTMLDivElement | null>;
  eventCardRefs: RefObject<Record<string, HTMLDivElement | null>>;
- fetchEvents: (opts?: { append?: boolean; force?: boolean }) => Promise<void>;
+ fetchEvents: (opts?: { append?: boolean; force?: boolean; silent?: boolean }) => Promise<void>;
  ensureFullCatalog: () => Promise<void>;
  refreshEventRating: (eventId: string) => Promise<void>;
  mergeDeepLinkedEvent: (eventId: string) => Promise<EventWithStats | null>;

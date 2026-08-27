@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 
-export const PTR_HAMMER_SIZE = 28;
-/** Held distance while refresh runs (matches loader footprint). */
-export const PTR_REFRESH_HOLD_PX = 64;
-const PULL_THRESHOLD_PX = 72;
-const MAX_PULL_PX = 112;
+/** Compact PTR indicator (separate from full-page LoadingSpinner at 28px). */
+export const PTR_HAMMER_SIZE = 20;
+/** Fixed slot height while refresh runs. */
+export const PTR_REFRESH_HOLD_PX = 36;
+const PULL_THRESHOLD_PX = 50;
+const MAX_PULL_PX = 72;
+const PULL_DAMPING = 0.42;
+const MIN_REFRESH_MS = 400;
 
 type UsePullToRefreshOptions = {
   scrollEl: HTMLElement | null;
   enabled: boolean;
+  routeKey: string;
   onRefresh: () => void | Promise<void>;
   setRefreshing: (refreshing: boolean) => void;
 };
@@ -16,32 +20,52 @@ type UsePullToRefreshOptions = {
 export function usePullToRefresh({
   scrollEl,
   enabled,
+  routeKey,
   onRefresh,
   setRefreshing,
 }: UsePullToRefreshOptions) {
   const [pull, setPull] = useState(0);
-  const [contentOffset, setContentOffset] = useState(0);
+  const [pullHeight, setPullHeight] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
   const [atScrollTop, setAtScrollTop] = useState(true);
   const pullRef = useRef(0);
   const startYRef = useRef(0);
+  const touchActiveRef = useRef(false);
   const pullingRef = useRef(false);
   const refreshingRef = useRef(false);
 
+  const resetAll = () => {
+    touchActiveRef.current = false;
+    pullingRef.current = false;
+    pullRef.current = 0;
+    refreshingRef.current = false;
+    setPull(0);
+    setPullHeight(0);
+    setIsPulling(false);
+    setIsRefreshing(false);
+    setRefreshing(false);
+  };
+
   useEffect(() => {
     if (!enabled) {
-      pullRef.current = 0;
+      touchActiveRef.current = false;
       pullingRef.current = false;
+      pullRef.current = 0;
       refreshingRef.current = false;
       setPull(0);
-      setContentOffset(0);
-      setIsRefreshing(false);
+      setPullHeight(0);
       setIsPulling(false);
+      setIsRefreshing(false);
       setAtScrollTop(true);
       setRefreshing(false);
     }
   }, [enabled, setRefreshing]);
+
+  useEffect(() => {
+    resetAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeKey]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -55,7 +79,7 @@ export function usePullToRefresh({
       setIsPulling(false);
       pullRef.current = 0;
       setPull(0);
-      setContentOffset(0);
+      setPullHeight(0);
     };
 
     const syncScrollTop = () => {
@@ -63,7 +87,7 @@ export function usePullToRefresh({
       setAtScrollTop(atTop);
       if (atTop) return;
       if (refreshingRef.current) {
-        setContentOffset(0);
+        setPullHeight(0);
         setPull(0);
         return;
       }
@@ -71,15 +95,13 @@ export function usePullToRefresh({
     };
 
     const onTouchStart = (e: TouchEvent) => {
-      if (refreshingRef.current) return;
-      if (el.scrollTop > 0) return;
+      if (refreshingRef.current || el.scrollTop > 0) return;
+      touchActiveRef.current = true;
       startYRef.current = e.touches[0]?.clientY ?? 0;
-      pullingRef.current = true;
-      setIsPulling(true);
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (!pullingRef.current || refreshingRef.current) return;
+      if (!touchActiveRef.current || refreshingRef.current) return;
       if (el.scrollTop > 0) {
         resetPull();
         return;
@@ -88,20 +110,24 @@ export function usePullToRefresh({
       const y = e.touches[0]?.clientY ?? 0;
       const delta = y - startYRef.current;
       if (delta <= 0) {
-        pullRef.current = 0;
-        setPull(0);
-        setContentOffset(0);
+        resetPull();
         return;
       }
 
-      const next = Math.min(delta * 0.5, MAX_PULL_PX);
+      if (!pullingRef.current) {
+        pullingRef.current = true;
+        setIsPulling(true);
+      }
+
+      const next = Math.min(delta * PULL_DAMPING, MAX_PULL_PX);
       pullRef.current = next;
       setPull(next);
-      setContentOffset(next);
-      if (next > 0) e.preventDefault();
+      setPullHeight(next);
+      e.preventDefault();
     };
 
     const finishPull = () => {
+      touchActiveRef.current = false;
       if (!pullingRef.current) return;
       pullingRef.current = false;
       setIsPulling(false);
@@ -110,21 +136,28 @@ export function usePullToRefresh({
       pullRef.current = 0;
       setPull(0);
       if (!shouldRefresh || refreshingRef.current) {
-        setContentOffset(0);
+        setPullHeight(0);
         return;
       }
 
       refreshingRef.current = true;
       setIsRefreshing(true);
       setRefreshing(true);
-      setContentOffset(Math.max(releasePull, PTR_REFRESH_HOLD_PX));
+      setPullHeight(PTR_REFRESH_HOLD_PX);
 
-      void Promise.resolve(onRefresh()).finally(() => {
-        refreshingRef.current = false;
-        setIsRefreshing(false);
-        setRefreshing(false);
-        setContentOffset(0);
-      });
+      const started = Date.now();
+      void Promise.resolve(onRefresh())
+        .catch(() => {})
+        .finally(async () => {
+          const wait = MIN_REFRESH_MS - (Date.now() - started);
+          if (wait > 0) {
+            await new Promise((resolve) => window.setTimeout(resolve, wait));
+          }
+          refreshingRef.current = false;
+          setIsRefreshing(false);
+          setRefreshing(false);
+          setPullHeight(0);
+        });
     };
 
     syncScrollTop();
@@ -141,17 +174,16 @@ export function usePullToRefresh({
       el.removeEventListener('touchend', finishPull);
       el.removeEventListener('touchcancel', finishPull);
     };
-  }, [enabled, onRefresh, scrollEl, setRefreshing]);
+  }, [enabled, onRefresh, routeKey, scrollEl, setRefreshing]);
 
-  const showIndicator = contentOffset > 0 && atScrollTop;
+  const visible = pullHeight > 0 && atScrollTop;
 
   return {
     pull,
     pullProgress: Math.min(pull / PULL_THRESHOLD_PX, 1),
-    contentOffset: showIndicator ? contentOffset : 0,
+    pullHeight: visible ? pullHeight : 0,
     isRefreshing,
     isPulling,
-    showIndicator,
-    pullThreshold: PULL_THRESHOLD_PX,
+    visible,
   };
 }

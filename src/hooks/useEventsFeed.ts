@@ -50,11 +50,12 @@ export function useEventsFeed({ userId, enabled = true }: UseEventsFeedOptions) 
   const catalogFullyLoadedRef = useRef(false);
 
   const fetchEvents = useCallback(
-    async (opts?: { append?: boolean; force?: boolean }) => {
+    async (opts?: { append?: boolean; force?: boolean; silent?: boolean }) => {
       if (!enabledRef.current) return;
       const append = opts?.append ?? false;
       const force = opts?.force ?? false;
-      const silent = hasLoadedEventsRef.current && !force && !append;
+      const background = opts?.silent ?? false;
+      const silent = background || (hasLoadedEventsRef.current && !force && !append);
       if (!append && !silent) setLoading(true);
       if (append) {
         if (loadingMoreRef.current || !hasMoreEventsRef.current) return;
@@ -71,7 +72,11 @@ export function useEventsFeed({ userId, enabled = true }: UseEventsFeedOptions) 
         setHasMoreEvents(true);
         beyondHorizonLoadedRef.current = false;
         catalogFullyLoadedRef.current = false;
-      } else if (force) {
+      } else if (force && !background) {
+        setEventsError(null);
+        setLoadMoreError(null);
+        loadMoreErrorRef.current = null;
+      } else if (background || force) {
         setEventsError(null);
         setLoadMoreError(null);
         loadMoreErrorRef.current = null;
@@ -128,7 +133,8 @@ export function useEventsFeed({ userId, enabled = true }: UseEventsFeedOptions) 
           // Silent refresh must not wipe a hydrated catalog or restart filter loading.
           const preserveCatalog =
             silent &&
-            (catalogFullyLoadedRef.current ||
+            (background ||
+              catalogFullyLoadedRef.current ||
               beyondHorizonLoadedRef.current ||
               eventsOffsetRef.current > pastRes.data.length ||
               !hasMoreEventsRef.current);

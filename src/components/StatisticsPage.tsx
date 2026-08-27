@@ -52,8 +52,9 @@ export default function StatisticsPage({
   const [loading, setLoading] = useState(true);
   const home = useHomeCatalogOptional();
 
-  const reloadStats = useCallback(() => {
-    setLoading(true);
+  const reloadStats = useCallback((opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+    if (!silent) setLoading(true);
     void fetchAllEvents().then(async ({ data, error }) => {
       if (error) {
         console.error('Error fetching events:', error);
@@ -68,7 +69,7 @@ export default function StatisticsPage({
     });
   }, []);
 
-  useRegisterPullToRefresh(reloadStats);
+  useRegisterPullToRefresh(() => reloadStats({ silent: true }));
 
   useEffect(() => {
     if (selectedType !== 'all' && selectedType !== 'designer' && selectedType !== 'artist') {
