@@ -64,23 +64,24 @@ export default function AppLayout({
     [home],
   );
 
-  const { contentOffset, isRefreshing, isPulling, pullProgress } = usePullToRefresh({
-    scrollEl: mainScrollEl,
-    enabled: !desktopLikePointer,
-    onRefresh: runRefresh,
-    setRefreshing,
-  });
+  const { contentOffset, isRefreshing, isPulling, pullProgress, showIndicator } =
+    usePullToRefresh({
+      scrollEl: mainScrollEl,
+      enabled: !desktopLikePointer,
+      onRefresh: runRefresh,
+      setRefreshing,
+    });
 
-  const contentShift =
+  const contentPad =
     contentOffset > 0
       ? {
-          transform: `translateY(${contentOffset}px)`,
+          paddingTop: contentOffset,
           transition: isPulling
             ? 'none'
-            : 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
+            : 'padding-top 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
         }
       : {
-          transition: 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
+          transition: 'padding-top 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
         };
 
   return (
@@ -110,12 +111,14 @@ export default function AppLayout({
           desktopLikePointer ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]'
         }`}
       >
-        <PullToRefreshIndicator
-          offset={contentOffset}
-          isRefreshing={isRefreshing}
-          pullProgress={pullProgress}
-        />
-        <div className="min-h-full overflow-x-clip" style={contentShift}>
+        <div className="min-h-full overflow-x-clip" style={contentPad}>
+          {showIndicator ? (
+            <PullToRefreshIndicator
+              offset={contentOffset}
+              isRefreshing={isRefreshing}
+              pullProgress={pullProgress}
+            />
+          ) : null}
           {children}
         </div>
       </main>

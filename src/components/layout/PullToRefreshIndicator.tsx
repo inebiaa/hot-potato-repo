@@ -1,3 +1,4 @@
+import LoadingSpinner from '../ui/LoadingSpinner';
 import { HammerSpin } from '../ui/HammerSpin';
 import { PTR_HAMMER_SIZE } from '../../hooks/usePullToRefresh';
 
@@ -7,7 +8,10 @@ type PullToRefreshIndicatorProps = {
   pullProgress: number;
 };
 
-/** Hammer in the overscroll gap above content. No band chrome: same loader as the rest of the app. */
+/**
+ * In-flow slot at the top of page content (scrolls away with the feed).
+ * Sits in padding space only; never pinned over the viewport.
+ */
 export default function PullToRefreshIndicator({
   offset,
   isRefreshing,
@@ -19,10 +23,12 @@ export default function PullToRefreshIndicator({
 
   return (
     <div
-      className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-center overflow-visible text-muted-foreground"
-      style={{ height: offset }}
-      aria-hidden={!isRefreshing}
-      {...(isRefreshing ? { role: 'status' as const, 'aria-label': 'Refreshing' } : {})}
+      className="pointer-events-none flex items-center justify-center overflow-visible text-muted-foreground"
+      style={{
+        height: offset,
+        marginTop: -offset,
+      }}
+      {...(isRefreshing ? { role: 'status' as const, 'aria-label': 'Refreshing' } : { 'aria-hidden': true })}
     >
       <div
         className="flex items-center justify-center overflow-visible"
@@ -31,11 +37,11 @@ export default function PullToRefreshIndicator({
           transform: isRefreshing ? undefined : `scale(${0.85 + pullProgress * 0.15})`,
         }}
       >
-        <HammerSpin
-          size={PTR_HAMMER_SIZE}
-          animate={isRefreshing}
-          rotation={pullProgress * 360}
-        />
+        {isRefreshing ? (
+          <LoadingSpinner />
+        ) : (
+          <HammerSpin size={PTR_HAMMER_SIZE} rotation={pullProgress * 360} />
+        )}
       </div>
     </div>
   );

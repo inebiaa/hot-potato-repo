@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export const PTR_HAMMER_SIZE = 28;
 /** Held distance while refresh runs (matches loader footprint). */
-export const PTR_REFRESH_HOLD_PX = 56;
+export const PTR_REFRESH_HOLD_PX = 64;
 const PULL_THRESHOLD_PX = 72;
 const MAX_PULL_PX = 112;
 
@@ -23,6 +23,7 @@ export function usePullToRefresh({
   const [contentOffset, setContentOffset] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
+  const [atScrollTop, setAtScrollTop] = useState(true);
   const pullRef = useRef(0);
   const startYRef = useRef(0);
   const pullingRef = useRef(false);
@@ -37,6 +38,7 @@ export function usePullToRefresh({
       setContentOffset(0);
       setIsRefreshing(false);
       setIsPulling(false);
+      setAtScrollTop(true);
       setRefreshing(false);
     }
   }, [enabled, setRefreshing]);
@@ -54,6 +56,18 @@ export function usePullToRefresh({
       pullRef.current = 0;
       setPull(0);
       setContentOffset(0);
+    };
+
+    const syncScrollTop = () => {
+      const atTop = el.scrollTop <= 0;
+      setAtScrollTop(atTop);
+      if (atTop) return;
+      if (refreshingRef.current) {
+        setContentOffset(0);
+        setPull(0);
+        return;
+      }
+      resetPull();
     };
 
     const onTouchStart = (e: TouchEvent) => {
@@ -113,12 +127,15 @@ export function usePullToRefresh({
       });
     };
 
+    syncScrollTop();
+    el.addEventListener('scroll', syncScrollTop, { passive: true });
     el.addEventListener('touchstart', onTouchStart, { passive: true });
     el.addEventListener('touchmove', onTouchMove, { passive: false });
     el.addEventListener('touchend', finishPull);
     el.addEventListener('touchcancel', finishPull);
 
     return () => {
+      el.removeEventListener('scroll', syncScrollTop);
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', finishPull);
@@ -126,12 +143,15 @@ export function usePullToRefresh({
     };
   }, [enabled, onRefresh, scrollEl, setRefreshing]);
 
+  const showIndicator = contentOffset > 0 && atScrollTop;
+
   return {
     pull,
     pullProgress: Math.min(pull / PULL_THRESHOLD_PX, 1),
-    contentOffset,
+    contentOffset: showIndicator ? contentOffset : 0,
     isRefreshing,
     isPulling,
+    showIndicator,
     pullThreshold: PULL_THRESHOLD_PX,
   };
 }
