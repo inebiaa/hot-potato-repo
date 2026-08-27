@@ -103,7 +103,15 @@ export default function AppLayout({
           refreshing={refreshing}
           pullThreshold={pullThreshold}
         />
-        {children}
+        <div
+          style={{
+            transform: pull > 0 ? `translateY(${pull}px)` : undefined,
+            transition:
+              pull === 0 && !refreshing ? 'transform 0.2s ease-out' : 'none',
+          }}
+        >
+          {children}
+        </div>
       </main>
     </div>
   );
