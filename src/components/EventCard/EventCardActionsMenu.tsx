@@ -23,6 +23,7 @@ import { canonicalEventUrl, listPagePath } from "../../lib/siteBase";
 import { fetchUserPublicHandle } from "../../lib/userProfile";
 import { setAppModalParams } from "../../lib/searchParamsModal";
 import { useT } from "../../hooks/useCopy";
+import { eventCardActionButtonClass } from "./eventCardActionButton";
 import { deleteStoredEventImage } from "../../lib/eventImageUpload";
 import {
   addEventToListAndLiked,
@@ -366,7 +367,7 @@ export default function EventCardActionsMenu({
           }
           setShowActionsMenu(true);
         }}
-        className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md leading-none text-muted-foreground transition-colors hover:text-foreground active:opacity-70"
+        className={`${eventCardActionButtonClass} text-muted-foreground hover:text-foreground`}
         title="Actions"
         aria-haspopup="true"
         aria-expanded={showActionsMenu}

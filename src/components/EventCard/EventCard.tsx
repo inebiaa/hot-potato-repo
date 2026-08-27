@@ -14,6 +14,7 @@ import RemoteImg from '../RemoteImg';
 import type { TagColorsForPills } from '../tagCards/types';
 import EventCardTitle from './EventCardTitle';
 import EventCardActionsMenu from './EventCardActionsMenu';
+import { eventCardActionButtonClass } from './eventCardActionButton';
 import EventCardTags from './EventCardTags';
 import { shouldOpenShowFromCardBodyClick } from '../../lib/eventCardBodyClick';
 import { cn } from '../../lib/utils';
@@ -194,14 +195,14 @@ export default function EventCard({
         <div className={`min-w-0 p-4 sm:p-6 ${imageOpacity !== undefined ? 'bg-card' : ''}`}>
           <div className="mb-2 min-w-0 type-headline leading-snug after:block after:clear-both after:content-['']">
             <div
-              className="float-right -mr-0.5 flex h-[1.375em] shrink-0 items-center gap-0.5 [shape-outside:margin-box]"
+              className="float-right ml-1 flex shrink-0 items-center [shape-outside:margin-box]"
               data-event-actions
             >
               <button
                 type="button"
                 onClick={(e) => { void handleToggleLiked(e); }}
                 disabled={likeBusy}
-                className={`inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md leading-none transition-colors active:opacity-70 ${
+                className={`${eventCardActionButtonClass} ${
                   liked
                     ? 'text-foreground hover:text-muted-foreground'
                     : 'text-muted-foreground hover:text-foreground'
