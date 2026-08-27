@@ -1,5 +1,4 @@
 import { ChevronDown } from "lucide-react";
-import type { ReactNode } from "react";
 import { cn } from "../../lib/utils";
 import { tagPillShellClass } from "../tagPillShell";
 import { useT } from "../../hooks/useCopy";

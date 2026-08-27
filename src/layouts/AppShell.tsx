@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useEffect, useCallback, type ReactNode } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Event } from '../lib/supabase';
 import { CopyProvider } from '../contexts/CopyContext';

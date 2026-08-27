@@ -1,6 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import type { Event } from "../../lib/supabase";
-import { Button, Input, Label, Modal, formErrorClass, typeCallout } from "../ui";
+import { Input, Modal, formErrorClass, typeCallout } from "../ui";
 import { useT } from "../../hooks/useCopy";
 
 interface AddEventToListModalProps {

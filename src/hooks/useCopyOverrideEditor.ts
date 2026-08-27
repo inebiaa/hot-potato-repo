@@ -6,7 +6,7 @@ import { buildCopyOverridesPatch, saveCopyOverridesToDb } from '../lib/saveCopyO
 
 export function useCopyOverrideEditor() {
   const { user, isAdmin } = useAuth();
-  const { appSettings, setAppSettings } = useAppSettings();
+  const { setAppSettings } = useAppSettings();
 
   const updateCopyOverride = useCallback(
     (key: CopyKey, value: string): string => {
