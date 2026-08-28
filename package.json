@@ -12,6 +12,7 @@
     "test": "node --env-file-if-exists=.env --import tsx --test src/lib/feedImageAttrs.test.ts src/lib/eventCardBodyClick.test.ts src/lib/eventCardImageUrl.test.ts src/lib/imageCdn.test.ts src/lib/eventsFeed.test.ts src/lib/eventTagFilter.test.ts src/lib/searchParamsModal.test.ts src/lib/homeCatalogRoute.test.ts src/lib/appModalState.test.ts",
     "verify:jsonld": "node scripts/verify-event-jsonld.mjs",
     "migrate:images-to-r2": "node scripts/migrate-images-to-r2.mjs",
+    "purge:supabase-storage": "node scripts/purge-supabase-storage.mjs",
     "backfill:event-images": "node scripts/backfill-event-images.mjs",
     "recompress:event-images": "node scripts/recompress-event-images-local.mjs",
     "recompress:event-images:remote": "node scripts/invoke-recompress-event-images.mjs",
